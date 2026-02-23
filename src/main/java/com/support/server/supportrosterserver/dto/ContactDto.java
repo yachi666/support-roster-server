@@ -1,0 +1,14 @@
+package com.support.server.supportrosterserver.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ContactDto {
+    private String slack;
+    private String email;
+    private String phone;
+}
