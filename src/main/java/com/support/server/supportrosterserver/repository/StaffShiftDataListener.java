@@ -3,19 +3,19 @@ package com.support.server.supportrosterserver.repository;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.support.server.supportrosterserver.entity.ColorRow;
+import com.support.server.supportrosterserver.entity.StaffShiftRow;
 import org.apache.fesod.sheet.context.AnalysisContext;
 import org.apache.fesod.sheet.event.AnalysisEventListener;
 import org.apache.fesod.sheet.exception.ExcelAnalysisException;
 import lombok.Getter;
 
-public class ColorDataListener extends AnalysisEventListener<ColorRow> {
+public class StaffShiftDataListener extends AnalysisEventListener<StaffShiftRow> {
 
     @Getter
-    private List<ColorRow> dataList = new ArrayList<>();
+    private List<StaffShiftRow> dataList = new ArrayList<>();
 
     @Override
-    public void invoke(ColorRow data, AnalysisContext context) {
+    public void invoke(StaffShiftRow data, AnalysisContext context) {
         dataList.add(data);
     }
 

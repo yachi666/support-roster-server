@@ -3,20 +3,19 @@ package com.support.server.supportrosterserver.repository;
 import java.util.ArrayList;
 import java.util.List;
 
-
-import com.support.server.supportrosterserver.entity.RosterRow;
+import com.support.server.supportrosterserver.entity.ShiftDefinitionRow;
 import org.apache.fesod.sheet.context.AnalysisContext;
 import org.apache.fesod.sheet.event.AnalysisEventListener;
 import org.apache.fesod.sheet.exception.ExcelAnalysisException;
 import lombok.Getter;
 
-public class RosterDataListener extends AnalysisEventListener<RosterRow> {
+public class ShiftDefinitionDataListener extends AnalysisEventListener<ShiftDefinitionRow> {
 
     @Getter
-    private List<RosterRow> dataList = new ArrayList<>();
+    private List<ShiftDefinitionRow> dataList = new ArrayList<>();
 
     @Override
-    public void invoke(RosterRow data, AnalysisContext context) {
+    public void invoke(ShiftDefinitionRow data, AnalysisContext context) {
         dataList.add(data);
     }
 

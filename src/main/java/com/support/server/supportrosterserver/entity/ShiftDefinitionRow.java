@@ -1,6 +1,5 @@
 package com.support.server.supportrosterserver.entity;
 
-
 import org.apache.fesod.sheet.annotation.ExcelProperty;
 
 import lombok.Data;
@@ -8,7 +7,7 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-public class RosterRow {
+public class ShiftDefinitionRow {
     @ExcelProperty(index = 0)
     private String roleGroup;
 
@@ -28,11 +27,8 @@ public class RosterRow {
     private String timezone;
 
     @ExcelProperty(index = 6)
-    private String staffId;
-
-    @ExcelProperty(index = 7)
     private String showOnRosterPage;
 
-    @ExcelProperty(index = 8)
+    @ExcelProperty(index = 7)
     private String remark;
 }

@@ -14,6 +14,8 @@ public class Staff {
     private String email;
     private String phone;
     private String slack;
+    private String region;
+    private String contact;
     private List<String> roleGroups;
 
     public Staff(Long id, String name) {

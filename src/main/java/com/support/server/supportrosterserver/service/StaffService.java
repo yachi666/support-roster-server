@@ -6,8 +6,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.support.server.supportrosterserver.dto.StaffDto;
-import com.support.server.supportrosterserver.entity.RosterEntry;
 import com.support.server.supportrosterserver.entity.Staff;
+import com.support.server.supportrosterserver.entity.StaffShift;
 import com.support.server.supportrosterserver.repository.RosterRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -32,9 +32,12 @@ public class StaffService {
         
         StaffDto dto = convertToDto(staff);
         
-        List<RosterEntry> entries = rosterRepository.findRosterEntriesByStaffId(id);
-        List<String> roleGroups = entries.stream()
-            .map(RosterEntry::getRoleGroup)
+        List<StaffShift> shifts = rosterRepository.findAllStaffShifts().stream()
+            .filter(s -> s.getStaffId().equals(id))
+            .toList();
+        
+        List<String> roleGroups = shifts.stream()
+            .map(StaffShift::getRoleGroup)
             .distinct()
             .collect(Collectors.toList());
         dto.setRoleGroups(roleGroups);
@@ -50,6 +53,8 @@ public class StaffService {
         dto.setEmail(staff.getEmail());
         dto.setPhone(staff.getPhone());
         dto.setSlack(staff.getSlack());
+        dto.setRegion(staff.getRegion());
+        dto.setContact(staff.getContact());
         return dto;
     }
 }

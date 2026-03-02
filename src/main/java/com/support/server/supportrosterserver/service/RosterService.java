@@ -20,7 +20,8 @@ import org.springframework.stereotype.Service;
 import com.support.server.supportrosterserver.dto.ContactDto;
 import com.support.server.supportrosterserver.dto.ShiftDto;
 import com.support.server.supportrosterserver.dto.TeamDto;
-import com.support.server.supportrosterserver.entity.RosterEntry;
+import com.support.server.supportrosterserver.entity.ShiftDefinition;
+import com.support.server.supportrosterserver.entity.StaffShift;
 import com.support.server.supportrosterserver.repository.RosterRepository;
 
 @Service
@@ -64,67 +65,103 @@ public class RosterService {
     }
 
     public List<ShiftDto> getShiftsByDate(LocalDate date, String teamId, String timezone) {
-        var entries = rosterRepository.findAllRosterEntries();
+        List<StaffShift> staffShifts;
 
         if (teamId != null && !teamId.isEmpty()) {
             var roleGroup = findRoleGroupByTeamId(teamId);
             if (roleGroup != null) {
-                entries = rosterRepository.findRosterEntriesByRoleGroup(roleGroup);
+                staffShifts = rosterRepository.findStaffShiftsByRoleGroup(roleGroup);
+            } else {
+                staffShifts = rosterRepository.findAllStaffShifts();
             }
+        } else {
+            staffShifts = rosterRepository.findAllStaffShifts();
         }
 
         var shifts = new ArrayList<ShiftDto>();
-        for (var entry : entries) {
-            if (!Boolean.TRUE.equals(entry.getShowOnRosterPage())) {
+        int dayOfMonth = date.getDayOfMonth();
+        var targetZone = ZoneId.of(Objects.requireNonNullElse(timezone, "UTC"));
+
+        for (var staffShift : staffShifts) {
+            String shiftCode = staffShift.getShiftCodeByDay(dayOfMonth);
+            if (shiftCode == null || shiftCode.isEmpty()) {
                 continue;
             }
 
-            shifts.add(convertToShiftDto(entry, date, timezone));
+            if (!isPrimaryShift(shiftCode)) {
+                continue;
+            }
+
+            ShiftDefinition shiftDef = rosterRepository.findShiftDefinition(staffShift.getRoleGroup(), shiftCode);
+            if (shiftDef != null && !Boolean.TRUE.equals(shiftDef.getShowOnRosterPage())) {
+                continue;
+            }
+
+            var dto = convertToShiftDto(staffShift, shiftCode, shiftDef, date, timezone);
+            
+            if (!isShiftOnDate(dto.getStart(), dto.getEnd(), date, targetZone)) {
+                continue;
+            }
+            
+            shifts.add(dto);
         }
 
         return shifts;
     }
 
-    public ShiftDto getShiftById(String id) {
-        var today = LocalDate.now(ZoneId.of("UTC"));
-        return rosterRepository.findAllRosterEntries().stream()
-            .filter(entry -> buildShiftId(entry).equals(id))
-            .findFirst()
-            .map(entry -> convertToShiftDto(entry, today, "UTC"))
-            .orElse(null);
+    private boolean isShiftOnDate(OffsetDateTime start, OffsetDateTime end, LocalDate targetDate, ZoneId targetZone) {
+        ZonedDateTime startInTargetZone = start.atZoneSameInstant(targetZone);
+        ZonedDateTime endInTargetZone = end.atZoneSameInstant(targetZone);
+        
+        LocalDate startDate = startInTargetZone.toLocalDate();
+        LocalDate endDate = endInTargetZone.toLocalDate();
+        
+        return startDate.equals(targetDate) || endDate.equals(targetDate) ||
+               (startDate.isBefore(targetDate) && endDate.isAfter(targetDate));
     }
 
-    private ShiftDto convertToShiftDto(RosterEntry entry, LocalDate date, String timezone) {
-        var dto = new ShiftDto();
-        dto.setId(buildShiftId(entry));
+    public ShiftDto getShiftById(String id) {
+        return null;
+    }
 
-        var team = TEAM_MAPPING.get(entry.getRoleGroup());
+    private ShiftDto convertToShiftDto(StaffShift staffShift, String shiftCode, ShiftDefinition shiftDef, 
+                                       LocalDate date, String timezone) {
+        var dto = new ShiftDto();
+        dto.setId(buildShiftId(staffShift, shiftCode, date));
+
+        var team = TEAM_MAPPING.get(staffShift.getRoleGroup());
         if (team != null) {
             dto.setTeamId(team.getId());
         } else {
-            dto.setTeamId(entry.getRoleGroup().toLowerCase().replace("_", "-"));
+            dto.setTeamId(staffShift.getRoleGroup().toLowerCase().replace("_", "-"));
         }
 
-        dto.setStaffId(entry.getStaffId());
-        dto.setUserName("Staff " + entry.getStaffId());
-        dto.setUserAvatar(generateAvatarUrl(entry.getStaffId()));
-        dto.setCode(entry.getCode());
-        dto.setMeaning(entry.getMeaning());
-        dto.setTimezone(entry.getTimezone());
-        dto.setIsPrimary(isPrimaryShift(entry));
-        dto.setShowOnRoster(entry.getShowOnRosterPage());
-        dto.setRemark(entry.getRemark());
+        dto.setStaffId(staffShift.getStaffId());
+        dto.setUserName(staffShift.getName());
+        dto.setUserAvatar(generateAvatarUrl(staffShift.getStaffId()));
+        dto.setCode(shiftCode);
+        dto.setTimezone(shiftDef != null ? shiftDef.getTimezone() : "HKT");
+        dto.setIsPrimary(isPrimaryShift(shiftCode));
+        dto.setShowOnRoster(true);
+        dto.setRemark(shiftDef != null ? shiftDef.getRemark() : staffShift.getNotes());
+
+        if (shiftDef != null) {
+            dto.setMeaning(shiftDef.getMeaning());
+        } else {
+            dto.setMeaning(getDefaultMeaning(shiftCode));
+        }
+
+        LocalTime startTime = parseTime(shiftDef != null ? shiftDef.getStartTime() : null);
+        LocalTime endTime = parseTime(shiftDef != null ? shiftDef.getEndTime() : null);
+        String shiftTimezone = shiftDef != null ? shiftDef.getTimezone() : "HKT";
 
         var targetZone = ZoneId.of(Objects.requireNonNullElse(timezone, "UTC"));
-        var shiftZone = "HKT".equals(entry.getTimezone())
-            ? ZoneId.of("Asia/Hong_Kong")
-            : ZoneId.of("UTC");
+        var shiftZone = getZoneId(shiftTimezone);
 
-        var startDateTime = calculateShiftDateTime(date, entry.getStartTime(), shiftZone, targetZone);
-        var endDateTime = calculateShiftDateTime(date, entry.getEndTime(), shiftZone, targetZone);
+        var startDateTime = calculateShiftDateTime(date, startTime, shiftZone, targetZone);
+        var endDateTime = calculateShiftDateTime(date, endTime, shiftZone, targetZone);
 
-        if (entry.getEndTime() != null && entry.getStartTime() != null
-            && entry.getEndTime().isBefore(entry.getStartTime())) {
+        if (endTime != null && startTime != null && endTime.isBefore(startTime)) {
             endDateTime = endDateTime.plusDays(1);
         }
 
@@ -132,13 +169,51 @@ public class RosterService {
         dto.setEnd(endDateTime);
 
         var contact = new ContactDto(
-            "@staff" + entry.getStaffId(),
-            "staff" + entry.getStaffId() + "@company.com",
-            "+1-555-" + String.format("%04d", entry.getStaffId())
+            "@" + staffShift.getName().toLowerCase().replace(" ", ""),
+            staffShift.getName().toLowerCase().replace(" ", "") + "@company.com",
+            staffShift.getContact() != null ? staffShift.getContact() : ""
         );
         dto.setContact(contact);
 
         return dto;
+    }
+
+    private LocalTime parseTime(String timeStr) {
+        if (timeStr == null || timeStr.isEmpty()) return null;
+        try {
+            String[] parts = timeStr.split(":");
+            return LocalTime.of(
+                Integer.parseInt(parts[0]),
+                Integer.parseInt(parts[1]),
+                parts.length > 2 ? Integer.parseInt(parts[2]) : 0
+            );
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String getDefaultMeaning(String code) {
+        return switch (code) {
+            case "A" -> "00:00-07:00";
+            case "B" -> "06:30-15:30";
+            case "C" -> "08:00-17:00";
+            case "D" -> "15:30-00:30";
+            case "DS" -> "Day Shift";
+            case "NS" -> "Night Shift";
+            case "OC" -> "Full Day Oncall Support";
+            case "BH" -> "Business Hours";
+            case "HoL" -> "Holiday or Leave";
+            default -> code;
+        };
+    }
+
+    private ZoneId getZoneId(String timezone) {
+        return switch (timezone) {
+            case "HKT" -> ZoneId.of("Asia/Hong_Kong");
+            case "IST" -> ZoneId.of("Asia/Kolkata");
+            case "INT" -> ZoneId.of("UTC");
+            default -> ZoneId.of("UTC");
+        };
     }
 
     private OffsetDateTime calculateShiftDateTime(LocalDate date, LocalTime time, ZoneId sourceZone, ZoneId targetZone) {
@@ -149,8 +224,8 @@ public class RosterService {
         return zonedDateTime.withZoneSameInstant(targetZone).toOffsetDateTime();
     }
 
-    private boolean isPrimaryShift(RosterEntry entry) {
-        return PRIMARY_CODES.contains(entry.getCode());
+    private boolean isPrimaryShift(String code) {
+        return PRIMARY_CODES.contains(code);
     }
 
     private String findRoleGroupByTeamId(String teamId) {
@@ -166,14 +241,11 @@ public class RosterService {
         return AVATARS.get((avatarIndex - 1) % AVATARS.size());
     }
 
-    private String buildShiftId(RosterEntry entry) {
+    private String buildShiftId(StaffShift staffShift, String shiftCode, LocalDate date) {
         var key = String.join("|",
-            Objects.toString(entry.getRoleGroup(), ""),
-            Objects.toString(entry.getStaffId(), ""),
-            Objects.toString(entry.getCode(), ""),
-            Objects.toString(entry.getStartTime(), ""),
-            Objects.toString(entry.getEndTime(), ""),
-            Objects.toString(entry.getTimezone(), "")
+            Objects.toString(staffShift.getStaffId(), ""),
+            Objects.toString(shiftCode, ""),
+            Objects.toString(date, "")
         );
         return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
     }
