@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -19,6 +20,8 @@ import org.springframework.web.context.support.AnnotationConfigWebApplicationCon
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.servlet.Filter;
 
 class CorsConfigTest {
 
@@ -33,7 +36,10 @@ class CorsConfigTest {
         applicationContext.register(TestWebConfig.class);
         applicationContext.refresh();
 
-        mockMvc = MockMvcBuilders.webAppContextSetup(applicationContext).build();
+        FilterRegistrationBean<Filter> registration = applicationContext.getBean("privateNetworkFilter", FilterRegistrationBean.class);
+        mockMvc = MockMvcBuilders.webAppContextSetup(applicationContext)
+            .addFilters(registration.getFilter())
+            .build();
     }
 
     @AfterEach
@@ -49,8 +55,10 @@ class CorsConfigTest {
                 .header("Origin", "https://frontend.example.com")
                 .header("Access-Control-Request-Method", "GET"))
             .andExpect(status().isOk())
-            .andExpect(header().string("Access-Control-Allow-Origin", "*"))
-            .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
+            .andExpect(header().string("Access-Control-Allow-Origin", "https://frontend.example.com"))
+            .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
+            .andExpect(header().string("Access-Control-Allow-Private-Network", "true"))
+            .andExpect(header().string("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"));
     }
 
     @Test
@@ -58,9 +66,22 @@ class CorsConfigTest {
         mockMvc.perform(get("/api/test")
                 .header("Origin", "http://localhost:5173"))
             .andExpect(status().isOk())
-            .andExpect(header().string("Access-Control-Allow-Origin", "*"))
-            .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"))
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+            .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
+            .andExpect(header().string("Access-Control-Allow-Private-Network", "true"))
             .andExpect(content().string("ok"));
+    }
+
+    @Test
+    void shouldHandlePrivateNetworkAccessRequest() throws Exception {
+        mockMvc.perform(options("/api/test")
+                .header("Origin", "http://hk120050033.hk.hsbc:8091")
+                .header("Access-Control-Request-Method", "GET")
+                .header("Access-Control-Request-Private-Network", "true"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://hk120050033.hk.hsbc:8091"))
+            .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
+            .andExpect(header().string("Access-Control-Allow-Private-Network", "true"));
     }
 
     @RestController
