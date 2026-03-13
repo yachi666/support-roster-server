@@ -1,5 +1,31 @@
 # Spec Change Log
 
+## 2026-03-13 - Spring Boot 4 全局 CORS 配置收敛
+
+### 变更背景
+
+原有跨域实现使用手工注册的 `CorsFilter`，并允许任意来源携带凭证访问，配置过宽且不符合当前 Spring Boot 4 / Spring MVC 场景下更推荐的全局配置方式。
+
+### 变更文件
+
+1. `src/main/java/com/support/server/supportrosterserver/config/CorsConfig.java`
+2. `src/test/java/com/support/server/supportrosterserver/config/CorsConfigTest.java`
+3. `.specs/constraints-and-conventions.md`
+4. `.specs/CHANGELOG.md`
+
+### 详细变更记录
+
+- 将 `CorsConfig` 从手工 `CorsFilter` 切换为 `WebMvcConfigurer#addCorsMappings`，与 Spring Boot 4 的 Spring MVC 全局配置方式保持一致。
+- 跨域范围收敛为 `/api/**`，仅对业务 API 开放，而非对全部路径开放。
+- 允许任意来源访问 API，但显式关闭 `allowCredentials`，避免“任意来源 + 凭证”带来的安全风险。
+- 新增基于 `MockMvc` 的预检请求与实际请求测试，验证任意前端来源均可跨域访问 `/api/**`。
+
+### 影响评估
+
+- 所有前端站点均可直接访问当前 API。
+- 跨域策略更符合 Spring Boot 4 的推荐实践，且安全边界比原实现更清晰。
+- 如后续需要跨域 Cookie / Session，必须改为显式来源白名单策略。
+
 ## 2026-03-12 - 导入模版下载与验证规则优化
 
 ### 变更背景

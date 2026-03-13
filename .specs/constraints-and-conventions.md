@@ -131,6 +131,14 @@ public class RosterRepository {
 - 不要假设 `spring-boot-starter-web` 一定会在当前项目依赖图中传递提供 Jackson 编译类路径；新增 JSON 序列化/反序列化逻辑时，应同时检查对应 starter 是否已声明。
 - 服务类中优先通过 Spring 注入 `ObjectMapper`，避免手工 new 实例导致全局序列化配置不一致。
 
+#### Spring Boot 4 全局 CORS 配置
+
+- Spring MVC 应用优先使用 `WebMvcConfigurer#addCorsMappings` 统一声明全局跨域策略；只有在需要更底层过滤链接入时，才使用手工注册的 `CorsFilter`。
+- 当前项目的公共 HTTP 接口统一挂在 `/api/**`，全局跨域规则也应限制在 `/api/**`，避免把 Actuator 或非 API 路径一并暴露给任意来源。
+- 当需求是“允许所有前端访问”时，推荐使用 `allowedOrigins("*") + allowCredentials(false)`；不要配置“任意来源 + 凭证”，避免把 Cookie / Session 类请求放开给所有站点。
+- `allowedHeaders("*")` 可用于兼容常见前端自定义请求头；`allowedMethods(...)` 应显式列出项目支持的 HTTP 方法。
+- 若未来必须支持跨域 Cookie、Session 或其他凭证，请改为明确白名单来源（或受控 `allowedOriginPatterns`），并同步更新测试与规范。
+
 ---
 
 ## 异常处理机制
