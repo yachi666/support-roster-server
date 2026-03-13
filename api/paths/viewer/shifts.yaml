@@ -1,0 +1,35 @@
+shiftCollection:
+  get:
+    tags: [Viewer Shifts]
+    summary: Get viewer shifts by date
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/DateParam
+      - $ref: ../../components/common.yaml#/parameters/TeamIdParam
+      - $ref: ../../components/common.yaml#/parameters/TimezoneParam
+    responses:
+      '200':
+        description: Shift list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/Shift
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+
+shiftItem:
+  get:
+    tags: [Viewer Shifts]
+    summary: Get shift by id
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/ShiftIdParam
+    responses:
+      '200':
+        description: Shift detail
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/Shift
+      '404':
+        $ref: ../../components/common.yaml#/responses/NotFound

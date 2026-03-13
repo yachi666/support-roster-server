@@ -1,0 +1,33 @@
+validation:
+  get:
+    tags: [Workspace Validation]
+    summary: Get workspace validation issues
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/YearParam
+      - $ref: ../../components/common.yaml#/parameters/MonthParam
+    responses:
+      '200':
+        description: Validation result
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceValidationResponse
+resolve:
+  post:
+    tags: [Workspace Validation]
+    summary: Resolve workspace validation issues
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceValidationResolveRequest
+    responses:
+      '200':
+        description: Resolve result with refreshed validation payload
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceValidationResolveResponse
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest

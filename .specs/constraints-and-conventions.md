@@ -123,6 +123,14 @@ public class RosterRepository {
 }
 ```
 
+### 构建依赖约束
+
+#### Spring Boot 4 JSON 依赖
+
+- 使用 `ObjectMapper`、`JsonProcessingException`、Jackson 注解或需要 JSON HTTP 消息转换时，必须在 `pom.xml` 中显式声明 `spring-boot-starter-json`。
+- 不要假设 `spring-boot-starter-web` 一定会在当前项目依赖图中传递提供 Jackson 编译类路径；新增 JSON 序列化/反序列化逻辑时，应同时检查对应 starter 是否已声明。
+- 服务类中优先通过 Spring 注入 `ObjectMapper`，避免手工 new 实例导致全局序列化配置不一致。
+
 ---
 
 ## 异常处理机制

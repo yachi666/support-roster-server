@@ -1,0 +1,13 @@
+shiftCodeCollection:
+  get:
+    tags: [Viewer ShiftCodes]
+    summary: Get viewer shift codes
+    responses:
+      '200':
+        description: Shift code list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/ShiftCode

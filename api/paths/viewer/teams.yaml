@@ -1,0 +1,13 @@
+teamCollection:
+  get:
+    tags: [Viewer Teams]
+    summary: Get viewer teams
+    responses:
+      '200':
+        description: Viewer team list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/Team

@@ -1,0 +1,34 @@
+roster:
+  get:
+    tags: [Workspace Roster]
+    summary: Get monthly roster matrix
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/YearParam
+      - $ref: ../../components/common.yaml#/parameters/MonthParam
+    responses:
+      '200':
+        description: Monthly roster payload
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceMonthlyRosterResponse
+
+rosterSave:
+  post:
+    tags: [Workspace Roster]
+    summary: Save monthly roster cell updates
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceRosterSaveRequest
+    responses:
+      '200':
+        description: Updated monthly roster payload
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceMonthlyRosterResponse
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest

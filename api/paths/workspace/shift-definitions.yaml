@@ -1,0 +1,77 @@
+shiftDefinitionCollection:
+  get:
+    tags: [Workspace ShiftDefinitions]
+    summary: List shift definitions
+    parameters:
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Shift definition list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinition
+  post:
+    tags: [Workspace ShiftDefinitions]
+    summary: Create shift definition
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinitionUpsertRequest
+    responses:
+      '200':
+        description: Created shift definition
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinition
+
+shiftDefinitionItem:
+  get:
+    tags: [Workspace ShiftDefinitions]
+    summary: Get shift definition by id
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    responses:
+      '200':
+        description: Shift definition detail
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinition
+      '404':
+        $ref: ../../components/common.yaml#/responses/NotFound
+  put:
+    tags: [Workspace ShiftDefinitions]
+    summary: Update shift definition
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinitionUpsertRequest
+    responses:
+      '200':
+        description: Updated shift definition
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinition
+  delete:
+    tags: [Workspace ShiftDefinitions]
+    summary: Delete shift definition
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    responses:
+      '204':
+        description: Deleted

@@ -6,8 +6,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.support.server.supportrosterserver.dto.RoleGroupDto;
-import com.support.server.supportrosterserver.entity.RoleGroup;
-import com.support.server.supportrosterserver.repository.RosterRepository;
+import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
+import com.support.server.supportrosterserver.service.workspace.WorkspaceLookupService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -15,25 +15,28 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class RoleGroupService {
 
-    private final RosterRepository rosterRepository;
+    private final WorkspaceLookupService lookupService;
 
     public List<RoleGroupDto> getAllRoleGroups() {
-        return rosterRepository.findAllRoleGroups().stream()
+        return lookupService.listRoleGroups().stream()
             .map(this::convertToDto)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public RoleGroupDto getRoleGroupById(String id) {
-        RoleGroup roleGroup = rosterRepository.findRoleGroupById(id);
+        RoleGroupEntity roleGroup = lookupService.listRoleGroups().stream()
+            .filter(item -> id.equals(item.getCode()))
+            .findFirst()
+            .orElse(null);
         if (roleGroup == null) {
             return null;
         }
         return convertToDto(roleGroup);
     }
 
-    private RoleGroupDto convertToDto(RoleGroup roleGroup) {
+    private RoleGroupDto convertToDto(RoleGroupEntity roleGroup) {
         return new RoleGroupDto(
-            roleGroup.getId(),
+            roleGroup.getCode(),
             roleGroup.getName(),
             roleGroup.getCategory(),
             roleGroup.getRegion()

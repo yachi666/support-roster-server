@@ -22,6 +22,7 @@ public class ShiftDto {
     private String timezone;
     private Boolean isPrimary;
     private Boolean showOnRoster;
+    private String colorHex;
     private String remark;
     private ContactDto contact;
     private BackupDto backup;

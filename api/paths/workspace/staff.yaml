@@ -1,0 +1,85 @@
+staffCollection:
+  get:
+    tags: [Workspace Staff]
+    summary: List workspace staff
+    parameters:
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Staff list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/WorkspaceStaff
+  post:
+    tags: [Workspace Staff]
+    summary: Create workspace staff
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceStaffUpsertRequest
+    responses:
+      '200':
+        description: Created staff
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceStaff
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+
+staffItem:
+  get:
+    tags: [Workspace Staff]
+    summary: Get workspace staff by id
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    responses:
+      '200':
+        description: Staff detail
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceStaff
+      '404':
+        $ref: ../../components/common.yaml#/responses/NotFound
+  put:
+    tags: [Workspace Staff]
+    summary: Update workspace staff
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceStaffUpsertRequest
+    responses:
+      '200':
+        description: Updated staff
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceStaff
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+      '404':
+        $ref: ../../components/common.yaml#/responses/NotFound
+  delete:
+    tags: [Workspace Staff]
+    summary: Delete workspace staff
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    responses:
+      '204':
+        description: Deleted
+      '404':
+        $ref: ../../components/common.yaml#/responses/NotFound

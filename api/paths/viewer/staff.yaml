@@ -1,0 +1,29 @@
+staffCollection:
+  get:
+    tags: [Viewer Staff]
+    summary: Get viewer staff list
+    responses:
+      '200':
+        description: Staff list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/Staff
+
+staffItem:
+  get:
+    tags: [Viewer Staff]
+    summary: Get viewer staff by id
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/StaffIdParam
+    responses:
+      '200':
+        description: Staff detail
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/Staff
+      '404':
+        $ref: ../../components/common.yaml#/responses/NotFound

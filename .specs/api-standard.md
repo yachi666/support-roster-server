@@ -19,16 +19,33 @@ http://localhost:8080/api
 | 使用复数形式 | `/api/teams`, `/api/staff` | RESTful 风格 |
 | 资源嵌套避免过深 | `/api/shifts/{id}` | 最多一层嵌套 |
 
+### 命名空间约定
+
+- 公共 viewer 接口保留在 `/api/**`
+- workspace 后台管理接口统一放在 `/api/workspace/**`
+- 当前阶段不启用认证，因此管理接口与 viewer 接口都由同一服务直接暴露
+
 ### 端点清单
 
 ```mermaid
 graph LR
-    subgraph "API 端点"
-        T["GET /api/teams"]
-        S["GET /api/shifts<br/>GET /api/shifts/{id}"]
-        ST["GET /api/staff<br/>GET /api/staff/{id}"]
-        RG["GET /api/role-groups"]
-    end
+  subgraph "Viewer API"
+    T["GET /api/teams"]
+    S["GET /api/shifts<br/>GET /api/shifts/{id}"]
+    ST["GET /api/staff<br/>GET /api/staff/{id}"]
+    RG["GET /api/role-groups"]
+    SC["GET /api/shift-codes"]
+  end
+
+  subgraph "Workspace API"
+    WO["GET /api/workspace/overview"]
+    WS["/api/workspace/staff"]
+    WD["/api/workspace/shift-definitions"]
+    WT["/api/workspace/teams"]
+    WR["GET /api/workspace/roster<br/>POST /api/workspace/roster/save"]
+    WV["GET /api/workspace/validation"]
+    WI["POST /api/workspace/import-export/preview<br/>POST /api/workspace/import-export/{batchId}/apply<br/>GET /api/workspace/import-export/export"]
+  end
 ```
 
 ---
@@ -126,6 +143,26 @@ sequenceDiagram
 ---
 
 ## 核心接口清单
+
+### Workspace 管理接口总览
+
+| 模块 | 路径 |
+|------|------|
+| 总览 | `GET /api/workspace/overview` |
+| 角色组 | `GET /api/workspace/role-groups` |
+| 人员目录 | `GET/POST /api/workspace/staff`, `GET/PUT/DELETE /api/workspace/staff/{id}` |
+| 班次定义 | `GET/POST /api/workspace/shift-definitions`, `GET/PUT/DELETE /api/workspace/shift-definitions/{id}` |
+| 团队映射 | `GET/POST /api/workspace/teams`, `GET/PUT/DELETE /api/workspace/teams/{id}` |
+| 月度排班 | `GET /api/workspace/roster`, `POST /api/workspace/roster/save` |
+| 校验中心 | `GET /api/workspace/validation` |
+| 导入导出 | `POST /api/workspace/import-export/preview`, `POST /api/workspace/import-export/{batchId}/apply`, `GET /api/workspace/import-export/export` |
+
+### Workspace 接口行为说明
+
+- 排班数据按“员工 + 日期 + 班次编码”存储于数据库，而非整月 JSON。
+- 导入采用两阶段流程：先 preview，再 apply。
+- 校验中心同时聚合实时业务校验与导入批次问题。
+- 当前阶段无认证，错误主要以 `400`、`404`、`500` 返回。
 
 ### 1. 团队接口
 
@@ -441,9 +478,6 @@ Accept: application/json
 
 **文件位置**: [api/openapi.yaml](../api/openapi.yaml)
 
-可通过 Swagger UI 或其他 OpenAPI 工具查看交互式文档。
+路径契约已按 controller 拆分：viewer 接口位于 `api/paths/viewer/`，workspace 管理接口位于 `api/paths/workspace/`，共享参数与 schema 位于 `api/components/common.yaml`。
 
-**[Warning] 文档漂移提醒**：`openapi.yaml` 目前包含 `GET /shift-codes`，但当前 Java Controller 尚未实现该端点。以代码实际暴露接口为准，后续需二选一修复：
-
-1. 实现 `/api/shift-codes`。
-2. 从 OpenAPI 中移除该路径定义。
+可通过 Swagger UI 或其他 OpenAPI 工具从主入口文件聚合查看交互式文档。目录拆分约束见 [api/openapi-layout.md](./api/openapi-layout.md)。

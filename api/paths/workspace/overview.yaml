@@ -1,0 +1,11 @@
+overview:
+  get:
+    tags: [Workspace Overview]
+    summary: Get workspace overview dashboard data
+    responses:
+      '200':
+        description: Overview payload
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceOverviewResponse

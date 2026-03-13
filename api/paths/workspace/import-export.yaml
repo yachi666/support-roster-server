@@ -1,0 +1,70 @@
+preview:
+  post:
+    tags: [Workspace ImportExport]
+    summary: Preview Excel import and generate validation issues
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file, year, month]
+            properties:
+              file:
+                type: string
+                format: binary
+              year:
+                type: integer
+              month:
+                type: integer
+              operator:
+                type: string
+    responses:
+      '200':
+        description: Import preview result
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceImportPreviewResponse
+
+apply:
+  post:
+    tags: [Workspace ImportExport]
+    summary: Apply a validated import batch into database
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: operator
+        in: query
+        required: false
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Apply result
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceImportApplyResponse
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+
+export:
+  get:
+    tags: [Workspace ImportExport]
+    summary: Export monthly roster as CSV
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/YearParam
+      - $ref: ../../components/common.yaml#/parameters/MonthParam
+    responses:
+      '200':
+        description: CSV export
+        content:
+          text/csv:
+            schema:
+              type: string
+              format: binary

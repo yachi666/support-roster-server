@@ -1,0 +1,71 @@
+teamCollection:
+  get:
+    tags: [Workspace Teams]
+    summary: List workspace teams
+    responses:
+      '200':
+        description: Team list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/WorkspaceTeam
+  post:
+    tags: [Workspace Teams]
+    summary: Create workspace team
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceTeamUpsertRequest
+    responses:
+      '200':
+        description: Created team
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceTeam
+
+teamItem:
+  get:
+    tags: [Workspace Teams]
+    summary: Get workspace team by id
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    responses:
+      '200':
+        description: Team detail
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceTeam
+      '404':
+        $ref: ../../components/common.yaml#/responses/NotFound
+  put:
+    tags: [Workspace Teams]
+    summary: Update workspace team
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceTeamUpsertRequest
+    responses:
+      '200':
+        description: Updated team
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceTeam
+  delete:
+    tags: [Workspace Teams]
+    summary: Delete workspace team
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    responses:
+      '204':
+        description: Deleted
