@@ -20,6 +20,7 @@ import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentE
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
+import com.support.server.supportrosterserver.mapper.ImportBatchMapper;
 import com.support.server.supportrosterserver.mapper.ImportIssueMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
@@ -30,6 +31,7 @@ class WorkspaceValidationServiceTest {
     private StaffMapper staffMapper;
     private ShiftDefinitionMapper shiftDefinitionMapper;
     private RosterAssignmentMapper rosterAssignmentMapper;
+    private ImportBatchMapper importBatchMapper;
     private ImportIssueMapper importIssueMapper;
     private WorkspaceLookupService lookupService;
     private WorkspaceValidationService validationService;
@@ -39,9 +41,10 @@ class WorkspaceValidationServiceTest {
         staffMapper = mock(StaffMapper.class);
         shiftDefinitionMapper = mock(ShiftDefinitionMapper.class);
         rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
+        importBatchMapper = mock(ImportBatchMapper.class);
         importIssueMapper = mock(ImportIssueMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
-        validationService = new WorkspaceValidationService(staffMapper, shiftDefinitionMapper, rosterAssignmentMapper, importIssueMapper, lookupService);
+        validationService = new WorkspaceValidationService(staffMapper, shiftDefinitionMapper, rosterAssignmentMapper, importBatchMapper, importIssueMapper, lookupService);
     }
 
     @Test
