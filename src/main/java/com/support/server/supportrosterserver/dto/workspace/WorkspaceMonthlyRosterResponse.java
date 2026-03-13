@@ -15,6 +15,7 @@ public class WorkspaceMonthlyRosterResponse {
     private Integer month;
     private List<WorkspaceRosterGroupDto> groups;
     private List<String> shiftCodeOptions;
+    private Map<Long, List<String>> shiftCodeOptionsByRoleGroup;
     private Map<String, String> shiftCodeColorMap;
     private String validationWarning;
 }

@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,22 +73,40 @@ public class WorkspaceRosterService {
                     schedule.put(day, scheduleMap.getOrDefault(staff.getId() + "|" + day, ""));
                 }
                 RoleGroupEntity roleGroup = roleGroupMap.get(staff.getRoleGroupId());
-                persons.add(new WorkspaceRosterPersonDto(staff.getId(), staff.getName(), roleGroup == null ? staff.getRoleName() : roleGroup.getName(), schedule));
+                persons.add(new WorkspaceRosterPersonDto(
+                    staff.getId(),
+                    staff.getName(),
+                    roleGroup == null ? staff.getRoleName() : roleGroup.getName(),
+                    staff.getRoleGroupId(),
+                    schedule
+                ));
             }
             groups.add(new WorkspaceRosterGroupDto(team.getId(), team.getName(), team.getColor(), persons));
         }
 
-        List<String> shiftOptions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
+        List<ShiftDefinitionEntity> visibleShiftDefinitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
                 .eq(ShiftDefinitionEntity::getVisible, true)
-                .orderByAsc(ShiftDefinitionEntity::getCode))
-            .stream()
+                .orderByAsc(ShiftDefinitionEntity::getRoleGroupId)
+                .orderByAsc(ShiftDefinitionEntity::getCode));
+
+        List<String> shiftOptions = visibleShiftDefinitions.stream()
             .map(ShiftDefinitionEntity::getCode)
             .distinct()
             .toList();
 
+        Map<Long, List<String>> shiftCodeOptionsByRoleGroup = visibleShiftDefinitions.stream()
+            .filter(shiftDefinition -> shiftDefinition.getRoleGroupId() != null)
+            .collect(Collectors.groupingBy(
+                ShiftDefinitionEntity::getRoleGroupId,
+                LinkedHashMap::new,
+                Collectors.mapping(ShiftDefinitionEntity::getCode, Collectors.collectingAndThen(Collectors.toList(), codes -> codes.stream()
+                    .filter(code -> code != null && !code.isBlank())
+                    .distinct()
+                    .toList()))
+            ));
+
         Map<String, String> shiftCodeColorMap = new HashMap<>();
-        for (ShiftDefinitionEntity shiftDef : shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-                .eq(ShiftDefinitionEntity::getVisible, true))) {
+        for (ShiftDefinitionEntity shiftDef : visibleShiftDefinitions) {
             if (shiftDef.getCode() != null && shiftDef.getColorHex() != null) {
                 shiftCodeColorMap.put(shiftDef.getCode(), shiftDef.getColorHex());
             }
@@ -99,7 +118,15 @@ public class WorkspaceRosterService {
             .findFirst()
             .orElse("");
 
-        return new WorkspaceMonthlyRosterResponse(targetMonth.getYear(), targetMonth.getMonthValue(), groups, shiftOptions, shiftCodeColorMap, validationWarning);
+        return new WorkspaceMonthlyRosterResponse(
+            targetMonth.getYear(),
+            targetMonth.getMonthValue(),
+            groups,
+            shiftOptions,
+            shiftCodeOptionsByRoleGroup,
+            shiftCodeColorMap,
+            validationWarning
+        );
     }
 
     @Transactional

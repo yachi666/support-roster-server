@@ -429,6 +429,8 @@ schemas:
         type: string
       roleName:
         type: string
+      roleGroupId:
+        type: string
       schedule:
         type: object
         additionalProperties:
@@ -462,6 +464,16 @@ schemas:
       shiftCodeOptions:
         type: array
         items:
+          type: string
+      shiftCodeOptionsByRoleGroup:
+        type: object
+        additionalProperties:
+          type: array
+          items:
+            type: string
+      shiftCodeColorMap:
+        type: object
+        additionalProperties:
           type: string
       validationWarning:
         type: string

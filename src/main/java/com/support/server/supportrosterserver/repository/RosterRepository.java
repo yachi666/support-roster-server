@@ -1,5 +1,7 @@
 package com.support.server.supportrosterserver.repository;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,20 +39,20 @@ public class RosterRepository {
     private void loadRosterData() {
         try {
             ClassPathResource resource = new ClassPathResource(ROSTER_FILE);
-            String filePath = resource.getFile().getAbsolutePath();
+            byte[] rosterBytes = resource.getContentAsByteArray();
 
-            loadShiftDefinitions(filePath);
-            loadStaffShiftData(filePath);
+            loadShiftDefinitions(rosterBytes);
+            loadStaffShiftData(rosterBytes);
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to load roster data", e);
         }
     }
 
-    private void loadShiftDefinitions(String filePath) {
-        try {
+    private void loadShiftDefinitions(byte[] rosterBytes) {
+        try(ByteArrayInputStream inputStream = new ByteArrayInputStream(rosterBytes)) {
             ShiftDefinitionDataListener listener = new ShiftDefinitionDataListener();
-            FesodSheet.read(filePath, ShiftDefinitionRow.class, listener)
+            FesodSheet.read(inputStream, ShiftDefinitionRow.class, listener)
                 .sheet(SHEET_INDEX_SHIFT_DEFINITIONS)
                 .doRead();
 
@@ -91,10 +93,10 @@ public class RosterRepository {
         }
     }
 
-    private void loadStaffShiftData(String filePath) {
-        try {
+    private void loadStaffShiftData(byte[] rosterBytes) {
+        try(InputStream inputStream = new ByteArrayInputStream(rosterBytes)) {
             StaffShiftDataListener staffShiftListener = new StaffShiftDataListener();
-            FesodSheet.read(filePath, StaffShiftRow.class, staffShiftListener)
+            FesodSheet.read(inputStream, StaffShiftRow.class, staffShiftListener)
                 .sheet(SHEET_INDEX_STAFF_SHIFTS)
                 .doRead();
 
