@@ -38,7 +38,7 @@ controller：`WorkspaceStaffController`
 - `email`、`phone`、`slack`
 - `region`、`timezone`
 - `roleName`、`status`
-- `avatar`、`notes`
+- `notes`
 
 ## 资源约束
 
@@ -73,7 +73,7 @@ controller：`WorkspaceStaffController`
 | `roleName` | `WorkspaceStaffUpsertRequest.roleName` | `roleName` | 否 | 展示角色名 |
 | `roleGroupId` | `WorkspaceStaffUpsertRequest.roleGroupId` | `roleGroupId` | 是 | 角色组主键 |
 | `status` | `WorkspaceStaffUpsertRequest.status` | `status` | 否 | 状态 |
-| `avatar` | `WorkspaceStaffUpsertRequest.avatar` | `avatar` | 否 | 头像 |
+| `avatar` | `WorkspaceStaffUpsertRequest.avatar` | `avatar` | 否 | 历史兼容字段，服务端返回时改为基于 `staffCode` 实时拼接 |
 | `notes` | `WorkspaceStaffUpsertRequest.notes` | `notes` | 否 | 备注 |
 
 ### 查询参数与路径字段
@@ -101,6 +101,6 @@ controller：`WorkspaceStaffController`
 | `roleGroupCode` | `roleGroupCode` | 角色组编码 |
 | `roleGroupName` | `roleGroupName` | 角色组名称 |
 | `status` | `status` | 状态 |
-| `avatar` | `avatar` | 头像 |
+| `avatar` | `avatar` | 基于 `staffCode` 实时拼接的头像 URL |
 | `notes` | `notes` | 备注 |
 | `rosterTags` | `rosterTags` | 排班标签列表 |

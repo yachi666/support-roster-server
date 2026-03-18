@@ -269,14 +269,16 @@ shiftId = UUID.nameUUIDFromBytes("{staffId}|{shiftCode}|{date}".getBytes(UTF-8))
 
 ### 5. 头像生成规则
 
-**定义位置**: [service/RosterService.java](../src/main/java/com/support/server/supportrosterserver/service/RosterService.java) `generateAvatarUrl()`
+**定义位置**: [service/AvatarUrlResolver.java](../src/main/java/com/support/server/supportrosterserver/service/AvatarUrlResolver.java) `resolve()`
 
 ```java
-avatarIndex = (staffId % 8) + 1
-avatar = AVATARS[(avatarIndex - 1) % 8]
+segment = staffCode.length() <= 4 ? staffCode : staffCode.substring(0, 4)
+avatar = "{support.avatar.base-url}/{segment}/{staffCode}.jpg"
 ```
 
-**[Warning]** 当前使用 Unsplash 占位图，实际生产环境应替换为真实头像系统
+- `staffCode` 作为头像目录与文件名来源。
+- 前四位不足 4 位时直接使用原值，不补零。
+- 数据库 `avatar` 字段不再作为对外返回值。
 
 ---
 

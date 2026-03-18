@@ -51,7 +51,7 @@ controller：`ShiftController`
 | `teamId` | `teamId` | 团队编码 |
 | `staffId` | `staffId` | 人员主键 |
 | `userName` | `userName` | 人员名称 |
-| `userAvatar` | `userAvatar` | 人员头像 |
+| `userAvatar` | `userAvatar` | 基于 `staffCode` 实时拼接的人物头像 |
 | `code` | `code` | 班次编码 |
 | `meaning` | `meaning` | 班次含义 |
 | `start` | `start` | 开始时间 |

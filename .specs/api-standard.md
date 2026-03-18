@@ -243,7 +243,7 @@ Accept: application/json
     "teamId": "l1",
     "staffId": 123,
     "userName": "test1",
-    "userAvatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100",
+    "userAvatar": "https://photos.global.image/casual/square/test/test1.jpg",
     "code": "A",
     "meaning": "00:00-07:00",
     "start": "2024-01-15T00:00:00+08:00",
@@ -295,7 +295,7 @@ Accept: application/json
   {
     "id": 123,
     "name": "test1",
-    "avatar": null,
+    "avatar": "https://photos.global.image/casual/square/test/test1.jpg",
     "email": null,
     "phone": null,
     "slack": null,
@@ -393,7 +393,7 @@ Accept: application/json
 | `teamId` | `String` | 团队 ID |
 | `staffId` | `Long` | 员工 ID |
 | `userName` | `String` | 员工姓名 |
-| `userAvatar` | `String` | 头像 URL |
+| `userAvatar` | `String` | 基于 `staffCode` 实时拼接的头像 URL |
 | `code` | `String` | 班次代码 |
 | `meaning` | `String` | 班次含义 |
 | `start` | `OffsetDateTime` | 开始时间 (ISO 8601) |
@@ -413,7 +413,7 @@ Accept: application/json
 |------|------|------|
 | `id` | `Long` | 员工 ID |
 | `name` | `String` | 姓名 |
-| `avatar` | `String` | 头像 URL |
+| `avatar` | `String` | 基于 `staffCode` 实时拼接的头像 URL |
 | `email` | `String` | 邮箱 |
 | `phone` | `String` | 电话 |
 | `slack` | `String` | Slack 账号 |

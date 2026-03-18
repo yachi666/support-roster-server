@@ -21,6 +21,7 @@ import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
+import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class WorkspaceStaffService {
 
+    private final AvatarUrlResolver avatarUrlResolver;
     private final StaffMapper staffMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
@@ -98,7 +100,7 @@ public class WorkspaceStaffService {
             .map(entity -> new com.support.server.supportrosterserver.dto.StaffDto(
                 entity.getId(),
                 entity.getName(),
-                entity.getAvatar(),
+                avatarUrlResolver.resolve(entity.getStaffCode()),
                 entity.getEmail(),
                 entity.getPhone(),
                 entity.getSlack(),
@@ -118,7 +120,7 @@ public class WorkspaceStaffService {
         return new com.support.server.supportrosterserver.dto.StaffDto(
             entity.getId(),
             entity.getName(),
-            entity.getAvatar(),
+            avatarUrlResolver.resolve(entity.getStaffCode()),
             entity.getEmail(),
             entity.getPhone(),
             entity.getSlack(),
@@ -156,7 +158,7 @@ public class WorkspaceStaffService {
             roleGroup == null ? null : roleGroup.getCode(),
             roleGroup == null ? null : roleGroup.getName(),
             entity.getStatus(),
-            entity.getAvatar(),
+            avatarUrlResolver.resolve(entity.getStaffCode()),
             entity.getNotes(),
             new ArrayList<>(tags.values())
         );

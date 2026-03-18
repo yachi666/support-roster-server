@@ -43,3 +43,7 @@ management:
     web:
       exposure:
         include: health,info
+
+support:
+  avatar:
+    base-url: https://photos.global.image/casual/square

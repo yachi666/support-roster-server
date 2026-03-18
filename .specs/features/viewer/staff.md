@@ -38,7 +38,7 @@ controller：`StaffController`
 |------|------|------|
 | `id` | `id` | 人员主键 |
 | `name` | `name` | 人员姓名 |
-| `avatar` | `avatar` | 头像 |
+| `avatar` | `avatar` | 基于 `staffCode` 实时拼接的头像 URL |
 | `email` | `email` | 邮箱 |
 | `phone` | `phone` | 电话 |
 | `slack` | `slack` | Slack |

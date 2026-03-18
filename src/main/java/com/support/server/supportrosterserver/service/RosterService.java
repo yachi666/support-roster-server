@@ -30,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class RosterService {
 
+    private final AvatarUrlResolver avatarUrlResolver;
     private final WorkspaceTeamService workspaceTeamService;
     private final WorkspaceLookupService lookupService;
     private final RosterAssignmentMapper rosterAssignmentMapper;
@@ -87,7 +88,7 @@ public class RosterService {
         dto.setTeamId(team.getTeamCode());
         dto.setStaffId(staff.getId());
         dto.setUserName(staff.getName());
-        dto.setUserAvatar(staff.getAvatar());
+        dto.setUserAvatar(avatarUrlResolver.resolve(staff.getStaffCode()));
         dto.setCode(assignment.getShiftCode());
         dto.setMeaning(shiftDefinition.getMeaning());
         dto.setStart(start.withZoneSameInstant(targetZone).toOffsetDateTime());
