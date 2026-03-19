@@ -18,6 +18,6 @@ public class WorkspaceRosterPersonDto {
     private String avatar;
     private String roleName;
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long roleGroupId;
+    private Long teamId;
     private Map<Integer, String> schedule;
 }

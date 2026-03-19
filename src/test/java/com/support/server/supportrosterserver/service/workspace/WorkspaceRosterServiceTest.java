@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceMonthlyRosterResponse;
-import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
@@ -49,17 +48,10 @@ class WorkspaceRosterServiceTest {
     }
 
     @Test
-    void shouldReturnRoleScopedShiftOptionsForMonthlyRoster() {
-        RoleGroupEntity l1RoleGroup = new RoleGroupEntity();
-        l1RoleGroup.setId(101L);
-        l1RoleGroup.setName("L1 China");
-
-        RoleGroupEntity l2RoleGroup = new RoleGroupEntity();
-        l2RoleGroup.setId(202L);
-        l2RoleGroup.setName("L2 China");
-
+    void shouldReturnTeamScopedShiftOptionsForMonthlyRoster() {
         TeamEntity team = new TeamEntity();
         team.setId(301L);
+        team.setTeamCode("china-support");
         team.setName("China Support");
         team.setColor("#0f766e");
         team.setVisible(true);
@@ -69,50 +61,42 @@ class WorkspaceRosterServiceTest {
         alice.setStaffCode("401");
         alice.setName("Alice");
         alice.setRoleName("Analyst");
-        alice.setRoleGroupId(101L);
+        alice.setTeamId(301L);
 
         StaffEntity bob = new StaffEntity();
         bob.setId(402L);
         bob.setStaffCode("402X9");
         bob.setName("Bob");
         bob.setRoleName("Escalation");
-        bob.setRoleGroupId(202L);
+        bob.setTeamId(301L);
 
-        when(lookupService.roleGroupMap()).thenReturn(Map.of(
-            101L, l1RoleGroup,
-            202L, l2RoleGroup
-        ));
-        when(lookupService.teamByRoleGroupId()).thenReturn(Map.of(
-            101L, team,
-            202L, team
-        ));
+        when(lookupService.teamMap()).thenReturn(Map.of(301L, team));
         when(lookupService.listTeams()).thenReturn(List.of(team));
         when(staffMapper.selectList(any())).thenReturn(List.of(alice, bob));
         when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(
-            buildShiftDefinition(501L, 101L, "AP-D", "#ef4444"),
-            buildShiftDefinition(502L, 101L, "AP-N", "#f97316"),
-            buildShiftDefinition(503L, 202L, "L2-D", "#22c55e")
+            buildShiftDefinition(501L, 301L, "AP-D", "#ef4444"),
+            buildShiftDefinition(502L, 301L, "AP-N", "#f97316"),
+            buildShiftDefinition(503L, 301L, "L2-D", "#22c55e")
         ));
         when(validationService.validateLiveData(any())).thenReturn(List.of());
 
         WorkspaceMonthlyRosterResponse response = workspaceRosterService.getMonthlyRoster(2026, 3);
 
         assertEquals(1, response.getGroups().size());
-        assertEquals("101", response.getGroups().get(0).getStaff().get(0).getRoleGroupId().toString());
-        assertEquals("202", response.getGroups().get(0).getStaff().get(1).getRoleGroupId().toString());
+        assertEquals("301", response.getGroups().get(0).getStaff().get(0).getTeamId().toString());
+        assertEquals("301", response.getGroups().get(0).getStaff().get(1).getTeamId().toString());
         assertEquals("https://photos.global.image/casual/square/401/401.jpg", response.getGroups().get(0).getStaff().get(0).getAvatar());
         assertEquals("https://photos.global.image/casual/square/402X/402X9.jpg", response.getGroups().get(0).getStaff().get(1).getAvatar());
         assertIterableEquals(List.of("AP-D", "AP-N", "L2-D"), response.getShiftCodeOptions());
-        assertIterableEquals(List.of("AP-D", "AP-N"), response.getShiftCodeOptionsByRoleGroup().get(101L));
-        assertIterableEquals(List.of("L2-D"), response.getShiftCodeOptionsByRoleGroup().get(202L));
+        assertIterableEquals(List.of("AP-D", "AP-N", "L2-D"), response.getShiftCodeOptionsByTeam().get(301L));
         assertEquals("#ef4444", response.getShiftCodeColorMap().get("AP-D"));
         assertTrue(response.getValidationWarning().isEmpty());
     }
 
-    private ShiftDefinitionEntity buildShiftDefinition(Long id, Long roleGroupId, String code, String colorHex) {
+    private ShiftDefinitionEntity buildShiftDefinition(Long id, Long teamId, String code, String colorHex) {
         ShiftDefinitionEntity entity = new ShiftDefinitionEntity();
         entity.setId(id);
-        entity.setRoleGroupId(roleGroupId);
+        entity.setTeamId(teamId);
         entity.setCode(code);
         entity.setColorHex(colorHex);
         entity.setVisible(true);

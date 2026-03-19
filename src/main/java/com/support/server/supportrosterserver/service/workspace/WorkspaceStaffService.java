@@ -14,7 +14,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffUpsertRequest;
-import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
@@ -47,10 +46,9 @@ public class WorkspaceStaffService {
                 .or().like(StaffEntity::getRegion, keyword));
         }
 
-        Map<Long, RoleGroupEntity> roleGroupMap = lookupService.roleGroupMap();
-        Map<Long, TeamEntity> teamByRoleGroupId = lookupService.teamByRoleGroupId();
+        Map<Long, TeamEntity> teamMap = lookupService.teamMap();
         return staffMapper.selectList(query).stream()
-            .map(staff -> toDto(staff, roleGroupMap.get(staff.getRoleGroupId()), teamByRoleGroupId.get(staff.getRoleGroupId())))
+            .map(staff -> toDto(staff, teamMap.get(staff.getTeamId())))
             .toList();
     }
 
@@ -59,9 +57,7 @@ public class WorkspaceStaffService {
         if (entity == null) {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
-        Map<Long, RoleGroupEntity> roleGroupMap = lookupService.roleGroupMap();
-        Map<Long, TeamEntity> teamByRoleGroupId = lookupService.teamByRoleGroupId();
-        return toDto(entity, roleGroupMap.get(entity.getRoleGroupId()), teamByRoleGroupId.get(entity.getRoleGroupId()));
+        return toDto(entity, lookupService.teamMap().get(entity.getTeamId()));
     }
 
     @Transactional
@@ -116,7 +112,7 @@ public class WorkspaceStaffService {
         if (entity == null) {
             return null;
         }
-        RoleGroupEntity roleGroup = lookupService.roleGroupMap().get(entity.getRoleGroupId());
+        TeamEntity team = entity.getTeamId() == null ? null : lookupService.teamMap().get(entity.getTeamId());
         return new com.support.server.supportrosterserver.dto.StaffDto(
             entity.getId(),
             entity.getName(),
@@ -126,11 +122,11 @@ public class WorkspaceStaffService {
             entity.getSlack(),
             entity.getRegion(),
             entity.getPhone(),
-            roleGroup == null ? List.of() : List.of(roleGroup.getCode())
+            team == null ? List.of() : List.of(team.getTeamCode())
         );
     }
 
-    private WorkspaceStaffDto toDto(StaffEntity entity, RoleGroupEntity roleGroup, TeamEntity team) {
+    private WorkspaceStaffDto toDto(StaffEntity entity, TeamEntity team) {
         YearMonth currentMonth = YearMonth.now();
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
             .eq(RosterAssignmentEntity::getStaffId, entity.getId())
@@ -138,9 +134,6 @@ public class WorkspaceStaffService {
         Map<String, String> tags = new LinkedHashMap<>();
         if (team != null) {
             tags.put("team", team.getName());
-        }
-        if (roleGroup != null) {
-            tags.put("roleGroup", roleGroup.getCode());
         }
         tags.put("assignments", assignments.size() + " shifts this month");
         return new WorkspaceStaffDto(
@@ -153,10 +146,9 @@ public class WorkspaceStaffService {
             entity.getRegion(),
             entity.getTimezone(),
             entity.getRoleName(),
+            entity.getTeamId(),
+            team == null ? null : team.getTeamCode(),
             team == null ? null : team.getName(),
-            entity.getRoleGroupId(),
-            roleGroup == null ? null : roleGroup.getCode(),
-            roleGroup == null ? null : roleGroup.getName(),
             entity.getStatus(),
             avatarUrlResolver.resolve(entity.getStaffCode()),
             entity.getNotes(),
@@ -165,7 +157,7 @@ public class WorkspaceStaffService {
     }
 
     private void apply(StaffEntity entity, WorkspaceStaffUpsertRequest request) {
-        lookupService.requireRoleGroup(request.getRoleGroupId());
+        lookupService.requireTeam(request.getTeamId());
         entity.setStaffCode(request.getStaffCode());
         entity.setName(request.getName());
         entity.setEmail(request.getEmail());
@@ -174,7 +166,8 @@ public class WorkspaceStaffService {
         entity.setRegion(request.getRegion());
         entity.setTimezone(request.getTimezone());
         entity.setRoleName(request.getRoleName());
-        entity.setRoleGroupId(request.getRoleGroupId());
+        entity.setTeamId(request.getTeamId());
+        entity.setRoleGroupId(null);
         entity.setStatus(request.getStatus() == null || request.getStatus().isBlank() ? "Active" : request.getStatus());
         entity.setAvatar(request.getAvatar());
         entity.setNotes(request.getNotes());

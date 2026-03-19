@@ -29,8 +29,6 @@ public class ImportIssueEntity extends BaseEntity {
 
     private String teamName;
 
-    private String roleGroupCode;
-
     private String staffName;
 
     private LocalDate issueDate;

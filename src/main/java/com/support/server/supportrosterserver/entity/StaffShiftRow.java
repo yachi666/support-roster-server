@@ -15,7 +15,7 @@ public class StaffShiftRow {
     private String staffId;
 
     @ExcelProperty(index = 2)
-    private String roleGroup;
+    private String team;
 
     @ExcelProperty(index = 3)
     private String region;

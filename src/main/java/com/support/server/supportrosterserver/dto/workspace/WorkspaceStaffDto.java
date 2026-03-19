@@ -22,11 +22,10 @@ public class WorkspaceStaffDto {
     private String region;
     private String timezone;
     private String roleName;
-    private String teamName;
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long roleGroupId;
-    private String roleGroupCode;
-    private String roleGroupName;
+    private Long teamId;
+    private String teamCode;
+    private String teamName;
     private String status;
     private String avatar;
     private String notes;

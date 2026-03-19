@@ -32,6 +32,8 @@ public class StaffEntity extends BaseEntity {
 
     private String roleName;
 
+    private Long teamId;
+
     private Long roleGroupId;
 
     private String status;

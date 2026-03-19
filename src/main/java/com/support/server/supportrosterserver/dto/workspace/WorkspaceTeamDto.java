@@ -1,7 +1,5 @@
 package com.support.server.supportrosterserver.dto.workspace;
 
-import java.util.List;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -20,5 +18,4 @@ public class WorkspaceTeamDto {
     private Integer displayOrder;
     private Boolean visible;
     private String description;
-    private List<WorkspaceRoleGroupDto> roleGroups;
 }

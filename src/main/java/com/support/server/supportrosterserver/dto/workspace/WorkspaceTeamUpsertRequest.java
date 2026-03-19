@@ -1,7 +1,5 @@
 package com.support.server.supportrosterserver.dto.workspace;
 
-import java.util.List;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -24,7 +22,4 @@ public class WorkspaceTeamUpsertRequest {
     private Boolean visible;
 
     private String description;
-
-    @NotNull
-    private List<Long> roleGroupIds;
 }

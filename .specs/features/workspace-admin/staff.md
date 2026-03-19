@@ -34,7 +34,7 @@ controller：`WorkspaceStaffController`
 
 - `staffCode`
 - `name`
-- `roleGroupId`
+- `teamId`
 - `email`、`phone`、`slack`
 - `region`、`timezone`
 - `roleName`、`status`
@@ -42,17 +42,17 @@ controller：`WorkspaceStaffController`
 
 ## 资源约束
 
-- `staffCode`、`name`、`roleGroupId` 为必填字段。
-- 人员必须挂靠已存在的角色组。
+- `staffCode`、`name`、`teamId` 为必填字段。
+- 人员必须挂靠已存在的团队。
 - 删除人员时，应确保相关排班或引用关系按服务层约定被一并处理或阻止删除。
 
 ## 返回视图
 
 `WorkspaceStaffDto` 在列表与详情中同时承担展示模型，除人员基础信息外，还会携带：
 
+- `teamId`
+- `teamCode`
 - `teamName`
-- `roleGroupCode`
-- `roleGroupName`
 - `rosterTags`
 
 这些字段用于后台表格与筛选显示，不应视为单独资源的主数据写入口。
@@ -71,7 +71,7 @@ controller：`WorkspaceStaffController`
 | `region` | `WorkspaceStaffUpsertRequest.region` | `region` | 否 | 区域 |
 | `timezone` | `WorkspaceStaffUpsertRequest.timezone` | `timezone` | 否 | 时区 |
 | `roleName` | `WorkspaceStaffUpsertRequest.roleName` | `roleName` | 否 | 展示角色名 |
-| `roleGroupId` | `WorkspaceStaffUpsertRequest.roleGroupId` | `roleGroupId` | 是 | 角色组主键 |
+| `teamId` | `WorkspaceStaffUpsertRequest.teamId` | `teamId` | 是 | 团队主键 |
 | `status` | `WorkspaceStaffUpsertRequest.status` | `status` | 否 | 状态 |
 | `avatar` | `WorkspaceStaffUpsertRequest.avatar` | `avatar` | 否 | 历史兼容字段，服务端返回时改为基于 `staffCode` 实时拼接 |
 | `notes` | `WorkspaceStaffUpsertRequest.notes` | `notes` | 否 | 备注 |
@@ -96,10 +96,9 @@ controller：`WorkspaceStaffController`
 | `region` | `region` | 区域 |
 | `timezone` | `timezone` | 时区 |
 | `roleName` | `roleName` | 角色名 |
+| `teamId` | `teamId` | 所属团队主键 |
+| `teamCode` | `teamCode` | 所属团队编码 |
 | `teamName` | `teamName` | 所属团队名称 |
-| `roleGroupId` | `roleGroupId` | 角色组主键 |
-| `roleGroupCode` | `roleGroupCode` | 角色组编码 |
-| `roleGroupName` | `roleGroupName` | 角色组名称 |
 | `status` | `status` | 状态 |
 | `avatar` | `avatar` | 基于 `staffCode` 实时拼接的头像 URL |
 | `notes` | `notes` | 备注 |

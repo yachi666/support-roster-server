@@ -31,7 +31,7 @@ controller：`WorkspaceShiftDefinitionController`
 
 写接口统一使用 `WorkspaceShiftDefinitionUpsertRequest`，必填字段包括：
 
-- `roleGroupId`
+- `teamId`
 - `code`
 - `meaning`
 - `startTime`
@@ -47,7 +47,7 @@ controller：`WorkspaceShiftDefinitionController`
 
 ## 资源约束
 
-- 班次定义必须绑定已存在的角色组。
+- 班次定义必须绑定已存在的团队。
 - `startTime` 与 `endTime` 不可形成无效时间范围。
 - `primaryShift` 用于主班次校验规则。
 - `visible` 用于决定是否可出现在后台排班选项和相关展示中。
@@ -64,7 +64,7 @@ controller：`WorkspaceShiftDefinitionController`
 
 | 请求字段 | Request DTO | Response DTO 字段 | 必填 | 说明 |
 |------|------|------|------|------|
-| `roleGroupId` | `WorkspaceShiftDefinitionUpsertRequest.roleGroupId` | `roleGroupId` | 是 | 角色组主键 |
+| `teamId` | `WorkspaceShiftDefinitionUpsertRequest.teamId` | `teamId` | 是 | 团队主键 |
 | `code` | `WorkspaceShiftDefinitionUpsertRequest.code` | `code` | 是 | 班次编码 |
 | `meaning` | `WorkspaceShiftDefinitionUpsertRequest.meaning` | `meaning` | 是 | 班次说明 |
 | `startTime` | `WorkspaceShiftDefinitionUpsertRequest.startTime` | `startTime` | 是 | 开始时间 |
@@ -87,9 +87,9 @@ controller：`WorkspaceShiftDefinitionController`
 | DTO 字段 | OpenAPI 字段 | 说明 |
 |------|------|------|
 | `id` | `id` | 主键 |
-| `roleGroupId` | `roleGroupId` | 角色组主键 |
-| `roleGroupCode` | `roleGroupCode` | 角色组编码 |
-| `roleGroupName` | `roleGroupName` | 角色组名称 |
+| `teamId` | `teamId` | 团队主键 |
+| `teamCode` | `teamCode` | 团队编码 |
+| `teamName` | `teamName` | 团队名称 |
 | `code` | `code` | 班次编码 |
 | `meaning` | `meaning` | 班次含义 |
 | `startTime` | `startTime` | 开始时间 |

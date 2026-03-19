@@ -21,7 +21,6 @@ import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationR
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationSummaryDto;
 import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity;
 import com.support.server.supportrosterserver.entity.workspace.ImportBatchEntity;
-import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
@@ -67,19 +66,18 @@ public class WorkspaceValidationService {
         AtomicLong idGenerator = new AtomicLong(1_000_000L);
         List<WorkspaceValidationIssueDto> issues = new ArrayList<>();
 
-        Map<Long, RoleGroupEntity> roleGroupMap = lookupService.roleGroupMap();
-        Map<Long, TeamEntity> teamByRoleGroupId = lookupService.teamByRoleGroupId();
-        Map<String, ShiftDefinitionEntity> shiftDefinitionByRoleGroupAndCode = new HashMap<>();
+        Map<Long, TeamEntity> teamMap = lookupService.teamMap();
+        Map<String, ShiftDefinitionEntity> shiftDefinitionByTeamAndCode = new HashMap<>();
         for (ShiftDefinitionEntity def : shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery())) {
-            shiftDefinitionByRoleGroupAndCode.put(def.getRoleGroupId() + "|" + def.getCode(), def);
+            shiftDefinitionByTeamAndCode.put(def.getTeamId() + "|" + def.getCode(), def);
             if (def.getStartTime() == null || def.getEndTime() == null) {
-                RoleGroupEntity roleGroup = roleGroupMap.get(def.getRoleGroupId());
+                TeamEntity team = def.getTeamId() == null ? null : teamMap.get(def.getTeamId());
                 issues.add(new WorkspaceValidationIssueDto(
                     idGenerator.getAndIncrement(),
                     "medium",
                     "Invalid Shift Definition",
                     "Shift definition time range is incomplete for code '" + def.getCode() + "'.",
-                    roleGroup == null ? "-" : roleGroup.getName(),
+                    team == null ? "-" : team.getName(),
                     "-",
                     false,
                     RESOLUTION_KIND_MANUAL
@@ -90,7 +88,7 @@ public class WorkspaceValidationService {
         for (StaffEntity staff : staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()
                 .orderByAsc(StaffEntity::getName))) {
             if (staff.getTimezone() == null || staff.getTimezone().isBlank()) {
-                TeamEntity team = teamByRoleGroupId.get(staff.getRoleGroupId());
+                TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
                 issues.add(new WorkspaceValidationIssueDto(
                     idGenerator.getAndIncrement(),
                     "low",
@@ -102,12 +100,12 @@ public class WorkspaceValidationService {
                     RESOLUTION_KIND_MANUAL
                 ));
             }
-            if (roleGroupMap.get(staff.getRoleGroupId()) == null) {
+            if (staff.getTeamId() == null || teamMap.get(staff.getTeamId()) == null) {
                 issues.add(new WorkspaceValidationIssueDto(
                     idGenerator.getAndIncrement(),
                     "medium",
-                    "Missing Role Group",
-                    "Staff " + staff.getName() + " references a role group that does not exist.",
+                    "Missing Team",
+                    "Staff " + staff.getName() + " references a team that does not exist.",
                     "-",
                     "-",
                     false,
@@ -131,7 +129,7 @@ public class WorkspaceValidationService {
             String teamDayKey = assignment.getTeamId() + "|" + assignment.getAssignmentDate();
             assignmentsByTeamDay.computeIfAbsent(teamDayKey, ignored -> new ArrayList<>()).add(assignment);
 
-            if (!shiftDefinitionByRoleGroupAndCode.containsKey(assignment.getRoleGroupId() + "|" + assignment.getShiftCode())) {
+            if (!shiftDefinitionByTeamAndCode.containsKey(assignment.getTeamId() + "|" + assignment.getShiftCode())) {
                 TeamEntity team = assignment.getTeamId() == null ? null : lookupService.teamMap().get(assignment.getTeamId());
                 issues.add(new WorkspaceValidationIssueDto(
                     idGenerator.getAndIncrement(),
@@ -171,7 +169,7 @@ public class WorkspaceValidationService {
                 LocalDate date = targetMonth.atDay(day);
                 List<RosterAssignmentEntity> teamAssignments = assignmentsByTeamDay.getOrDefault(team.getId() + "|" + date, List.of());
                 boolean hasPrimary = teamAssignments.stream().anyMatch(assignment -> {
-                    ShiftDefinitionEntity def = shiftDefinitionByRoleGroupAndCode.get(assignment.getRoleGroupId() + "|" + assignment.getShiftCode());
+                    ShiftDefinitionEntity def = shiftDefinitionByTeamAndCode.get(assignment.getTeamId() + "|" + assignment.getShiftCode());
                     return def != null && Boolean.TRUE.equals(def.getPrimaryShift());
                 });
                 if (!hasPrimary) {

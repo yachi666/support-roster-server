@@ -9,10 +9,9 @@
 workspace 后台接口统一挂载在 `/api/workspace/**` 下，覆盖：
 
 - 总览看板
-- 角色组字典
 - 人员目录
 - 班次定义
-- 团队映射
+- 团队管理
 - 月度排班
 - 校验中心
 - Excel 导入导出
@@ -27,13 +26,13 @@ workspace 后台接口统一挂载在 `/api/workspace/**` 下，覆盖：
 ### 资源级规范
 
 - `workspace-admin/dashboard-overview.md`
-- `workspace-admin/role-groups.md`
 - `workspace-admin/staff.md`
 - `workspace-admin/shift-definitions.md`
 - `workspace-admin/teams.md`
 - `workspace-admin/roster.md`
 - `workspace-admin/validation.md`
 - `workspace-admin/import-export.md`
+- `workspace-admin/role-groups.md`（历史兼容说明）
 
 ## 兼容性约定
 
@@ -44,7 +43,6 @@ workspace 后台接口统一挂载在 `/api/workspace/**` 下，覆盖：
 - `/api/shifts/{id}`
 - `/api/staff`
 - `/api/staff/{id}`
-- `/api/role-groups`
 - `/api/shift-codes`
 
 这些接口继续通过服务层从数据库适配输出，不与 workspace 写接口合并。

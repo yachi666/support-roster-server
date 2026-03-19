@@ -21,7 +21,8 @@ controller：`StaffController`
 ## 资源约束
 
 - viewer staff service 当前委托 `WorkspaceStaffService` 生成只读 DTO。
-- 列表接口与详情接口共用 `StaffDto`，但当前实现中 `roleGroups` 的填充粒度可能因 service 路径不同而存在差异，应以代码实际行为为准。
+- 列表接口与详情接口共用 `StaffDto`。
+- 当前实现返回的分组信息实际来源于团队字段，`roleGroups` 仅作为历史兼容响应字段保留。
 
 ## 请求字段与 DTO 字段映射
 
@@ -44,4 +45,4 @@ controller：`StaffController`
 | `slack` | `slack` | Slack |
 | `region` | `region` | 区域 |
 | `contact` | `contact` | 联系方式摘要 |
-| `roleGroups` | `roleGroups` | 角色组列表 |
+| `roleGroups` | `roleGroups` | 历史兼容字段，当前返回团队编码列表 |

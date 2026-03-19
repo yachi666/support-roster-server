@@ -9,8 +9,9 @@ viewer 接口统一挂载在 `/api/**` 下，面向公开查看页提供只读�
 - 团队列表
 - 排班列表与排班详情
 - 人员列表与人员详情
-- 角色组列表
 - 班次编码列表
+
+遗留兼容说明：viewer 侧 role-group 接口已废弃，对应文档仅保留历史说明。
 
 ## 对应 OpenAPI 契约
 
@@ -35,5 +36,5 @@ viewer 接口统一挂载在 `/api/**` 下，面向公开查看页提供只读�
 - [teams.md](./teams.md) 对应 [api/paths/viewer/teams.yaml](../../../api/paths/viewer/teams.yaml)
 - [shifts.md](./shifts.md) 对应 [api/paths/viewer/shifts.yaml](../../../api/paths/viewer/shifts.yaml)
 - [staff.md](./staff.md) 对应 [api/paths/viewer/staff.yaml](../../../api/paths/viewer/staff.yaml)
-- [role-groups.md](./role-groups.md) 对应 [api/paths/viewer/role-groups.yaml](../../../api/paths/viewer/role-groups.yaml)
 - [shift-codes.md](./shift-codes.md) 对应 [api/paths/viewer/shift-codes.yaml](../../../api/paths/viewer/shift-codes.yaml)
+- [role-groups.md](./role-groups.md) 仅保留为历史兼容说明，不再代表当前有效 viewer 资源

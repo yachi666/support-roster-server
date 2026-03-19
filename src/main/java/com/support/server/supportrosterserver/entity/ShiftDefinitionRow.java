@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ShiftDefinitionRow {
     @ExcelProperty(index = 0)
-    private String roleGroup;
+    private String team;
 
     @ExcelProperty(index = 1)
     private String code;

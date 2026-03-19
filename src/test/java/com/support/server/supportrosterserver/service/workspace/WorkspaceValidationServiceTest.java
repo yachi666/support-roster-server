@@ -9,13 +9,11 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity;
-import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
@@ -52,21 +50,17 @@ class WorkspaceValidationServiceTest {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
         staff.setName("Alex");
-        staff.setRoleGroupId(10L);
-
-        RoleGroupEntity roleGroup = new RoleGroupEntity();
-        roleGroup.setId(10L);
-        roleGroup.setCode("AP_L2");
-        roleGroup.setName("AP L2");
+        staff.setTeamId(100L);
 
         TeamEntity team = new TeamEntity();
         team.setId(100L);
+        team.setTeamCode("ap-l2");
         team.setName("AP L2");
         team.setVisible(true);
 
         ShiftDefinitionEntity shiftDefinition = new ShiftDefinitionEntity();
         shiftDefinition.setId(1000L);
-        shiftDefinition.setRoleGroupId(10L);
+        shiftDefinition.setTeamId(100L);
         shiftDefinition.setCode("DS");
         shiftDefinition.setPrimaryShift(true);
         shiftDefinition.setVisible(true);
@@ -75,7 +69,6 @@ class WorkspaceValidationServiceTest {
 
         RosterAssignmentEntity assignment = new RosterAssignmentEntity();
         assignment.setStaffId(1L);
-        assignment.setRoleGroupId(10L);
         assignment.setTeamId(100L);
         assignment.setShiftCode("DS");
         assignment.setAssignmentDate(LocalDate.of(2026, 3, 1));
@@ -84,9 +77,7 @@ class WorkspaceValidationServiceTest {
         when(staffMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(staff));
         when(shiftDefinitionMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(shiftDefinition));
         when(rosterAssignmentMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(assignment));
-        when(lookupService.roleGroupMap()).thenReturn(Map.of(10L, roleGroup));
-        when(lookupService.teamByRoleGroupId()).thenReturn(Map.of(10L, team));
-        when(lookupService.teamMap()).thenReturn(Map.of(100L, team));
+        when(lookupService.teamMap()).thenReturn(java.util.Map.of(100L, team));
         when(lookupService.listTeams()).thenReturn(List.of(team));
 
         var issues = validationService.validateLiveData(YearMonth.of(2026, 3));

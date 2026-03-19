@@ -1,56 +1,38 @@
-# Workspace Role Groups
+# Workspace Role Groups (Deprecated)
 
-## 资源范围
+## 当前状态
 
-- 接口：`GET /api/workspace/role-groups`
-- controller：`WorkspaceRoleGroupController`
-- 输出 DTO：`WorkspaceRoleGroupDto`
+- 该文档仅保留为历史兼容说明。
+- 当前 workspace 管理主模型已统一使用 `team`，不再以 role group 作为独立后台资源。
+- 已移除 `GET /api/workspace/role-groups` 及对应 controller/service/dto。
 
-## 对应 OpenAPI 契约
+## 历史实现参考
 
-- 路径文件：[api/paths/workspace/role-groups.yaml](../../../api/paths/workspace/role-groups.yaml)
-- 聚合入口：[api/openapi.yaml](../../../api/openapi.yaml)
+- 历史路径文件：[api/paths/workspace/role-groups.yaml](../../../api/paths/workspace/role-groups.yaml)
+- 历史聚合入口：[api/openapi.yaml](../../../api/openapi.yaml)
 
-## 对应源码
+## 已废弃能力
 
-- Controller：[WorkspaceRoleGroupController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceRoleGroupController.java)
-- Service：[WorkspaceRoleGroupService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceRoleGroupService.java)
-- DTO：[WorkspaceRoleGroupDto.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceRoleGroupDto.java)
+- 原先的 role group 读取能力已被移除。
+- 人员、班次定义、导入导出、月排班现在全部直接使用 `teamId` / `teamName`。
 
-## 字段职责
+## 迁移后的职责归属
 
-角色组资源承载以下核心属性：
+原由角色组承载的业务分组语义，现统一收敛到团队资源：
 
-- `code`、`name`：业务标识与展示名称
-- `category`、`region`：分类与地区标签
-- `description`：补充说明
-- `active`：启用状态
+- `teamCode`、`name`：业务标识与展示名称
+- `color`、`displayOrder`：展示配置
+- `visible`、`description`：可见性与补充说明
 
-## 依赖关系
+## 兼容说明
 
-- 团队资源通过角色组建立可服务范围。
-- 人员资源通过 `roleGroupId` 归属角色组。
-- 班次定义资源通过 `roleGroupId` 绑定适用角色组。
+- 数据库中可能仍保留历史 `role_group_id` 列或字典表，用于兼容旧数据。
+- 这些字段不再作为 workspace API 的输入输出契约。
+- 新增或编辑数据时，应始终以 `team` 作为唯一分组维度。
 
-## 当前实现边界
+## 替代文档
 
-- 当前 controller 仅暴露列表读取接口，不提供后台直接维护角色组的写接口。
-- 若后续需要管理角色组字典，应新增独立写接口与对应规范，而不是复用现有只读列表语义。
-
-## 请求字段与 DTO 字段映射
-
-### 请求字段
-
-- 无请求体，无查询参数。
-
-### 响应 DTO 字段
-
-| DTO 字段 | OpenAPI 字段 | 说明 |
-|------|------|------|
-| `id` | `id` | 主键 |
-| `code` | `code` | 角色组编码 |
-| `name` | `name` | 角色组名称 |
-| `category` | `category` | 分类 |
-| `region` | `region` | 区域 |
-| `description` | `description` | 描述 |
-| `active` | `active` | 启用状态 |
+- 团队主资源说明见 [teams.md](./teams.md)
+- 人员目录说明见 [staff.md](./staff.md)
+- 班次定义说明见 [shift-definitions.md](./shift-definitions.md)
+- 导入导出说明见 [import-export.md](./import-export.md)

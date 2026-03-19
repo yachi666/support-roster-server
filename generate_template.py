@@ -7,18 +7,18 @@ wb = Workbook()
 ws_shifts = wb.active
 ws_shifts.title = "Shift Definitions"
 
-shift_headers = ["role_group", "code", "meaning", "start_time", "end_time", "timezone", "show_on_roster_page", "remark"]
+shift_headers = ["team", "code", "meaning", "start_time", "end_time", "timezone", "show_on_roster_page", "remark"]
 ws_shifts.append(shift_headers)
 
 shift_data = [
-    ["L1_China", "A", "00:00-07:00", "00:00", "07:00", "HKT", "Y", ""],
-    ["L1_China", "B", "06:30-15:30", "06:30", "15:30", "HKT", "Y", ""],
-    ["L1_China", "D", "15:30-00:30", "15:30", "00:30", "HKT", "Y", ""],
-    ["AP_L2", "DS", "Day Shift", "09:30", "18:30", "HKT", "Y", ""],
-    ["AP_L2", "NS", "Night Shift", "18:30", "09:30", "HKT", "Y", ""],
-    ["AP_L2", "AP-M", "AP Morning Shift", "06:00", "15:00", "HKT", "Y", ""],
-    ["AP_L2", "AP-E", "AP Evening Shift", "15:00", "00:00", "HKT", "Y", ""],
-    ["AP_L2", "AP-D", "AP Day Shift", "09:00", "18:00", "HKT", "Y", ""],
+    ["L1", "A", "00:00-07:00", "00:00", "07:00", "HKT", "Y", ""],
+    ["L1", "B", "06:30-15:30", "06:30", "15:30", "HKT", "Y", ""],
+    ["L1", "D", "15:30-00:30", "15:30", "00:30", "HKT", "Y", ""],
+    ["AP L2", "DS", "Day Shift", "09:30", "18:30", "HKT", "Y", ""],
+    ["AP L2", "NS", "Night Shift", "18:30", "09:30", "HKT", "Y", ""],
+    ["AP L2", "AP-M", "AP Morning Shift", "06:00", "15:00", "HKT", "Y", ""],
+    ["AP L2", "AP-E", "AP Evening Shift", "15:00", "00:00", "HKT", "Y", ""],
+    ["AP L2", "AP-D", "AP Day Shift", "09:00", "18:00", "HKT", "Y", ""],
 ]
 
 for row in shift_data:
@@ -59,16 +59,16 @@ for col in ws_shifts.columns:
 # Sheet 1: Staff Shifts
 ws_staff = wb.create_sheet("Staff Shifts")
 
-staff_headers = ["name", "staff_id", "role_group", "region", "contact", "notes"]
+staff_headers = ["name", "staff_id", "team", "region", "contact", "notes"]
 for day in range(1, 32):
     staff_headers.append(str(day))
 
 ws_staff.append(staff_headers)
 
 staff_data = [
-    ["John Doe", "1001", "L1_China", "China", "", "", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D"],
-    ["Jane Smith", "1002", "AP_L2", "China", "", "", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS"],
-    ["Mike Johnson", "1003", "AP_L2", "China", "", "", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D"],
+    ["John Doe", "1001", "L1", "China", "", "", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D", "A", "A", "B", "B", "D", "D"],
+    ["Jane Smith", "1002", "AP L2", "China", "", "", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS", "NS", "NS", "DS", "DS"],
+    ["Mike Johnson", "1003", "AP L2", "China", "", "", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D", "AP-M", "AP-M", "AP-E", "AP-E", "AP-D", "AP-D"],
 ]
 
 for row in staff_data:

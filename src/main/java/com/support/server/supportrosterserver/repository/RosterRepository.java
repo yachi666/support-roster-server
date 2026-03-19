@@ -59,9 +59,9 @@ public class RosterRepository {
             List<ShiftDefinitionRow> rows = listener.getDataList();
             
             for (ShiftDefinitionRow row : rows) {
-                String roleGroup = row.getRoleGroup();
+                String roleGroup = row.getTeam();
                 
-                if (roleGroup == null || roleGroup.isEmpty() || "role_group".equalsIgnoreCase(roleGroup)) {
+                if (roleGroup == null || roleGroup.isEmpty() || "team".equalsIgnoreCase(roleGroup)) {
                     continue;
                 }
 
@@ -117,7 +117,7 @@ public class RosterRepository {
                 StaffShift staffShift = new StaffShift();
                 staffShift.setStaffId(staffId);
                 staffShift.setName(row.getName());
-                staffShift.setRoleGroup(row.getRoleGroup());
+                staffShift.setRoleGroup(row.getTeam());
                 staffShift.setRegion(row.getRegion());
                 staffShift.setContact(row.getContact());
                 staffShift.setNotes(row.getNotes());
@@ -136,7 +136,7 @@ public class RosterRepository {
                     staffMap.put(staffId, staff);
                 }
 
-                String roleGroup = row.getRoleGroup();
+                String roleGroup = row.getTeam();
                 if (roleGroup != null && !roleGroup.isEmpty() && !roleGroupMap.containsKey(roleGroup)) {
                     RoleGroup rg = parseRoleGroup(roleGroup);
                     roleGroupMap.put(roleGroup, rg);

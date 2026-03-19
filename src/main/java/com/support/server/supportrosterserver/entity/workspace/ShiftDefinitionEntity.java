@@ -18,6 +18,8 @@ public class ShiftDefinitionEntity extends BaseEntity {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
+    private Long teamId;
+
     private Long roleGroupId;
 
     private String code;

@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +17,6 @@ import com.support.server.supportrosterserver.dto.workspace.WorkspaceRosterCellU
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceRosterGroupDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceRosterPersonDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceRosterSaveRequest;
-import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
@@ -45,8 +43,6 @@ public class WorkspaceRosterService {
 
     public WorkspaceMonthlyRosterResponse getMonthlyRoster(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
-        Map<Long, RoleGroupEntity> roleGroupMap = lookupService.roleGroupMap();
-        Map<Long, TeamEntity> teamByRoleGroupId = lookupService.teamByRoleGroupId();
         Map<String, String> scheduleMap = new HashMap<>();
 
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
@@ -57,7 +53,7 @@ public class WorkspaceRosterService {
 
         Map<Long, List<StaffEntity>> staffByTeamId = new LinkedHashMap<>();
         for (StaffEntity staff : staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery().orderByAsc(StaffEntity::getName))) {
-            TeamEntity team = teamByRoleGroupId.get(staff.getRoleGroupId());
+            TeamEntity team = staff.getTeamId() == null ? null : lookupService.teamMap().get(staff.getTeamId());
             if (team != null && Boolean.TRUE.equals(team.getVisible())) {
                 staffByTeamId.computeIfAbsent(team.getId(), ignored -> new ArrayList<>()).add(staff);
             }
@@ -74,13 +70,12 @@ public class WorkspaceRosterService {
                 for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
                     schedule.put(day, scheduleMap.getOrDefault(staff.getId() + "|" + day, ""));
                 }
-                RoleGroupEntity roleGroup = roleGroupMap.get(staff.getRoleGroupId());
                 persons.add(new WorkspaceRosterPersonDto(
                     staff.getId(),
                     staff.getName(),
                     avatarUrlResolver.resolve(staff.getStaffCode()),
-                    roleGroup == null ? staff.getRoleName() : roleGroup.getName(),
-                    staff.getRoleGroupId(),
+                    staff.getRoleName(),
+                    staff.getTeamId(),
                     schedule
                 ));
             }
@@ -89,7 +84,7 @@ public class WorkspaceRosterService {
 
         List<ShiftDefinitionEntity> visibleShiftDefinitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
                 .eq(ShiftDefinitionEntity::getVisible, true)
-                .orderByAsc(ShiftDefinitionEntity::getRoleGroupId)
+            .orderByAsc(ShiftDefinitionEntity::getTeamId)
                 .orderByAsc(ShiftDefinitionEntity::getCode));
 
         List<String> shiftOptions = visibleShiftDefinitions.stream()
@@ -97,16 +92,17 @@ public class WorkspaceRosterService {
             .distinct()
             .toList();
 
-        Map<Long, List<String>> shiftCodeOptionsByRoleGroup = visibleShiftDefinitions.stream()
-            .filter(shiftDefinition -> shiftDefinition.getRoleGroupId() != null)
-            .collect(Collectors.groupingBy(
-                ShiftDefinitionEntity::getRoleGroupId,
-                LinkedHashMap::new,
-                Collectors.mapping(ShiftDefinitionEntity::getCode, Collectors.collectingAndThen(Collectors.toList(), codes -> codes.stream()
-                    .filter(code -> code != null && !code.isBlank())
-                    .distinct()
-                    .toList()))
-            ));
+        Map<Long, List<String>> shiftCodeOptionsByTeam = new LinkedHashMap<>();
+        for (ShiftDefinitionEntity shiftDefinition : visibleShiftDefinitions) {
+            if (shiftDefinition.getTeamId() == null || shiftDefinition.getCode() == null || shiftDefinition.getCode().isBlank()) {
+                continue;
+            }
+            shiftCodeOptionsByTeam.computeIfAbsent(shiftDefinition.getTeamId(), ignored -> new ArrayList<>());
+            List<String> codes = shiftCodeOptionsByTeam.get(shiftDefinition.getTeamId());
+            if (!codes.contains(shiftDefinition.getCode())) {
+                codes.add(shiftDefinition.getCode());
+            }
+        }
 
         Map<String, String> shiftCodeColorMap = new HashMap<>();
         for (ShiftDefinitionEntity shiftDef : visibleShiftDefinitions) {
@@ -126,7 +122,7 @@ public class WorkspaceRosterService {
             targetMonth.getMonthValue(),
             groups,
             shiftOptions,
-            shiftCodeOptionsByRoleGroup,
+            shiftCodeOptionsByTeam,
             shiftCodeColorMap,
             validationWarning
         );
@@ -156,16 +152,16 @@ public class WorkspaceRosterService {
             }
 
             ShiftDefinitionEntity shiftDefinition = shiftDefinitionMapper.selectOne(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-                .eq(ShiftDefinitionEntity::getRoleGroupId, staff.getRoleGroupId())
+                .eq(ShiftDefinitionEntity::getTeamId, staff.getTeamId())
                 .eq(ShiftDefinitionEntity::getCode, shiftCode)
                 .last("limit 1"));
             if (shiftDefinition == null) {
-                throw new BadRequestException("Shift code '" + shiftCode + "' does not exist for staff role group.");
+                throw new BadRequestException("Shift code '" + shiftCode + "' does not exist for staff team.");
             }
 
-            TeamEntity team = lookupService.teamByRoleGroupId().get(staff.getRoleGroupId());
+            TeamEntity team = staff.getTeamId() == null ? null : lookupService.teamMap().get(staff.getTeamId());
             if (team == null) {
-                throw new BadRequestException("Staff role group is not mapped to any team.");
+                throw new BadRequestException("Staff team does not exist.");
             }
 
             if (existing == null) {
@@ -173,7 +169,7 @@ public class WorkspaceRosterService {
                 existing.setStaffId(staff.getId());
                 existing.setAssignmentDate(date);
             }
-            existing.setRoleGroupId(staff.getRoleGroupId());
+            existing.setRoleGroupId(null);
             existing.setTeamId(team.getId());
             existing.setShiftDefinitionId(shiftDefinition.getId());
             existing.setShiftCode(shiftCode);

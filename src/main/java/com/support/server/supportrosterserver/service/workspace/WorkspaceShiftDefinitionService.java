@@ -11,8 +11,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.dto.ShiftCodeDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionUpsertRequest;
-import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
+import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 
@@ -28,16 +28,16 @@ public class WorkspaceShiftDefinitionService {
     public List<WorkspaceShiftDefinitionDto> listShiftDefinitions(String keyword) {
         LambdaQueryWrapper<ShiftDefinitionEntity> query = Wrappers.<ShiftDefinitionEntity>lambdaQuery()
             .orderByAsc(ShiftDefinitionEntity::getCode)
-            .orderByAsc(ShiftDefinitionEntity::getRoleGroupId);
+            .orderByAsc(ShiftDefinitionEntity::getTeamId);
         if (keyword != null && !keyword.isBlank()) {
             query.and(wrapper -> wrapper
                 .like(ShiftDefinitionEntity::getCode, keyword)
                 .or().like(ShiftDefinitionEntity::getMeaning, keyword)
                 .or().like(ShiftDefinitionEntity::getTimezone, keyword));
         }
-        Map<Long, RoleGroupEntity> roleGroupMap = lookupService.roleGroupMap();
+        Map<Long, TeamEntity> teamMap = lookupService.teamMap();
         return shiftDefinitionMapper.selectList(query).stream()
-            .map(def -> toDto(def, roleGroupMap.get(def.getRoleGroupId())))
+            .map(def -> toDto(def, teamMap.get(def.getTeamId())))
             .toList();
     }
 
@@ -46,8 +46,7 @@ public class WorkspaceShiftDefinitionService {
         if (entity == null) {
             throw new ResourceNotFoundException("ShiftDefinition", "id", id);
         }
-        RoleGroupEntity roleGroup = lookupService.roleGroupMap().get(entity.getRoleGroupId());
-        return toDto(entity, roleGroup);
+        return toDto(entity, lookupService.teamMap().get(entity.getTeamId()));
     }
 
     @Transactional
@@ -93,12 +92,12 @@ public class WorkspaceShiftDefinitionService {
             .toList();
     }
 
-    private WorkspaceShiftDefinitionDto toDto(ShiftDefinitionEntity entity, RoleGroupEntity roleGroup) {
+    private WorkspaceShiftDefinitionDto toDto(ShiftDefinitionEntity entity, TeamEntity team) {
         return new WorkspaceShiftDefinitionDto(
             entity.getId(),
-            entity.getRoleGroupId(),
-            roleGroup == null ? null : roleGroup.getCode(),
-            roleGroup == null ? null : roleGroup.getName(),
+            entity.getTeamId(),
+            team == null ? null : team.getTeamCode(),
+            team == null ? null : team.getName(),
             entity.getCode(),
             entity.getMeaning(),
             entity.getStartTime(),
@@ -112,8 +111,9 @@ public class WorkspaceShiftDefinitionService {
     }
 
     private void apply(ShiftDefinitionEntity entity, WorkspaceShiftDefinitionUpsertRequest request) {
-        lookupService.requireRoleGroup(request.getRoleGroupId());
-        entity.setRoleGroupId(request.getRoleGroupId());
+        lookupService.requireTeam(request.getTeamId());
+        entity.setTeamId(request.getTeamId());
+        entity.setRoleGroupId(null);
         entity.setCode(request.getCode());
         entity.setMeaning(request.getMeaning());
         entity.setStartTime(request.getStartTime());

@@ -60,8 +60,8 @@ controller：`WorkspaceImportExportController`
 
 | Sheet Index | Sheet Name | 说明 |
 |-------------|------------|------|
-| 0 | Shift Definitions | 班次定义，包含 role_group, code, meaning, start_time, end_time, timezone, show_on_roster_page, remark |
-| 1 | Staff Shifts | 员工班次，包含 name, staff_id, role_group, region, contact, notes, 1-31 天列 |
+| 0 | Shift Definitions | 班次定义，包含 team, code, meaning, start_time, end_time, timezone, show_on_roster_page, remark |
+| 1 | Staff Shifts | 员工班次，包含 name, staff_id, team, region, contact, notes, 1-31 天列 |
 | 2 | Color Definitions | 颜色定义，包含 code, color_name, rgb, hex |
 
 ## 资源约束
@@ -89,8 +89,8 @@ controller：`WorkspaceImportExportController`
 ### 数据过滤规则
 
 导入时自动过滤以下无效行：
-- 标题行（role_group 列为 "role_group"）
-- 空行（role_group 或 code 为空）
+- 标题行（team 列为 "team"）
+- 空行（team 或 code 为空）
 - 非班次定义行（start_time、end_time、timezone 均为空）
 - 颜色定义混入数据（start_time 以 "#" 开头）
 

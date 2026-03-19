@@ -15,7 +15,6 @@ api/
 │   └── common.yaml
 └── paths/
     ├── viewer/
-    │   ├── role-groups.yaml
     │   ├── shift-codes.yaml
     │   ├── shifts.yaml
     │   ├── staff.yaml
@@ -23,7 +22,6 @@ api/
     └── workspace/
         ├── import-export.yaml
         ├── overview.yaml
-        ├── role-groups.yaml
         ├── roster.yaml
         ├── shift-definitions.yaml
         ├── staff.yaml
@@ -61,10 +59,8 @@ api/
 | `TeamController` | `api/paths/viewer/teams.yaml` |
 | `ShiftController` | `api/paths/viewer/shifts.yaml` |
 | `StaffController` | `api/paths/viewer/staff.yaml` |
-| `RoleGroupController` | `api/paths/viewer/role-groups.yaml` |
 | `ShiftCodeController` | `api/paths/viewer/shift-codes.yaml` |
 | `WorkspaceOverviewController` | `api/paths/workspace/overview.yaml` |
-| `WorkspaceRoleGroupController` | `api/paths/workspace/role-groups.yaml` |
 | `WorkspaceStaffController` | `api/paths/workspace/staff.yaml` |
 | `WorkspaceShiftDefinitionController` | `api/paths/workspace/shift-definitions.yaml` |
 | `WorkspaceTeamController` | `api/paths/workspace/teams.yaml` |

@@ -15,9 +15,9 @@ public class WorkspaceShiftDefinitionDto {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long roleGroupId;
-    private String roleGroupCode;
-    private String roleGroupName;
+    private Long teamId;
+    private String teamCode;
+    private String teamName;
     private String code;
     private String meaning;
     private LocalTime startTime;

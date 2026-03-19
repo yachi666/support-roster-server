@@ -25,7 +25,7 @@ public class WorkspaceStaffUpsertRequest {
     private String roleName;
 
     @NotNull
-    private Long roleGroupId;
+    private Long teamId;
 
     private String status;
 

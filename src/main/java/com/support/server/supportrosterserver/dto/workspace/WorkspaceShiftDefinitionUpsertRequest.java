@@ -9,7 +9,7 @@ import lombok.Data;
 @Data
 public class WorkspaceShiftDefinitionUpsertRequest {
     @NotNull
-    private Long roleGroupId;
+    private Long teamId;
 
     @NotBlank
     private String code;

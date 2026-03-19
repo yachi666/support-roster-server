@@ -17,10 +17,10 @@
 
 - `workspace-admin/overview.md`：跨资源共性约束与核心表
 - `workspace-admin/dashboard-overview.md`：首页总览聚合
-- `workspace-admin/role-groups.md`：角色组字典
+- `workspace-admin/role-groups.md`：历史兼容说明（已废弃）
 - `workspace-admin/staff.md`：人员目录
 - `workspace-admin/shift-definitions.md`：班次定义
-- `workspace-admin/teams.md`：团队映射
+- `workspace-admin/teams.md`：团队管理
 - `workspace-admin/roster.md`：月度排班
 - `workspace-admin/validation.md`：校验中心
 - `workspace-admin/import-export.md`：导入导出流程
@@ -28,5 +28,5 @@
 - `viewer/teams.md`：团队列表
 - `viewer/shifts.md`：排班列表与详情
 - `viewer/staff.md`：人员列表与详情
-- `viewer/role-groups.md`：角色组列表
+- `viewer/role-groups.md`：历史兼容说明（已废弃）
 - `viewer/shift-codes.md`：班次编码列表

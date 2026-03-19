@@ -11,10 +11,10 @@
 |------|------|------|
 | `overview.md` | Workspace 后台能力边界、持久化栈、核心表与跨资源约束 | `../../../api/openapi.yaml` |
 | `dashboard-overview.md` | 总览看板聚合接口与输出结构 | `../../../api/paths/workspace/overview.yaml` |
-| `role-groups.md` | 角色组字典读取接口与团队/人员依赖关系 | `../../../api/paths/workspace/role-groups.yaml` |
+| `role-groups.md` | 历史兼容说明，记录已废弃的 role-group 后台资源 | `../../../api/paths/workspace/role-groups.yaml` |
 | `staff.md` | 人员目录的查询、创建、更新、删除与筛选约束 | `../../../api/paths/workspace/staff.yaml` |
 | `shift-definitions.md` | 班次定义的 CRUD 规则与可见性约束 | `../../../api/paths/workspace/shift-definitions.yaml` |
-| `teams.md` | 团队与角色组映射的维护规则 | `../../../api/paths/workspace/teams.yaml` |
+| `teams.md` | 团队资源自身的维护规则 | `../../../api/paths/workspace/teams.yaml` |
 | `roster.md` | 月度排班查询、单元格保存与存储约定 | `../../../api/paths/workspace/roster.yaml` |
 | `validation.md` | 校验中心输出结构与规则来源 | `../../../api/paths/workspace/validation.yaml` |
 | `import-export.md` | Excel 导入预览、应用与导出流程 | `../../../api/paths/workspace/import-export.yaml` |
@@ -24,7 +24,7 @@
 | 资源文档 | Controller | Service | DTO |
 |------|------|------|------|
 | `dashboard-overview.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceOverviewController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceOverviewService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceOverviewResponse.java` |
-| `role-groups.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceRoleGroupController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceRoleGroupService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceRoleGroupDto.java` |
+| `role-groups.md` | 已废弃 | 已废弃 | 已废弃 |
 | `staff.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceStaffController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceStaffService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceStaffDto.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceStaffUpsertRequest.java` |
 | `shift-definitions.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceShiftDefinitionController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceShiftDefinitionService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionDto.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionUpsertRequest.java` |
 | `teams.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceTeamController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceTeamService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceTeamDto.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceTeamUpsertRequest.java` |

@@ -36,7 +36,6 @@ import com.support.server.supportrosterserver.entity.StaffShiftRow;
 import com.support.server.supportrosterserver.entity.workspace.ImportBatchEntity;
 import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity;
 import com.support.server.supportrosterserver.entity.workspace.ImportRecordEntity;
-import com.support.server.supportrosterserver.entity.workspace.RoleGroupEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
@@ -48,6 +47,7 @@ import com.support.server.supportrosterserver.mapper.ImportRecordMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.mapper.TeamMapper;
 import com.support.server.supportrosterserver.repository.ColorDefinitionDataListener;
 import com.support.server.supportrosterserver.repository.ShiftDefinitionDataListener;
 import com.support.server.supportrosterserver.repository.StaffShiftDataListener;
@@ -71,6 +71,7 @@ public class WorkspaceImportService {
     private final ShiftDefinitionMapper shiftDefinitionMapper;
     private final StaffMapper staffMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
+    private final TeamMapper teamMapper;
     private final WorkspaceLookupService lookupService;
     private final ObjectMapper objectMapper;
 
@@ -106,7 +107,13 @@ public class WorkspaceImportService {
             Map<String, String> colorHexByCode = new HashMap<>();
             List<ImportRecordEntity> records = new ArrayList<>();
             List<ImportIssueEntity> issues = new ArrayList<>();
-            Set<String> availableRoleGroups = new HashSet<>();
+            Map<String, TeamEntity> teamsByName = lookupService.listTeams().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                    team -> team.getName().toLowerCase(Locale.ROOT),
+                    team -> team,
+                    (left, right) -> left,
+                    HashMap::new
+                ));
             Set<String> validShiftKeys = new HashSet<>();
             Set<String> scheduledPrimaryCoverage = new HashSet<>();
             Set<String> staffDayKeys = new HashSet<>();
@@ -121,7 +128,7 @@ public class WorkspaceImportService {
 
             int rowIndex = 1;
             for (ShiftDefinitionRow row : shiftListener.getDataList()) {
-                if (row.getRoleGroup() == null || row.getRoleGroup().isBlank() || "role_group".equalsIgnoreCase(row.getRoleGroup())) {
+                if (row.getTeam() == null || row.getTeam().isBlank() || "team".equalsIgnoreCase(row.getTeam())) {
                     continue;
                 }
                 if (row.getCode() == null || row.getCode().isBlank()) {
@@ -134,22 +141,24 @@ public class WorkspaceImportService {
                     continue;
                 }
                 boolean valid = true;
+                TeamEntity team = teamsByName.get(row.getTeam().trim().toLowerCase(Locale.ROOT));
                 if (row.getCode() == null || row.getCode().isBlank()) {
                     valid = false;
-                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Code", "Shift definition code is missing.", null, row.getRoleGroup(), null, null));
+                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Code", "Shift definition code is missing.", row.getTeam(), null, null));
                 }
                 if (parseTime(row.getStartTime()) == null || parseTime(row.getEndTime()) == null) {
                     valid = false;
-                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Definition", "Shift definition time range is invalid for role group '" + row.getRoleGroup() + "'.", null, row.getRoleGroup(), null, null));
+                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Definition", "Shift definition time range is invalid for team '" + row.getTeam() + "'.", row.getTeam(), null, null));
                 }
-                if (lookupService.deriveTeamProfile(row.getRoleGroup()) == null) {
+                if (team == null) {
                     valid = false;
-                    issues.add(buildIssue(batch.getId(), "medium", "Missing Team Mapping", "Role group '" + row.getRoleGroup() + "' cannot be mapped to a team.", null, row.getRoleGroup(), null, null));
+                    issues.add(buildIssue(batch.getId(), "medium", "Missing Team", "Team '" + row.getTeam() + "' does not exist.", row.getTeam(), null, null));
                 }
-                availableRoleGroups.add(row.getRoleGroup());
-                validShiftKeys.add(row.getRoleGroup() + "|" + row.getCode());
+                if (team != null) {
+                    validShiftKeys.add(team.getId() + "|" + row.getCode());
+                }
                 Map<String, Object> payload = new HashMap<>();
-                payload.put("roleGroup", row.getRoleGroup());
+                payload.put("team", row.getTeam());
                 payload.put("code", row.getCode());
                 payload.put("meaning", row.getMeaning());
                 payload.put("startTime", row.getStartTime());
@@ -161,11 +170,10 @@ public class WorkspaceImportService {
                 records.add(buildRecord(batch.getId(), "Shift Definitions", rowIndex++, "SHIFT_DEFINITION", payload, valid));
             }
 
-            for (RoleGroupEntity entity : lookupService.listRoleGroups()) {
-                availableRoleGroups.add(entity.getCode());
-            }
             for (ShiftDefinitionEntity entity : shiftDefinitionMapper.selectList(Wrappers.lambdaQuery())) {
-                validShiftKeys.add(entity.getRoleGroupId() + "|" + entity.getCode());
+                if (entity.getTeamId() != null) {
+                    validShiftKeys.add(entity.getTeamId() + "|" + entity.getCode());
+                }
             }
 
             rowIndex = 1;
@@ -174,21 +182,18 @@ public class WorkspaceImportService {
                     continue;
                 }
                 boolean valid = true;
+                TeamEntity team = row.getTeam() == null ? null : teamsByName.get(row.getTeam().trim().toLowerCase(Locale.ROOT));
                 if (parseLong(row.getStaffId()) == null) {
                     valid = false;
-                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Staff ID", "Staff ID is missing or not numeric for row '" + row.getName() + "'.", null, row.getRoleGroup(), row.getName(), null));
+                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Staff ID", "Staff ID is missing or not numeric for row '" + row.getName() + "'.", row.getTeam(), row.getName(), null));
                 }
-                if (row.getRoleGroup() == null || row.getRoleGroup().isBlank() || !availableRoleGroups.contains(row.getRoleGroup())) {
+                if (row.getTeam() == null || row.getTeam().isBlank() || team == null) {
                     valid = false;
-                    issues.add(buildIssue(batch.getId(), "medium", "Missing Role Group", "Role group '" + row.getRoleGroup() + "' does not exist in import or database.", null, row.getRoleGroup(), row.getName(), null));
+                    issues.add(buildIssue(batch.getId(), "medium", "Missing Team", "Team '" + row.getTeam() + "' does not exist in import or database.", row.getTeam(), row.getName(), null));
                 }
-                if (lookupService.deriveTeamProfile(row.getRoleGroup()) == null) {
+                if (lookupService.inferTimezone(row.getRegion(), row.getTeam()) == null) {
                     valid = false;
-                    issues.add(buildIssue(batch.getId(), "medium", "Missing Team Mapping", "Role group '" + row.getRoleGroup() + "' cannot be mapped to a team.", null, row.getRoleGroup(), row.getName(), null));
-                }
-                if (lookupService.inferTimezone(row.getRegion(), row.getRoleGroup()) == null) {
-                    valid = false;
-                    issues.add(buildIssue(batch.getId(), "low", "Time Zone Ambiguity", "Staff '" + row.getName() + "' has no inferable timezone.", null, row.getRoleGroup(), row.getName(), null));
+                    issues.add(buildIssue(batch.getId(), "low", "Time Zone Ambiguity", "Staff '" + row.getName() + "' has no inferable timezone.", row.getTeam(), row.getName(), null));
                 }
 
                 for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
@@ -196,35 +201,28 @@ public class WorkspaceImportService {
                     if (shiftCode == null || shiftCode.isBlank()) {
                         continue;
                     }
-                    String directKey = row.getRoleGroup() + "|" + shiftCode;
-                    boolean shiftExists = validShiftKeys.contains(directKey) || findExistingShiftDefinition(row.getRoleGroup(), shiftCode) != null;
+                    String directKey = team == null ? null : team.getId() + "|" + shiftCode;
+                    boolean shiftExists = directKey != null && validShiftKeys.contains(directKey);
                     if (!shiftExists) {
                         valid = false;
-                        issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Code", "Code '" + shiftCode + "' not found for role group '" + row.getRoleGroup() + "'.", null, row.getRoleGroup(), row.getName(), targetMonth.atDay(day)));
+                        issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Code", "Code '" + shiftCode + "' not found for team '" + row.getTeam() + "'.", row.getTeam(), row.getName(), targetMonth.atDay(day)));
                     }
                     String staffDayKey = row.getStaffId() + "|" + day;
                     if (!staffDayKeys.add(staffDayKey)) {
                         valid = false;
-                        issues.add(buildIssue(batch.getId(), "high", "Overlapping Assignment", "Staff '" + row.getName() + "' has duplicate assignments on the same day.", lookupService.deriveTeamProfile(row.getRoleGroup()) == null ? null : lookupService.deriveTeamProfile(row.getRoleGroup()).name(), row.getRoleGroup(), row.getName(), targetMonth.atDay(day)));
+                        issues.add(buildIssue(batch.getId(), "high", "Overlapping Assignment", "Staff '" + row.getName() + "' has duplicate assignments on the same day.", row.getTeam(), row.getName(), targetMonth.atDay(day)));
                     }
-                    if (PRIMARY_CODES.contains(shiftCode)) {
-                        var profile = lookupService.deriveTeamProfile(row.getRoleGroup());
-                        if (profile != null) {
-                            scheduledPrimaryCoverage.add(profile.teamCode() + "|" + day);
-                        }
+                    if (PRIMARY_CODES.contains(shiftCode) && team != null) {
+                        scheduledPrimaryCoverage.add(team.getId() + "|" + day);
                     }
                 }
                 records.add(buildRecord(batch.getId(), "Staff Shifts", rowIndex++, "STAFF_SHIFT", row, valid));
             }
 
-            for (String roleGroupCode : availableRoleGroups) {
-                var profile = lookupService.deriveTeamProfile(roleGroupCode);
-                if (profile == null) {
-                    continue;
-                }
+            for (TeamEntity team : teamsByName.values()) {
                 for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
-                    if (!scheduledPrimaryCoverage.contains(profile.teamCode() + "|" + day)) {
-                        issues.add(buildIssue(batch.getId(), "low", "Missing Primary Coverage", "No primary shift scheduled for " + profile.name() + " on " + targetMonth.atDay(day).format(DATE_FORMATTER) + ".", profile.name(), roleGroupCode, null, targetMonth.atDay(day)));
+                    if (!scheduledPrimaryCoverage.contains(team.getId() + "|" + day)) {
+                        issues.add(buildIssue(batch.getId(), "low", "Missing Primary Coverage", "No primary shift scheduled for " + team.getName() + " on " + targetMonth.atDay(day).format(DATE_FORMATTER) + ".", team.getName(), null, targetMonth.atDay(day)));
                     }
                 }
             }
@@ -287,18 +285,23 @@ public class WorkspaceImportService {
             if ("SHIFT_DEFINITION".equals(record.getRecordType())) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> payload = readValue(record.getPayloadJson(), Map.class);
-                String roleGroupCode = String.valueOf(payload.get("roleGroup"));
-                RoleGroupEntity roleGroup = lookupService.findOrCreateRoleGroupByCode(roleGroupCode);
-                lookupService.findOrCreateTeamForRoleGroup(roleGroup);
+                String teamName = String.valueOf(payload.get("team"));
+                TeamEntity team = teamMapper.selectOne(Wrappers.<TeamEntity>lambdaQuery()
+                    .eq(TeamEntity::getName, teamName)
+                    .last("limit 1"));
+                if (team == null) {
+                    throw new BadRequestException("Team '" + teamName + "' does not exist.");
+                }
 
                 ShiftDefinitionEntity entity = shiftDefinitionMapper.selectOne(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-                    .eq(ShiftDefinitionEntity::getRoleGroupId, roleGroup.getId())
+                    .eq(ShiftDefinitionEntity::getTeamId, team.getId())
                     .eq(ShiftDefinitionEntity::getCode, String.valueOf(payload.get("code")))
                     .last("limit 1"));
                 if (entity == null) {
                     entity = new ShiftDefinitionEntity();
                 }
-                entity.setRoleGroupId(roleGroup.getId());
+                entity.setTeamId(team.getId());
+                entity.setRoleGroupId(null);
                 entity.setCode(String.valueOf(payload.get("code")));
                 entity.setMeaning((String) payload.get("meaning"));
                 entity.setStartTime(parseTime((String) payload.get("startTime")));
@@ -320,10 +323,11 @@ public class WorkspaceImportService {
                 continue;
             }
             StaffShiftRow row = readValue(record.getPayloadJson(), StaffShiftRow.class);
-            RoleGroupEntity roleGroup = lookupService.findOrCreateRoleGroupByCode(row.getRoleGroup());
-            TeamEntity team = lookupService.findOrCreateTeamForRoleGroup(roleGroup);
+            TeamEntity team = teamMapper.selectOne(Wrappers.<TeamEntity>lambdaQuery()
+                .eq(TeamEntity::getName, row.getTeam())
+                .last("limit 1"));
             if (team == null) {
-                throw new BadRequestException("No team mapping found for role group '" + row.getRoleGroup() + "'.");
+                throw new BadRequestException("No team found for '" + row.getTeam() + "'.");
             }
 
             StaffEntity staff = staffMapper.selectOne(Wrappers.<StaffEntity>lambdaQuery()
@@ -335,9 +339,10 @@ public class WorkspaceImportService {
             staff.setStaffCode(row.getStaffId());
             staff.setName(row.getName());
             staff.setRegion(row.getRegion());
-            staff.setTimezone(lookupService.inferTimezone(row.getRegion(), row.getRoleGroup()));
-            staff.setRoleName(roleGroup.getName());
-            staff.setRoleGroupId(roleGroup.getId());
+            staff.setTimezone(lookupService.inferTimezone(row.getRegion(), row.getTeam()));
+            staff.setRoleName(team.getName());
+            staff.setTeamId(team.getId());
+            staff.setRoleGroupId(null);
             staff.setStatus("Active");
             staff.setPhone(row.getContact());
             staff.setNotes(row.getNotes());
@@ -353,7 +358,7 @@ public class WorkspaceImportService {
                     continue;
                 }
                 ShiftDefinitionEntity shiftDefinition = shiftDefinitionMapper.selectOne(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-                    .eq(ShiftDefinitionEntity::getRoleGroupId, roleGroup.getId())
+                    .eq(ShiftDefinitionEntity::getTeamId, team.getId())
                     .eq(ShiftDefinitionEntity::getCode, shiftCode)
                     .last("limit 1"));
                 if (shiftDefinition == null) {
@@ -361,7 +366,7 @@ public class WorkspaceImportService {
                 }
                 RosterAssignmentEntity assignment = new RosterAssignmentEntity();
                 assignment.setStaffId(staff.getId());
-                assignment.setRoleGroupId(roleGroup.getId());
+                assignment.setRoleGroupId(null);
                 assignment.setTeamId(team.getId());
                 assignment.setShiftDefinitionId(shiftDefinition.getId());
                 assignment.setAssignmentDate(targetMonth.atDay(day));
@@ -383,7 +388,7 @@ public class WorkspaceImportService {
     public ResponseEntity<byte[]> exportRoster(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
         List<StaffEntity> staffList = staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery().orderByAsc(StaffEntity::getStaffCode));
-        Map<Long, RoleGroupEntity> roleGroupMap = lookupService.roleGroupMap();
+        Map<Long, TeamEntity> teamMap = lookupService.teamMap();
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
             .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth())
             .orderByAsc(RosterAssignmentEntity::getStaffId)
@@ -394,17 +399,17 @@ public class WorkspaceImportService {
         }
 
         StringBuilder csv = new StringBuilder();
-        csv.append("name,staff_id,role_group,region,contact,notes");
+        csv.append("name,staff_id,team,region,contact,notes");
         for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
             csv.append(',').append(day);
         }
         csv.append('\n');
 
         for (StaffEntity staff : staffList) {
-            RoleGroupEntity roleGroup = roleGroupMap.get(staff.getRoleGroupId());
+            TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
             csv.append(safeCsv(staff.getName())).append(',')
                 .append(safeCsv(staff.getStaffCode())).append(',')
-                .append(safeCsv(roleGroup == null ? "" : roleGroup.getCode())).append(',')
+                .append(safeCsv(team == null ? "" : team.getName())).append(',')
                 .append(safeCsv(staff.getRegion())).append(',')
                 .append(safeCsv(staff.getPhone())).append(',')
                 .append(safeCsv(staff.getNotes()));
@@ -450,14 +455,13 @@ public class WorkspaceImportService {
     }
 
     private ImportIssueEntity buildIssue(Long batchId, String severity, String issueType, String description,
-                                         String teamName, String roleGroupCode, String staffName, LocalDate issueDate) {
+                                         String teamName, String staffName, LocalDate issueDate) {
         ImportIssueEntity issue = new ImportIssueEntity();
         issue.setBatchId(batchId);
         issue.setSeverity(severity);
         issue.setIssueType(issueType);
         issue.setDescription(description);
         issue.setTeamName(teamName);
-        issue.setRoleGroupCode(roleGroupCode);
         issue.setStaffName(staffName);
         issue.setIssueDate(issueDate);
         issue.setResolved(false);
@@ -511,20 +515,6 @@ public class WorkspaceImportService {
         } catch (RuntimeException ex) {
             return null;
         }
-    }
-
-    private ShiftDefinitionEntity findExistingShiftDefinition(String roleGroupCode, String shiftCode) {
-        RoleGroupEntity roleGroup = lookupService.listRoleGroups().stream()
-            .filter(item -> roleGroupCode.equals(item.getCode()))
-            .findFirst()
-            .orElse(null);
-        if (roleGroup == null) {
-            return null;
-        }
-        return shiftDefinitionMapper.selectOne(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-            .eq(ShiftDefinitionEntity::getRoleGroupId, roleGroup.getId())
-            .eq(ShiftDefinitionEntity::getCode, shiftCode)
-            .last("limit 1"));
     }
 
     private YearMonth resolveMonth(Integer year, Integer month) {

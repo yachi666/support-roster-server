@@ -32,22 +32,20 @@ controller：`WorkspaceTeamController`
 - `displayOrder`
 - `visible`
 - `description`
-- `roleGroups`
 
 ## 写入语义
 
-写接口统一使用 `WorkspaceTeamUpsertRequest`，其中 `roleGroupIds` 用于维护团队与角色组的映射关系。
+写接口统一使用 `WorkspaceTeamUpsertRequest`，当前仅维护团队自身属性，不再维护角色组映射关系。
 
 ## 资源约束
 
-- 团队基础信息与角色组映射应在一次写请求中保持一致。
 - `displayOrder` 用于前端展示排序，不应复用为业务优先级含义。
 - `visible` 为展示控制字段，不等同于逻辑删除。
 
 ## 关联影响
 
 - 团队映射会影响排班分组展示。
-- 角色组与团队关系也是校验中心判断“角色组 / 团队映射缺失”的依据之一。
+- 导入、班次定义、人员目录、月排班均直接使用团队作为主分组维度。
 
 ## 请求字段与 DTO 字段映射
 
@@ -61,7 +59,6 @@ controller：`WorkspaceTeamController`
 | `displayOrder` | `WorkspaceTeamUpsertRequest.displayOrder` | `displayOrder` | 是 | 排序 |
 | `visible` | `WorkspaceTeamUpsertRequest.visible` | `visible` | 是 | 是否显示 |
 | `description` | `WorkspaceTeamUpsertRequest.description` | `description` | 否 | 描述 |
-| `roleGroupIds` | `WorkspaceTeamUpsertRequest.roleGroupIds` | `roleGroups` | 是 | 角色组映射列表 |
 
 ### 路径字段
 
@@ -80,4 +77,3 @@ controller：`WorkspaceTeamController`
 | `displayOrder` | `displayOrder` | 排序 |
 | `visible` | `visible` | 是否显示 |
 | `description` | `description` | 描述 |
-| `roleGroups` | `roleGroups` | 角色组对象列表 |
