@@ -28,6 +28,7 @@ import com.support.server.supportrosterserver.exception.ResourceNotFoundExceptio
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 
 import lombok.RequiredArgsConstructor;
 
@@ -40,6 +41,7 @@ public class WorkspaceRosterService {
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
     private final WorkspaceValidationService validationService;
+    private final AvatarUrlResolver avatarUrlResolver;
 
     public WorkspaceMonthlyRosterResponse getMonthlyRoster(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
@@ -76,6 +78,7 @@ public class WorkspaceRosterService {
                 persons.add(new WorkspaceRosterPersonDto(
                     staff.getId(),
                     staff.getName(),
+                    avatarUrlResolver.resolve(staff.getStaffCode()),
                     roleGroup == null ? staff.getRoleName() : roleGroup.getName(),
                     staff.getRoleGroupId(),
                     schedule

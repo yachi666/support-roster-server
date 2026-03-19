@@ -21,6 +21,7 @@ import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 
 class WorkspaceRosterServiceTest {
 
@@ -42,7 +43,8 @@ class WorkspaceRosterServiceTest {
             shiftDefinitionMapper,
             mock(RosterAssignmentMapper.class),
             lookupService,
-            validationService
+            validationService,
+            new AvatarUrlResolver("https://photos.global.image/casual/square")
         );
     }
 
@@ -64,12 +66,14 @@ class WorkspaceRosterServiceTest {
 
         StaffEntity alice = new StaffEntity();
         alice.setId(401L);
+        alice.setStaffCode("401");
         alice.setName("Alice");
         alice.setRoleName("Analyst");
         alice.setRoleGroupId(101L);
 
         StaffEntity bob = new StaffEntity();
         bob.setId(402L);
+        bob.setStaffCode("402X9");
         bob.setName("Bob");
         bob.setRoleName("Escalation");
         bob.setRoleGroupId(202L);
@@ -96,6 +100,8 @@ class WorkspaceRosterServiceTest {
         assertEquals(1, response.getGroups().size());
         assertEquals("101", response.getGroups().get(0).getStaff().get(0).getRoleGroupId().toString());
         assertEquals("202", response.getGroups().get(0).getStaff().get(1).getRoleGroupId().toString());
+        assertEquals("https://photos.global.image/casual/square/401/401.jpg", response.getGroups().get(0).getStaff().get(0).getAvatar());
+        assertEquals("https://photos.global.image/casual/square/402X/402X9.jpg", response.getGroups().get(0).getStaff().get(1).getAvatar());
         assertIterableEquals(List.of("AP-D", "AP-N", "L2-D"), response.getShiftCodeOptions());
         assertIterableEquals(List.of("AP-D", "AP-N"), response.getShiftCodeOptionsByRoleGroup().get(101L));
         assertIterableEquals(List.of("L2-D"), response.getShiftCodeOptionsByRoleGroup().get(202L));

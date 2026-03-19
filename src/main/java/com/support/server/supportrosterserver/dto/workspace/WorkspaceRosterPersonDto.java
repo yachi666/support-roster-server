@@ -15,6 +15,7 @@ public class WorkspaceRosterPersonDto {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long staffId;
     private String staffName;
+    private String avatar;
     private String roleName;
     @JsonSerialize(using = ToStringSerializer.class)
     private Long roleGroupId;
