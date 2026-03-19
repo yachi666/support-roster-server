@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceTeamDto;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceTeamReorderRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceTeamUpsertRequest;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceTeamService;
 
@@ -45,6 +46,11 @@ public class WorkspaceTeamController {
     @PutMapping("/{id}")
     public ResponseEntity<WorkspaceTeamDto> updateTeam(@PathVariable Long id, @Valid @RequestBody WorkspaceTeamUpsertRequest request) {
         return ResponseEntity.ok(workspaceTeamService.updateTeam(id, request));
+    }
+
+    @PostMapping("/reorder")
+    public ResponseEntity<List<WorkspaceTeamDto>> reorderTeams(@Valid @RequestBody WorkspaceTeamReorderRequest request) {
+        return ResponseEntity.ok(workspaceTeamService.reorderTeams(request.getTeamIds()));
     }
 
     @DeleteMapping("/{id}")

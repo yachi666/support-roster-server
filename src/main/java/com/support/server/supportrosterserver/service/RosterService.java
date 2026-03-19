@@ -93,7 +93,7 @@ public class RosterService {
         dto.setMeaning(shiftDefinition.getMeaning());
         dto.setStart(start.withZoneSameInstant(targetZone).toOffsetDateTime());
         dto.setEnd(end.withZoneSameInstant(targetZone).toOffsetDateTime());
-        dto.setTimezone(shiftDefinition.getTimezone());
+        dto.setTimezone(lookupService.normalizeWorkspaceTimezone(shiftDefinition.getTimezone()));
         dto.setIsPrimary(shiftDefinition.getPrimaryShift());
         dto.setShowOnRoster(shiftDefinition.getVisible());
         dto.setColorHex(shiftDefinition.getColorHex());
@@ -112,7 +112,7 @@ public class RosterService {
         return switch (timezone) {
             case "HKT" -> ZoneId.of("Asia/Hong_Kong");
             case "IST" -> ZoneId.of("Asia/Kolkata");
-            case "INT" -> ZoneId.of("UTC");
+            case "UTC" -> ZoneId.of("UTC");
             default -> timezone != null && timezone.contains("/") ? ZoneId.of(timezone) : ZoneId.of("UTC");
         };
     }

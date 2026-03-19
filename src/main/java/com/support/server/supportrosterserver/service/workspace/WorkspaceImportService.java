@@ -1,7 +1,7 @@
 package com.support.server.supportrosterserver.service.workspace;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -10,14 +10,21 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 import org.apache.fesod.sheet.FesodSheet;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -61,8 +68,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class WorkspaceImportService {
 
-    private static final byte[] UTF_8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM dd", Locale.ENGLISH);
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final Set<String> PRIMARY_CODES = Set.of("OC", "DS", "NS", "A", "B", "D");
 
     private final ImportBatchMapper importBatchMapper;
@@ -163,7 +170,7 @@ public class WorkspaceImportService {
                 payload.put("meaning", row.getMeaning());
                 payload.put("startTime", row.getStartTime());
                 payload.put("endTime", row.getEndTime());
-                payload.put("timezone", row.getTimezone());
+                payload.put("timezone", lookupService.normalizeWorkspaceTimezone(row.getTimezone()));
                 payload.put("showOnRosterPage", row.getShowOnRosterPage());
                 payload.put("remark", row.getRemark());
                 payload.put("colorHex", colorHexByCode.get(row.getCode()));
@@ -306,7 +313,7 @@ public class WorkspaceImportService {
                 entity.setMeaning((String) payload.get("meaning"));
                 entity.setStartTime(parseTime((String) payload.get("startTime")));
                 entity.setEndTime(parseTime((String) payload.get("endTime")));
-                entity.setTimezone((String) payload.get("timezone"));
+                entity.setTimezone(lookupService.normalizeWorkspaceTimezone((String) payload.get("timezone")));
                 entity.setVisible("Y".equalsIgnoreCase(String.valueOf(payload.get("showOnRosterPage"))));
                 entity.setPrimaryShift(PRIMARY_CODES.contains(entity.getCode()));
                 entity.setRemark((String) payload.get("remark"));
@@ -339,7 +346,7 @@ public class WorkspaceImportService {
             staff.setStaffCode(row.getStaffId());
             staff.setName(row.getName());
             staff.setRegion(row.getRegion());
-            staff.setTimezone(lookupService.inferTimezone(row.getRegion(), row.getTeam()));
+            staff.setTimezone(lookupService.normalizeWorkspaceTimezone(lookupService.inferTimezone(row.getRegion(), row.getTeam())));
             staff.setRoleName(team.getName());
             staff.setTeamId(team.getId());
             staff.setRoleGroupId(null);
@@ -387,8 +394,19 @@ public class WorkspaceImportService {
 
     public ResponseEntity<byte[]> exportRoster(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
-        List<StaffEntity> staffList = staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery().orderByAsc(StaffEntity::getStaffCode));
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
+        List<ShiftDefinitionEntity> shiftDefinitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
+            .orderByAsc(ShiftDefinitionEntity::getTeamId)
+            .orderByAsc(ShiftDefinitionEntity::getCode));
+        List<StaffEntity> staffList = new ArrayList<>(staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()));
+        staffList.sort(Comparator
+            .comparing((StaffEntity staff) -> {
+                TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
+                return team == null || team.getDisplayOrder() == null ? Integer.MAX_VALUE : team.getDisplayOrder();
+            })
+            .thenComparing(staff -> staff.getStaffCode() == null ? "" : staff.getStaffCode())
+            .thenComparing(staff -> staff.getName() == null ? "" : staff.getName()));
+
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
             .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth())
             .orderByAsc(RosterAssignmentEntity::getStaffId)
@@ -398,36 +416,20 @@ public class WorkspaceImportService {
             schedule.put(assignment.getStaffId() + "|" + assignment.getAssignmentDate().getDayOfMonth(), assignment.getShiftCode());
         }
 
-        StringBuilder csv = new StringBuilder();
-        csv.append("name,staff_id,team,region,contact,notes");
-        for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
-            csv.append(',').append(day);
-        }
-        csv.append('\n');
+        try (Workbook workbook = loadTemplateWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            populateShiftDefinitionsSheet(workbook.getSheet("Shift Definitions"), shiftDefinitions, teamMap);
+            populateStaffShiftsSheet(workbook.getSheet("Staff Shifts"), staffList, teamMap, schedule, targetMonth);
+            populateColorDefinitionsSheet(workbook.getSheet("Color Definitions"), shiftDefinitions);
+            workbook.write(outputStream);
 
-        for (StaffEntity staff : staffList) {
-            TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
-            csv.append(safeCsv(staff.getName())).append(',')
-                .append(safeCsv(staff.getStaffCode())).append(',')
-                .append(safeCsv(team == null ? "" : team.getName())).append(',')
-                .append(safeCsv(staff.getRegion())).append(',')
-                .append(safeCsv(staff.getPhone())).append(',')
-                .append(safeCsv(staff.getNotes()));
-            for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
-                csv.append(',').append(safeCsv(schedule.get(staff.getId() + "|" + day)));
-            }
-            csv.append('\n');
+            String fileName = "workspace-roster-" + targetMonth.getYear() + "-" + String.format("%02d", targetMonth.getMonthValue()) + ".xlsx";
+            return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fileName)
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(outputStream.toByteArray());
+        } catch (IOException ex) {
+            throw new BadRequestException("Failed to export roster workbook: " + ex.getMessage());
         }
-
-        byte[] csvBytes = csv.toString().getBytes(StandardCharsets.UTF_8);
-        byte[] body = new byte[UTF_8_BOM.length + csvBytes.length];
-        System.arraycopy(UTF_8_BOM, 0, body, 0, UTF_8_BOM.length);
-        System.arraycopy(csvBytes, 0, body, UTF_8_BOM.length, csvBytes.length);
-        String fileName = "workspace-roster-" + targetMonth.getYear() + "-" + String.format("%02d", targetMonth.getMonthValue()) + ".csv";
-        return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fileName)
-            .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-            .body(body);
     }
 
     public ResponseEntity<byte[]> downloadTemplate() {
@@ -441,6 +443,145 @@ public class WorkspaceImportService {
         } catch (IOException ex) {
             throw new BadRequestException("Failed to read template file: " + ex.getMessage());
         }
+    }
+
+    private Workbook loadTemplateWorkbook() throws IOException {
+        ClassPathResource resource = new ClassPathResource("roster.xlsx");
+        return WorkbookFactory.create(resource.getInputStream());
+    }
+
+    private void populateShiftDefinitionsSheet(Sheet sheet, List<ShiftDefinitionEntity> shiftDefinitions, Map<Long, TeamEntity> teamMap) {
+        List<List<String>> rows = new ArrayList<>();
+
+        for (ShiftDefinitionEntity shiftDefinition : shiftDefinitions) {
+            TeamEntity team = shiftDefinition.getTeamId() == null ? null : teamMap.get(shiftDefinition.getTeamId());
+            rows.add(List.of(
+                team == null ? "" : safeString(team.getName()),
+                safeString(shiftDefinition.getCode()),
+                safeString(shiftDefinition.getMeaning()),
+                formatTime(shiftDefinition.getStartTime()),
+                formatTime(shiftDefinition.getEndTime()),
+                lookupService.normalizeWorkspaceTimezone(shiftDefinition.getTimezone()),
+                Boolean.TRUE.equals(shiftDefinition.getVisible()) ? "Y" : "N",
+                safeString(shiftDefinition.getRemark())
+            ));
+        }
+
+        replaceSheetRows(sheet, rows);
+    }
+
+    private void populateStaffShiftsSheet(Sheet sheet, List<StaffEntity> staffList, Map<Long, TeamEntity> teamMap,
+                                          Map<String, String> schedule, YearMonth targetMonth) {
+        List<List<String>> rows = new ArrayList<>();
+
+        for (StaffEntity staff : staffList) {
+            TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
+            List<String> row = new ArrayList<>();
+            row.add(safeString(staff.getName()));
+            row.add(safeString(staff.getStaffCode()));
+            row.add(team == null ? "" : safeString(team.getName()));
+            row.add(safeString(staff.getRegion()));
+            row.add(safeString(staff.getPhone()));
+            row.add(safeString(staff.getNotes()));
+
+            for (int day = 1; day <= 31; day++) {
+                if (day <= targetMonth.lengthOfMonth()) {
+                    row.add(safeString(schedule.get(staff.getId() + "|" + day)));
+                } else {
+                    row.add("");
+                }
+            }
+
+            rows.add(row);
+        }
+
+        replaceSheetRows(sheet, rows);
+    }
+
+    private void populateColorDefinitionsSheet(Sheet sheet, List<ShiftDefinitionEntity> shiftDefinitions) {
+        Map<String, ShiftDefinitionEntity> uniqueDefinitions = new LinkedHashMap<>();
+        for (ShiftDefinitionEntity shiftDefinition : shiftDefinitions) {
+            if (shiftDefinition.getCode() == null || shiftDefinition.getCode().isBlank()) {
+                continue;
+            }
+            uniqueDefinitions.putIfAbsent(shiftDefinition.getCode(), shiftDefinition);
+        }
+
+        List<List<String>> rows = new ArrayList<>();
+        for (ShiftDefinitionEntity shiftDefinition : uniqueDefinitions.values()) {
+            rows.add(List.of(
+                safeString(shiftDefinition.getCode()),
+                safeString(shiftDefinition.getCode()),
+                toRgbString(shiftDefinition.getColorHex()),
+                safeString(shiftDefinition.getColorHex())
+            ));
+        }
+
+        replaceSheetRows(sheet, rows);
+    }
+
+    private void replaceSheetRows(Sheet sheet, List<List<String>> rows) {
+        if (sheet == null) {
+            return;
+        }
+
+        Row styleRow = sheet.getRow(Math.min(1, sheet.getLastRowNum()));
+        int maxColumns = styleRow == null ? 0 : styleRow.getLastCellNum();
+        int rowIndex = 1;
+
+        for (List<String> rowValues : rows) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                row = sheet.createRow(rowIndex);
+            }
+
+            int columns = Math.max(maxColumns, rowValues.size());
+            for (int columnIndex = 0; columnIndex < columns; columnIndex++) {
+                Cell cell = row.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                if (styleRow != null) {
+                    Cell styleCell = styleRow.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                    cell.setCellStyle(styleCell.getCellStyle());
+                }
+                cell.setCellValue(columnIndex < rowValues.size() ? safeString(rowValues.get(columnIndex)) : "");
+            }
+
+            rowIndex++;
+        }
+
+        for (int clearIndex = rowIndex; clearIndex <= sheet.getLastRowNum(); clearIndex++) {
+            Row row = sheet.getRow(clearIndex);
+            if (row == null) {
+                continue;
+            }
+            int lastCellNum = Math.max(row.getLastCellNum(), maxColumns);
+            for (int columnIndex = 0; columnIndex < lastCellNum; columnIndex++) {
+                Cell cell = row.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                if (styleRow != null) {
+                    Cell styleCell = styleRow.getCell(columnIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                    cell.setCellStyle(styleCell.getCellStyle());
+                }
+                cell.setCellValue("");
+            }
+        }
+    }
+
+    private String formatTime(LocalTime value) {
+        return value == null ? "" : value.format(TIME_FORMATTER);
+    }
+
+    private String toRgbString(String hex) {
+        if (hex == null || !hex.matches("^#[0-9a-fA-F]{6}$")) {
+            return "";
+        }
+
+        int red = Integer.parseInt(hex.substring(1, 3), 16);
+        int green = Integer.parseInt(hex.substring(3, 5), 16);
+        int blue = Integer.parseInt(hex.substring(5, 7), 16);
+        return red + " " + green + " " + blue;
+    }
+
+    private String safeString(String value) {
+        return value == null ? "" : value;
     }
 
     private ImportRecordEntity buildRecord(Long batchId, String sheetName, int rowNumber, String recordType, Object payload, boolean valid) {
@@ -522,11 +663,4 @@ public class WorkspaceImportService {
         return YearMonth.of(year == null ? now.getYear() : year, month == null ? now.getMonthValue() : month);
     }
 
-    private String safeCsv(String value) {
-        if (value == null) {
-            return "";
-        }
-        String escaped = value.replace("\"", "\"\"");
-        return '"' + escaped + '"';
-    }
 }

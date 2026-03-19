@@ -43,35 +43,48 @@ public class WorkspaceLookupService {
         return entity;
     }
 
+    public String normalizeWorkspaceTimezone(String timezone) {
+        if (timezone == null || timezone.isBlank()) {
+            return "UTC";
+        }
+
+        return switch (timezone) {
+            case "UTC", "GMT" -> "UTC";
+            case "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Singapore", "Asia/Tokyo", "Asia/Seoul", "HKT" -> "HKT";
+            case "Asia/Kolkata", "Asia/Calcutta", "Asia/Colombo", "IST", "Europe/London", "America/New_York" -> "IST";
+            default -> "UTC";
+        };
+    }
+
     public String inferTimezone(String region, String teamName) {
         if (region != null) {
             String normalized = region.toLowerCase(Locale.ROOT);
             if (normalized.contains("china")) {
-                return "Asia/Shanghai";
+                return "HKT";
             }
             if (normalized.contains("india")) {
-                return "Asia/Kolkata";
+                return "IST";
             }
             if (normalized.contains("emea") || normalized.contains("europe")) {
-                return "Europe/London";
+                return "UTC";
             }
             if (normalized.contains("apac") || normalized.contains("singapore") || normalized.contains("hong kong")) {
-                return "Asia/Singapore";
+                return "HKT";
             }
             if (normalized.contains("america")) {
-                return "America/New_York";
+                return "UTC";
             }
         }
         if (teamName != null) {
             String normalizedTeam = teamName.toLowerCase(Locale.ROOT);
             if (normalizedTeam.contains("india")) {
-                return "Asia/Kolkata";
+                return "IST";
             }
             if (normalizedTeam.contains("china") || normalizedTeam.contains("ap")) {
-                return "Asia/Shanghai";
+                return "HKT";
             }
             if (normalizedTeam.contains("emea")) {
-                return "Europe/London";
+                return "UTC";
             }
         }
         return null;

@@ -102,7 +102,7 @@ public class WorkspaceShiftDefinitionService {
             entity.getMeaning(),
             entity.getStartTime(),
             entity.getEndTime(),
-            entity.getTimezone(),
+            lookupService.normalizeWorkspaceTimezone(entity.getTimezone()),
             entity.getPrimaryShift(),
             entity.getVisible(),
             entity.getColorHex(),
@@ -118,7 +118,7 @@ public class WorkspaceShiftDefinitionService {
         entity.setMeaning(request.getMeaning());
         entity.setStartTime(request.getStartTime());
         entity.setEndTime(request.getEndTime());
-        entity.setTimezone(request.getTimezone());
+        entity.setTimezone(lookupService.normalizeWorkspaceTimezone(request.getTimezone()));
         entity.setPrimaryShift(request.getPrimaryShift());
         entity.setVisible(request.getVisible());
         entity.setColorHex(request.getColorHex());

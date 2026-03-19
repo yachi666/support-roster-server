@@ -144,7 +144,7 @@ public class WorkspaceStaffService {
             entity.getPhone(),
             entity.getSlack(),
             entity.getRegion(),
-            entity.getTimezone(),
+            lookupService.normalizeWorkspaceTimezone(entity.getTimezone()),
             entity.getRoleName(),
             entity.getTeamId(),
             team == null ? null : team.getTeamCode(),
@@ -164,7 +164,7 @@ public class WorkspaceStaffService {
         entity.setPhone(request.getPhone());
         entity.setSlack(request.getSlack());
         entity.setRegion(request.getRegion());
-        entity.setTimezone(request.getTimezone());
+        entity.setTimezone(lookupService.normalizeWorkspaceTimezone(request.getTimezone()));
         entity.setRoleName(request.getRoleName());
         entity.setTeamId(request.getTeamId());
         entity.setRoleGroupId(null);
