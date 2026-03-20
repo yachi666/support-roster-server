@@ -22,10 +22,20 @@ class WorkspaceLookupServiceTest {
 
     @Test
     void shouldInferTimezoneFromRegion() {
-        assertEquals("Asia/Shanghai", workspaceLookupService.inferTimezone("China", "L1 China"));
-        assertEquals("Asia/Kolkata", workspaceLookupService.inferTimezone("India", "Incident Manager India"));
-        assertEquals("Europe/London", workspaceLookupService.inferTimezone(null, "EMEA L2"));
-        assertEquals("Asia/Shanghai", workspaceLookupService.inferTimezone(null, "AP L2"));
+        assertEquals("HKT", workspaceLookupService.inferTimezone("China", "L1 China"));
+        assertEquals("IST", workspaceLookupService.inferTimezone("India", "Incident Manager India"));
+        assertEquals("UTC", workspaceLookupService.inferTimezone(null, "EMEA L2"));
+        assertEquals("HKT", workspaceLookupService.inferTimezone(null, "AP L2"));
         assertNull(workspaceLookupService.inferTimezone(null, null));
+    }
+
+    @Test
+    void shouldNormalizeWorkspaceTimezoneToSupportedValues() {
+        assertEquals("UTC", workspaceLookupService.normalizeWorkspaceTimezone(null));
+        assertEquals("UTC", workspaceLookupService.normalizeWorkspaceTimezone("GMT"));
+        assertEquals("HKT", workspaceLookupService.normalizeWorkspaceTimezone("Asia/Shanghai"));
+        assertEquals("IST", workspaceLookupService.normalizeWorkspaceTimezone("Asia/Kolkata"));
+        assertEquals("IST", workspaceLookupService.normalizeWorkspaceTimezone("America/New_York"));
+        assertEquals("UTC", workspaceLookupService.normalizeWorkspaceTimezone("Unknown/Zone"));
     }
 }
