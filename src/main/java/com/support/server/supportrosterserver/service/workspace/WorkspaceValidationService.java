@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -23,12 +25,14 @@ import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity
 import com.support.server.supportrosterserver.entity.workspace.ImportBatchEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
+import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.mapper.ImportBatchMapper;
 import com.support.server.supportrosterserver.mapper.ImportIssueMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
+import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -48,6 +52,7 @@ public class WorkspaceValidationService {
     private final ImportBatchMapper importBatchMapper;
     private final ImportIssueMapper importIssueMapper;
     private final WorkspaceLookupService lookupService;
+    private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
 
     public WorkspaceValidationResponse getValidation(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
@@ -67,11 +72,22 @@ public class WorkspaceValidationService {
         List<WorkspaceValidationIssueDto> issues = new ArrayList<>();
 
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
+        List<ShiftDefinitionEntity> definitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery());
+        Map<Long, Set<Long>> teamIdsByDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery())
+            .stream()
+            .collect(Collectors.groupingBy(
+                ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
+                Collectors.mapping(ShiftDefinitionTeamRelEntity::getTeamId, Collectors.toSet())
+            ));
+
         Map<String, ShiftDefinitionEntity> shiftDefinitionByTeamAndCode = new HashMap<>();
-        for (ShiftDefinitionEntity def : shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery())) {
-            shiftDefinitionByTeamAndCode.put(def.getTeamId() + "|" + def.getCode(), def);
+        for (ShiftDefinitionEntity def : definitions) {
+            for (Long teamId : teamIdsByDefinitionId.getOrDefault(def.getId(), Set.of())) {
+                shiftDefinitionByTeamAndCode.put(teamId + "|" + def.getCode(), def);
+            }
             if (def.getStartTime() == null || def.getEndTime() == null) {
-                TeamEntity team = def.getTeamId() == null ? null : teamMap.get(def.getTeamId());
+                Long firstTeamId = teamIdsByDefinitionId.getOrDefault(def.getId(), Set.of()).stream().findFirst().orElse(def.getTeamId());
+                TeamEntity team = firstTeamId == null ? null : teamMap.get(firstTeamId);
                 issues.add(new WorkspaceValidationIssueDto(
                     idGenerator.getAndIncrement(),
                     "medium",

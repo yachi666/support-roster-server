@@ -16,12 +16,14 @@ import org.junit.jupiter.api.Test;
 import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
+import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.mapper.ImportBatchMapper;
 import com.support.server.supportrosterserver.mapper.ImportIssueMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
+import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 
 class WorkspaceValidationServiceTest {
@@ -32,6 +34,7 @@ class WorkspaceValidationServiceTest {
     private ImportBatchMapper importBatchMapper;
     private ImportIssueMapper importIssueMapper;
     private WorkspaceLookupService lookupService;
+    private ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private WorkspaceValidationService validationService;
 
     @BeforeEach
@@ -42,7 +45,8 @@ class WorkspaceValidationServiceTest {
         importBatchMapper = mock(ImportBatchMapper.class);
         importIssueMapper = mock(ImportIssueMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
-        validationService = new WorkspaceValidationService(staffMapper, shiftDefinitionMapper, rosterAssignmentMapper, importBatchMapper, importIssueMapper, lookupService);
+        shiftDefinitionTeamRelMapper = mock(ShiftDefinitionTeamRelMapper.class);
+        validationService = new WorkspaceValidationService(staffMapper, shiftDefinitionMapper, rosterAssignmentMapper, importBatchMapper, importIssueMapper, lookupService, shiftDefinitionTeamRelMapper);
     }
 
     @Test
@@ -76,6 +80,7 @@ class WorkspaceValidationServiceTest {
         when(importIssueMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
         when(staffMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(staff));
         when(shiftDefinitionMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(shiftDefinition));
+        when(shiftDefinitionTeamRelMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(buildRelation(1000L, 100L)));
         when(rosterAssignmentMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(assignment));
         when(lookupService.teamMap()).thenReturn(java.util.Map.of(100L, team));
         when(lookupService.listTeams()).thenReturn(List.of(team));
@@ -85,5 +90,12 @@ class WorkspaceValidationServiceTest {
         assertTrue(issues.stream().anyMatch(issue -> issue.getType().equals("Time Zone Ambiguity")));
         assertTrue(issues.stream().anyMatch(issue -> issue.getType().equals("Missing Primary Coverage")));
         assertFalse(issues.stream().anyMatch(issue -> issue.getType().equals("Invalid Shift Code")));
+    }
+
+    private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {
+        ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
+        relation.setShiftDefinitionId(shiftDefinitionId);
+        relation.setTeamId(teamId);
+        return relation;
     }
 }

@@ -1,6 +1,7 @@
 package com.support.server.supportrosterserver.dto.workspace;
 
 import java.time.LocalTime;
+import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -27,4 +28,5 @@ public class WorkspaceShiftDefinitionDto {
     private Boolean visible;
     private String colorHex;
     private String remark;
+    private List<WorkspaceShiftDefinitionTeamDto> teams;
 }

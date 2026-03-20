@@ -17,5 +17,6 @@ public class WorkspaceMonthlyRosterResponse {
     private List<String> shiftCodeOptions;
     private Map<Long, List<String>> shiftCodeOptionsByTeam;
     private Map<String, String> shiftCodeColorMap;
+    private Map<Long, Map<String, WorkspaceRosterShiftDetailDto>> shiftDetailsByTeam;
     private String validationWarning;
 }

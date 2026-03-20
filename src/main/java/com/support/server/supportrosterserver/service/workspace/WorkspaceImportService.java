@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.fesod.sheet.FesodSheet;
 import org.apache.poi.ss.usermodel.Cell;
@@ -45,6 +46,7 @@ import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity
 import com.support.server.supportrosterserver.entity.workspace.ImportRecordEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
+import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.exception.BadRequestException;
@@ -53,6 +55,7 @@ import com.support.server.supportrosterserver.mapper.ImportIssueMapper;
 import com.support.server.supportrosterserver.mapper.ImportRecordMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
+import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.TeamMapper;
 import com.support.server.supportrosterserver.repository.ColorDefinitionDataListener;
@@ -76,6 +79,7 @@ public class WorkspaceImportService {
     private final ImportRecordMapper importRecordMapper;
     private final ImportIssueMapper importIssueMapper;
     private final ShiftDefinitionMapper shiftDefinitionMapper;
+    private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private final StaffMapper staffMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final TeamMapper teamMapper;
@@ -148,7 +152,7 @@ public class WorkspaceImportService {
                     continue;
                 }
                 boolean valid = true;
-                TeamEntity team = teamsByName.get(row.getTeam().trim().toLowerCase(Locale.ROOT));
+                List<TeamEntity> teams = resolveTeams(row.getTeam(), teamsByName);
                 if (row.getCode() == null || row.getCode().isBlank()) {
                     valid = false;
                     issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Code", "Shift definition code is missing.", row.getTeam(), null, null));
@@ -157,15 +161,15 @@ public class WorkspaceImportService {
                     valid = false;
                     issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Definition", "Shift definition time range is invalid for team '" + row.getTeam() + "'.", row.getTeam(), null, null));
                 }
-                if (team == null) {
+                if (teams.isEmpty()) {
                     valid = false;
                     issues.add(buildIssue(batch.getId(), "medium", "Missing Team", "Team '" + row.getTeam() + "' does not exist.", row.getTeam(), null, null));
                 }
-                if (team != null) {
+                for (TeamEntity team : teams) {
                     validShiftKeys.add(team.getId() + "|" + row.getCode());
                 }
                 Map<String, Object> payload = new HashMap<>();
-                payload.put("team", row.getTeam());
+                payload.put("teams", teams.stream().map(TeamEntity::getName).toList());
                 payload.put("code", row.getCode());
                 payload.put("meaning", row.getMeaning());
                 payload.put("startTime", row.getStartTime());
@@ -177,9 +181,15 @@ public class WorkspaceImportService {
                 records.add(buildRecord(batch.getId(), "Shift Definitions", rowIndex++, "SHIFT_DEFINITION", payload, valid));
             }
 
+            Map<Long, List<Long>> databaseTeamIdsByDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery())
+                .stream()
+                .collect(Collectors.groupingBy(
+                    ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
+                    Collectors.mapping(ShiftDefinitionTeamRelEntity::getTeamId, Collectors.toList())
+                ));
             for (ShiftDefinitionEntity entity : shiftDefinitionMapper.selectList(Wrappers.lambdaQuery())) {
-                if (entity.getTeamId() != null) {
-                    validShiftKeys.add(entity.getTeamId() + "|" + entity.getCode());
+                for (Long teamId : databaseTeamIdsByDefinitionId.getOrDefault(entity.getId(), List.of())) {
+                    validShiftKeys.add(teamId + "|" + entity.getCode());
                 }
             }
 
@@ -292,22 +302,18 @@ public class WorkspaceImportService {
             if ("SHIFT_DEFINITION".equals(record.getRecordType())) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> payload = readValue(record.getPayloadJson(), Map.class);
-                String teamName = String.valueOf(payload.get("team"));
-                TeamEntity team = teamMapper.selectOne(Wrappers.<TeamEntity>lambdaQuery()
-                    .eq(TeamEntity::getName, teamName)
-                    .last("limit 1"));
-                if (team == null) {
-                    throw new BadRequestException("Team '" + teamName + "' does not exist.");
+                @SuppressWarnings("unchecked")
+                List<String> teamNames = (List<String>) payload.get("teams");
+                List<TeamEntity> teams = resolveTeams(teamNames, teamMapper.selectList(Wrappers.<TeamEntity>lambdaQuery()));
+                if (teams.isEmpty()) {
+                    throw new BadRequestException("At least one team is required for shift definition import.");
                 }
 
-                ShiftDefinitionEntity entity = shiftDefinitionMapper.selectOne(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-                    .eq(ShiftDefinitionEntity::getTeamId, team.getId())
-                    .eq(ShiftDefinitionEntity::getCode, String.valueOf(payload.get("code")))
-                    .last("limit 1"));
+                ShiftDefinitionEntity entity = findExistingShiftDefinition(teams.get(0).getId(), String.valueOf(payload.get("code")));
                 if (entity == null) {
                     entity = new ShiftDefinitionEntity();
                 }
-                entity.setTeamId(team.getId());
+                entity.setTeamId(teams.get(0).getId());
                 entity.setRoleGroupId(null);
                 entity.setCode(String.valueOf(payload.get("code")));
                 entity.setMeaning((String) payload.get("meaning"));
@@ -323,6 +329,7 @@ public class WorkspaceImportService {
                 } else {
                     shiftDefinitionMapper.updateById(entity);
                 }
+                replaceShiftTeams(entity.getId(), teams.stream().map(TeamEntity::getId).toList());
             }
         }
         for (ImportRecordEntity record : records) {
@@ -364,10 +371,7 @@ public class WorkspaceImportService {
                 if (shiftCode == null || shiftCode.isBlank()) {
                     continue;
                 }
-                ShiftDefinitionEntity shiftDefinition = shiftDefinitionMapper.selectOne(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-                    .eq(ShiftDefinitionEntity::getTeamId, team.getId())
-                    .eq(ShiftDefinitionEntity::getCode, shiftCode)
-                    .last("limit 1"));
+                ShiftDefinitionEntity shiftDefinition = findExistingShiftDefinition(team.getId(), shiftCode);
                 if (shiftDefinition == null) {
                     continue;
                 }
@@ -451,12 +455,22 @@ public class WorkspaceImportService {
     }
 
     private void populateShiftDefinitionsSheet(Sheet sheet, List<ShiftDefinitionEntity> shiftDefinitions, Map<Long, TeamEntity> teamMap) {
+        Map<Long, List<TeamEntity>> teamsByShiftDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery())
+            .stream()
+            .collect(Collectors.groupingBy(
+                ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
+                Collectors.mapping(relation -> teamMap.get(relation.getTeamId()), Collectors.toList())
+            ));
         List<List<String>> rows = new ArrayList<>();
 
         for (ShiftDefinitionEntity shiftDefinition : shiftDefinitions) {
-            TeamEntity team = shiftDefinition.getTeamId() == null ? null : teamMap.get(shiftDefinition.getTeamId());
+            String teamNames = teamsByShiftDefinitionId.getOrDefault(shiftDefinition.getId(), List.of()).stream()
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparing(team -> team.getDisplayOrder() == null ? Integer.MAX_VALUE : team.getDisplayOrder()))
+                .map(TeamEntity::getName)
+                .collect(Collectors.joining(", "));
             rows.add(List.of(
-                team == null ? "" : safeString(team.getName()),
+                safeString(teamNames),
                 safeString(shiftDefinition.getCode()),
                 safeString(shiftDefinition.getMeaning()),
                 formatTime(shiftDefinition.getStartTime()),
@@ -655,6 +669,67 @@ public class WorkspaceImportService {
             return LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), parts.length > 2 ? Integer.parseInt(parts[2]) : 0);
         } catch (RuntimeException ex) {
             return null;
+        }
+    }
+
+    private List<TeamEntity> resolveTeams(String rawTeamNames, Map<String, TeamEntity> teamsByName) {
+        if (rawTeamNames == null || rawTeamNames.isBlank()) {
+            return List.of();
+        }
+
+        return java.util.Arrays.stream(rawTeamNames.split(",|;|\\n"))
+            .map(String::trim)
+            .filter(name -> !name.isBlank())
+            .map(name -> teamsByName.get(name.toLowerCase(Locale.ROOT)))
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    }
+
+    private List<TeamEntity> resolveTeams(List<String> teamNames, List<TeamEntity> teams) {
+        if (teamNames == null || teamNames.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, TeamEntity> teamsByName = teams.stream().collect(Collectors.toMap(
+            team -> team.getName().toLowerCase(Locale.ROOT),
+            team -> team,
+            (left, right) -> left,
+            HashMap::new
+        ));
+        return teamNames.stream()
+            .map(name -> teamsByName.get(name.toLowerCase(Locale.ROOT)))
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    }
+
+    private ShiftDefinitionEntity findExistingShiftDefinition(Long teamId, String code) {
+        List<ShiftDefinitionEntity> candidates = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
+            .eq(ShiftDefinitionEntity::getCode, code));
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        Set<Long> candidateIds = candidates.stream().map(ShiftDefinitionEntity::getId).collect(Collectors.toSet());
+        Set<Long> matchingIds = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                .eq(ShiftDefinitionTeamRelEntity::getTeamId, teamId)
+                .in(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, candidateIds))
+            .stream()
+            .map(ShiftDefinitionTeamRelEntity::getShiftDefinitionId)
+            .collect(Collectors.toSet());
+
+        return candidates.stream().filter(candidate -> matchingIds.contains(candidate.getId())).findFirst().orElse(null);
+    }
+
+    private void replaceShiftTeams(Long shiftDefinitionId, List<Long> teamIds) {
+        shiftDefinitionTeamRelMapper.delete(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+            .eq(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, shiftDefinitionId));
+        for (Long teamId : teamIds.stream().distinct().toList()) {
+            ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
+            relation.setShiftDefinitionId(shiftDefinitionId);
+            relation.setTeamId(teamId);
+            shiftDefinitionTeamRelMapper.insert(relation);
         }
     }
 

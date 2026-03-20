@@ -11,6 +11,7 @@
 |------|------|
 | `db-spec.md` | 数据库设计强制规则，包括雪花主键、审计时间字段与 DDL 存放约束 |
 | `ddl/README.md` | DDL 目录用途、维护方式与文件组织建议 |
+| `ddl/003_workspace_shift_definition_team_rel.sql` | 班次定义与团队多对多关联表，用于共享班次定义 |
 
 ## 目录说明
 

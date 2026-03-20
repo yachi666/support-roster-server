@@ -15,10 +15,12 @@ import org.junit.jupiter.api.Test;
 
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceMonthlyRosterResponse;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
+import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
+import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 
@@ -26,6 +28,7 @@ class WorkspaceRosterServiceTest {
 
     private StaffMapper staffMapper;
     private ShiftDefinitionMapper shiftDefinitionMapper;
+    private ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private WorkspaceLookupService lookupService;
     private WorkspaceValidationService validationService;
     private WorkspaceRosterService workspaceRosterService;
@@ -34,12 +37,14 @@ class WorkspaceRosterServiceTest {
     void setUp() {
         staffMapper = mock(StaffMapper.class);
         shiftDefinitionMapper = mock(ShiftDefinitionMapper.class);
+        shiftDefinitionTeamRelMapper = mock(ShiftDefinitionTeamRelMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
         validationService = mock(WorkspaceValidationService.class);
 
         workspaceRosterService = new WorkspaceRosterService(
             staffMapper,
             shiftDefinitionMapper,
+            shiftDefinitionTeamRelMapper,
             mock(RosterAssignmentMapper.class),
             lookupService,
             validationService,
@@ -78,6 +83,11 @@ class WorkspaceRosterServiceTest {
             buildShiftDefinition(502L, 301L, "AP-N", "#f97316"),
             buildShiftDefinition(503L, 301L, "L2-D", "#22c55e")
         ));
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
+            buildRelation(501L, 301L),
+            buildRelation(502L, 301L),
+            buildRelation(503L, 301L)
+        ));
         when(validationService.validateLiveData(any())).thenReturn(List.of());
 
         WorkspaceMonthlyRosterResponse response = workspaceRosterService.getMonthlyRoster(2026, 3);
@@ -90,7 +100,15 @@ class WorkspaceRosterServiceTest {
         assertIterableEquals(List.of("AP-D", "AP-N", "L2-D"), response.getShiftCodeOptions());
         assertIterableEquals(List.of("AP-D", "AP-N", "L2-D"), response.getShiftCodeOptionsByTeam().get(301L));
         assertEquals("#ef4444", response.getShiftCodeColorMap().get("AP-D"));
+        assertEquals("AP-D", response.getShiftDetailsByTeam().get(301L).get("AP-D").getCode());
         assertTrue(response.getValidationWarning().isEmpty());
+    }
+
+    private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {
+        ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
+        relation.setShiftDefinitionId(shiftDefinitionId);
+        relation.setTeamId(teamId);
+        return relation;
     }
 
     private ShiftDefinitionEntity buildShiftDefinition(Long id, Long teamId, String code, String colorHex) {

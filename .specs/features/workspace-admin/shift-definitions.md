@@ -26,12 +26,13 @@ controller：`WorkspaceShiftDefinitionController`
 
 - 列表接口支持可选 `keyword` 参数。
 - 返回模型为 `WorkspaceShiftDefinitionDto`。
+- 单条班次定义可关联多个团队，响应通过 `teams` 数组返回共享团队列表；兼容保留 `teamId/teamCode/teamName` 作为主显示团队。
 
 ## 写入字段
 
 写接口统一使用 `WorkspaceShiftDefinitionUpsertRequest`，必填字段包括：
 
-- `teamId`
+- `teamIds`
 - `code`
 - `meaning`
 - `startTime`
@@ -47,7 +48,8 @@ controller：`WorkspaceShiftDefinitionController`
 
 ## 资源约束
 
-- 班次定义必须绑定已存在的团队。
+- 班次定义必须至少绑定一个已存在的团队。
+- 同一团队下，同一个 `code` 只能关联一条有效班次定义；共享班次通过团队关联表实现，而不是复制多条主记录。
 - `startTime` 与 `endTime` 不可形成无效时间范围。
 - `primaryShift` 用于主班次校验规则。
 - `visible` 用于决定是否可出现在后台排班选项和相关展示中。
@@ -64,7 +66,7 @@ controller：`WorkspaceShiftDefinitionController`
 
 | 请求字段 | Request DTO | Response DTO 字段 | 必填 | 说明 |
 |------|------|------|------|------|
-| `teamId` | `WorkspaceShiftDefinitionUpsertRequest.teamId` | `teamId` | 是 | 团队主键 |
+| `teamIds` | `WorkspaceShiftDefinitionUpsertRequest.teamIds` | `teams[].id` | 是 | 共享团队主键列表 |
 | `code` | `WorkspaceShiftDefinitionUpsertRequest.code` | `code` | 是 | 班次编码 |
 | `meaning` | `WorkspaceShiftDefinitionUpsertRequest.meaning` | `meaning` | 是 | 班次说明 |
 | `startTime` | `WorkspaceShiftDefinitionUpsertRequest.startTime` | `startTime` | 是 | 开始时间 |
@@ -87,9 +89,9 @@ controller：`WorkspaceShiftDefinitionController`
 | DTO 字段 | OpenAPI 字段 | 说明 |
 |------|------|------|
 | `id` | `id` | 主键 |
-| `teamId` | `teamId` | 团队主键 |
-| `teamCode` | `teamCode` | 团队编码 |
-| `teamName` | `teamName` | 团队名称 |
+| `teamId` | `teamId` | 主显示团队主键 |
+| `teamCode` | `teamCode` | 主显示团队编码 |
+| `teamName` | `teamName` | 主显示团队名称 |
 | `code` | `code` | 班次编码 |
 | `meaning` | `meaning` | 班次含义 |
 | `startTime` | `startTime` | 开始时间 |
@@ -99,3 +101,4 @@ controller：`WorkspaceShiftDefinitionController`
 | `visible` | `visible` | 是否可见 |
 | `colorHex` | `colorHex` | 颜色 |
 | `remark` | `remark` | 备注 |
+| `teams` | `teams` | 共享团队列表 |
