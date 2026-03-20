@@ -177,31 +177,6 @@ public class WorkspaceValidationService {
             }
         }
 
-        List<TeamEntity> visibleTeams = lookupService.listTeams().stream()
-            .filter(team -> Boolean.TRUE.equals(team.getVisible()))
-            .toList();
-        for (TeamEntity team : visibleTeams) {
-            for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
-                LocalDate date = targetMonth.atDay(day);
-                List<RosterAssignmentEntity> teamAssignments = assignmentsByTeamDay.getOrDefault(team.getId() + "|" + date, List.of());
-                boolean hasPrimary = teamAssignments.stream().anyMatch(assignment -> {
-                    ShiftDefinitionEntity def = shiftDefinitionByTeamAndCode.get(assignment.getTeamId() + "|" + assignment.getShiftCode());
-                    return def != null && Boolean.TRUE.equals(def.getPrimaryShift());
-                });
-                if (!hasPrimary) {
-                    issues.add(new WorkspaceValidationIssueDto(
-                        idGenerator.getAndIncrement(),
-                        "high",
-                        "Missing Primary Coverage",
-                        "No primary shift scheduled for " + team.getName() + " on " + date.format(DATE_FORMATTER) + ".",
-                        team.getName(),
-                        date.format(DATE_FORMATTER),
-                        false,
-                        RESOLUTION_KIND_MANUAL
-                    ));
-                }
-            }
-        }
         return issues;
     }
 
@@ -257,6 +232,7 @@ public class WorkspaceValidationService {
                 .orderByDesc(ImportIssueEntity::getCreateTime)
                 .last("limit 100"))
             .stream()
+            .filter(issue -> !"Missing Primary Coverage".equals(issue.getIssueType()))
             .map(issue -> new WorkspaceValidationIssueDto(
                 issue.getId(),
                 issue.getSeverity(),

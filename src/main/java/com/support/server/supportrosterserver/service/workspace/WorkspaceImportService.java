@@ -117,7 +117,6 @@ public class WorkspaceImportService {
                     HashMap::new
                 ));
             Set<String> validShiftKeys = new HashSet<>();
-            Set<String> scheduledPrimaryCoverage = new HashSet<>();
             Set<String> staffDayKeys = new HashSet<>();
 
             for (ColorDefinitionRow colorRow : parsedWorkbook.colorRows()) {
@@ -220,19 +219,8 @@ public class WorkspaceImportService {
                         valid = false;
                         issues.add(buildIssue(batch.getId(), "high", "Overlapping Assignment", "Staff '" + row.getName() + "' has duplicate assignments on the same day.", row.getTeam(), row.getName(), targetMonth.atDay(day)));
                     }
-                    if (PRIMARY_CODES.contains(shiftCode) && team != null) {
-                        scheduledPrimaryCoverage.add(team.getId() + "|" + day);
-                    }
                 }
                 records.add(buildRecord(batch.getId(), "Staff Shifts", rowIndex++, "STAFF_SHIFT", row, valid));
-            }
-
-            for (TeamEntity team : teamsByName.values()) {
-                for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
-                    if (!scheduledPrimaryCoverage.contains(team.getId() + "|" + day)) {
-                        issues.add(buildIssue(batch.getId(), "low", "Missing Primary Coverage", "No primary shift scheduled for " + team.getName() + " on " + targetMonth.atDay(day).format(DATE_FORMATTER) + ".", team.getName(), null, targetMonth.atDay(day)));
-                    }
-                }
             }
 
             records.forEach(importRecordMapper::insert);

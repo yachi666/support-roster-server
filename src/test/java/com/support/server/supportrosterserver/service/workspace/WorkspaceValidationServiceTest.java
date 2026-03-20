@@ -50,7 +50,7 @@ class WorkspaceValidationServiceTest {
     }
 
     @Test
-    void shouldReportMissingTimezoneAndCoverage() {
+    void shouldReportMissingTimezoneWithoutCoverageIssue() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
         staff.setName("Alex");
@@ -88,7 +88,7 @@ class WorkspaceValidationServiceTest {
         var issues = validationService.validateLiveData(YearMonth.of(2026, 3));
 
         assertTrue(issues.stream().anyMatch(issue -> issue.getType().equals("Time Zone Ambiguity")));
-        assertTrue(issues.stream().anyMatch(issue -> issue.getType().equals("Missing Primary Coverage")));
+        assertFalse(issues.stream().anyMatch(issue -> issue.getType().equals("Missing Primary Coverage")));
         assertFalse(issues.stream().anyMatch(issue -> issue.getType().equals("Invalid Shift Code")));
     }
 

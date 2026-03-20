@@ -37,7 +37,6 @@ public class WorkspaceOverviewService {
         List<WorkspaceSummaryStatDto> stats = List.of(
             new WorkspaceSummaryStatDto("Completion Progress", completion + "%", totalIssues == 0 ? "No issues detected" : totalIssues + " issues detected", completion > 80 ? "good" : "warning", completion),
             new WorkspaceSummaryStatDto("Unresolved Issues", String.valueOf(totalIssues), validation.getSummary().getHigh() + " high severity", totalIssues == 0 ? "good" : "warning", Math.max(0, 100 - (int) totalIssues * 5)),
-            new WorkspaceSummaryStatDto("Missing Primary Coverage", String.valueOf(validation.getSummary().getHigh()), "Calculated from live roster", validation.getSummary().getHigh() == 0 ? "good" : "error", Math.max(0, 100 - (int) validation.getSummary().getHigh() * 10)),
             new WorkspaceSummaryStatDto("Draft Shifts", String.valueOf(totalAssignments), "Imported and manual records", "neutral", Math.min(100, (int) totalAssignments))
         );
 
