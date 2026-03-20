@@ -20,12 +20,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.apache.fesod.sheet.FesodSheet;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -58,9 +60,6 @@ import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.TeamMapper;
-import com.support.server.supportrosterserver.repository.ColorDefinitionDataListener;
-import com.support.server.supportrosterserver.repository.ShiftDefinitionDataListener;
-import com.support.server.supportrosterserver.repository.StaffShiftDataListener;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -105,15 +104,7 @@ public class WorkspaceImportService {
             tempFile = Files.createTempFile("workspace-import-", ".xlsx");
             file.transferTo(tempFile);
 
-            ShiftDefinitionDataListener shiftListener = new ShiftDefinitionDataListener();
-            StaffShiftDataListener staffListener = new StaffShiftDataListener();
-            ColorDefinitionDataListener colorListener = new ColorDefinitionDataListener();
-            FesodSheet.read(tempFile.toString(), ShiftDefinitionRow.class, shiftListener).sheet(0).doRead();
-            FesodSheet.read(tempFile.toString(), StaffShiftRow.class, staffListener).sheet(1).doRead();
-            try {
-                FesodSheet.read(tempFile.toString(), ColorDefinitionRow.class, colorListener).sheet(2).doRead();
-            } catch (Exception ignored) {
-            }
+            ParsedImportWorkbook parsedWorkbook = readImportWorkbook(tempFile);
 
             Map<String, String> colorHexByCode = new HashMap<>();
             List<ImportRecordEntity> records = new ArrayList<>();
@@ -129,7 +120,7 @@ public class WorkspaceImportService {
             Set<String> scheduledPrimaryCoverage = new HashSet<>();
             Set<String> staffDayKeys = new HashSet<>();
 
-            for (ColorDefinitionRow colorRow : colorListener.getDataList()) {
+            for (ColorDefinitionRow colorRow : parsedWorkbook.colorRows()) {
                 if (colorRow.getCode() == null || colorRow.getCode().isBlank() || "code".equalsIgnoreCase(colorRow.getCode())) {
                     continue;
                 }
@@ -138,7 +129,7 @@ public class WorkspaceImportService {
             }
 
             int rowIndex = 1;
-            for (ShiftDefinitionRow row : shiftListener.getDataList()) {
+            for (ShiftDefinitionRow row : parsedWorkbook.shiftDefinitionRows()) {
                 if (row.getTeam() == null || row.getTeam().isBlank() || "team".equalsIgnoreCase(row.getTeam())) {
                     continue;
                 }
@@ -194,15 +185,15 @@ public class WorkspaceImportService {
             }
 
             rowIndex = 1;
-            for (StaffShiftRow row : staffListener.getDataList()) {
+            for (StaffShiftRow row : parsedWorkbook.staffShiftRows()) {
                 if (row.getName() == null || row.getName().isBlank() || "name".equalsIgnoreCase(row.getName())) {
                     continue;
                 }
                 boolean valid = true;
                 TeamEntity team = row.getTeam() == null ? null : teamsByName.get(row.getTeam().trim().toLowerCase(Locale.ROOT));
-                if (parseLong(row.getStaffId()) == null) {
+                if (row.getStaffId() == null || row.getStaffId().isBlank()) {
                     valid = false;
-                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Staff ID", "Staff ID is missing or not numeric for row '" + row.getName() + "'.", row.getTeam(), row.getName(), null));
+                    issues.add(buildIssue(batch.getId(), "medium", "Invalid Staff ID", "Staff ID is missing for row '" + row.getName() + "'.", row.getTeam(), row.getName(), null));
                 }
                 if (row.getTeam() == null || row.getTeam().isBlank() || team == null) {
                     valid = false;
@@ -402,25 +393,25 @@ public class WorkspaceImportService {
         List<ShiftDefinitionEntity> shiftDefinitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
             .orderByAsc(ShiftDefinitionEntity::getTeamId)
             .orderByAsc(ShiftDefinitionEntity::getCode));
-        List<StaffEntity> staffList = new ArrayList<>(staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()));
-        staffList.sort(Comparator
-            .comparing((StaffEntity staff) -> {
-                TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
-                return team == null || team.getDisplayOrder() == null ? Integer.MAX_VALUE : team.getDisplayOrder();
-            })
-            .thenComparing(staff -> staff.getStaffCode() == null ? "" : staff.getStaffCode())
-            .thenComparing(staff -> staff.getName() == null ? "" : staff.getName()));
-
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
             .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth())
             .orderByAsc(RosterAssignmentEntity::getStaffId)
             .orderByAsc(RosterAssignmentEntity::getAssignmentDate));
+        Map<Long, Long> assignmentCountByStaffId = assignments.stream().collect(Collectors.groupingBy(
+            RosterAssignmentEntity::getStaffId,
+            Collectors.counting()
+        ));
         Map<String, String> schedule = new HashMap<>();
         for (RosterAssignmentEntity assignment : assignments) {
             schedule.put(assignment.getStaffId() + "|" + assignment.getAssignmentDate().getDayOfMonth(), assignment.getShiftCode());
         }
+        List<StaffEntity> staffList = dedupeStaffForExport(
+            staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()),
+            teamMap,
+            assignmentCountByStaffId
+        );
 
-        try (Workbook workbook = loadTemplateWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+        try (Workbook workbook = createExportWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             populateShiftDefinitionsSheet(workbook.getSheet("Shift Definitions"), shiftDefinitions, teamMap);
             populateStaffShiftsSheet(workbook.getSheet("Staff Shifts"), staffList, teamMap, schedule, targetMonth);
             populateColorDefinitionsSheet(workbook.getSheet("Color Definitions"), shiftDefinitions);
@@ -449,9 +440,27 @@ public class WorkspaceImportService {
         }
     }
 
-    private Workbook loadTemplateWorkbook() throws IOException {
-        ClassPathResource resource = new ClassPathResource("roster.xlsx");
-        return WorkbookFactory.create(resource.getInputStream());
+    private Workbook createExportWorkbook() {
+        Workbook workbook = new XSSFWorkbook();
+        createHeaderRow(workbook.createSheet("Shift Definitions"), List.of(
+            "team", "code", "meaning", "start_time", "end_time", "timezone", "show_on_roster_page", "remark"
+        ));
+
+        List<String> staffHeaders = new ArrayList<>(List.of("name", "staff_id", "team", "region", "contact", "notes"));
+        for (int day = 1; day <= 31; day++) {
+            staffHeaders.add(String.valueOf(day));
+        }
+        createHeaderRow(workbook.createSheet("Staff Shifts"), staffHeaders);
+        createHeaderRow(workbook.createSheet("Color Definitions"), List.of("code", "color_name", "rgb", "hex"));
+        return workbook;
+    }
+
+    private void createHeaderRow(Sheet sheet, List<String> headers) {
+        Row headerRow = sheet.createRow(0);
+        for (int columnIndex = 0; columnIndex < headers.size(); columnIndex++) {
+            headerRow.createCell(columnIndex).setCellValue(headers.get(columnIndex));
+            sheet.setColumnWidth(columnIndex, 18 * 256);
+        }
     }
 
     private void populateShiftDefinitionsSheet(Sheet sheet, List<ShiftDefinitionEntity> shiftDefinitions, Map<Long, TeamEntity> teamMap) {
@@ -512,6 +521,36 @@ public class WorkspaceImportService {
         replaceSheetRows(sheet, rows);
     }
 
+    private List<StaffEntity> dedupeStaffForExport(List<StaffEntity> staffEntities, Map<Long, TeamEntity> teamMap, Map<Long, Long> assignmentCountByStaffId) {
+        List<StaffEntity> sortedStaff = new ArrayList<>(staffEntities);
+        sortedStaff.sort(Comparator
+            .comparing((StaffEntity staff) -> {
+                TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
+                return team == null || team.getDisplayOrder() == null ? Integer.MAX_VALUE : team.getDisplayOrder();
+            })
+            .thenComparing((StaffEntity staff) -> assignmentCountByStaffId.getOrDefault(staff.getId(), 0L), Comparator.reverseOrder())
+            .thenComparing(staff -> staff.getStaffCode() == null ? "" : staff.getStaffCode())
+            .thenComparing(staff -> staff.getName() == null ? "" : staff.getName())
+            .thenComparing(staff -> staff.getId() == null ? Long.MAX_VALUE : staff.getId()));
+
+        Map<String, StaffEntity> uniqueStaffByCode = new LinkedHashMap<>();
+        for (StaffEntity staff : sortedStaff) {
+            uniqueStaffByCode.putIfAbsent(exportStaffKey(staff), staff);
+        }
+        return new ArrayList<>(uniqueStaffByCode.values());
+    }
+
+    private String exportStaffKey(StaffEntity staff) {
+        if (staff == null) {
+            return "";
+        }
+
+        if (staff.getStaffCode() == null || staff.getStaffCode().isBlank()) {
+            return "__id__" + (staff.getId() == null ? "" : staff.getId());
+        }
+        return staff.getStaffCode().trim().toLowerCase(Locale.ROOT);
+    }
+
     private void populateColorDefinitionsSheet(Sheet sheet, List<ShiftDefinitionEntity> shiftDefinitions) {
         Map<String, ShiftDefinitionEntity> uniqueDefinitions = new LinkedHashMap<>();
         for (ShiftDefinitionEntity shiftDefinition : shiftDefinitions) {
@@ -539,7 +578,7 @@ public class WorkspaceImportService {
             return;
         }
 
-        Row styleRow = sheet.getRow(Math.min(1, sheet.getLastRowNum()));
+        Row styleRow = sheet.getLastRowNum() >= 1 ? sheet.getRow(1) : null;
         int maxColumns = styleRow == null ? 0 : styleRow.getLastCellNum();
         int rowIndex = 1;
 
@@ -652,11 +691,170 @@ public class WorkspaceImportService {
         }
     }
 
-    private Long parseLong(String value) {
-        try {
-            return value == null ? null : Long.parseLong(value);
-        } catch (NumberFormatException ex) {
+    private ParsedImportWorkbook readImportWorkbook(Path tempFile) throws IOException {
+        try (Workbook workbook = WorkbookFactory.create(tempFile.toFile())) {
+            DataFormatter formatter = new DataFormatter(Locale.ENGLISH);
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            return new ParsedImportWorkbook(
+                readShiftDefinitionRows(workbook, formatter, evaluator),
+                readStaffShiftRows(workbook, formatter, evaluator),
+                readColorDefinitionRows(workbook, formatter, evaluator)
+            );
+        }
+    }
+
+    private List<ShiftDefinitionRow> readShiftDefinitionRows(Workbook workbook, DataFormatter formatter, FormulaEvaluator evaluator) {
+        Sheet sheet = getSheet(workbook, "Shift Definitions", 0);
+        if (sheet == null) {
+            return List.of();
+        }
+
+        List<ShiftDefinitionRow> rows = new ArrayList<>();
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (isBlankRow(row, 8, formatter, evaluator)) {
+                continue;
+            }
+
+            ShiftDefinitionRow item = new ShiftDefinitionRow();
+            item.setTeam(readCell(row, 0, formatter, evaluator));
+            item.setCode(readCell(row, 1, formatter, evaluator));
+            item.setMeaning(readCell(row, 2, formatter, evaluator));
+            item.setStartTime(readCell(row, 3, formatter, evaluator));
+            item.setEndTime(readCell(row, 4, formatter, evaluator));
+            item.setTimezone(readCell(row, 5, formatter, evaluator));
+            item.setShowOnRosterPage(readCell(row, 6, formatter, evaluator));
+            item.setRemark(readCell(row, 7, formatter, evaluator));
+            rows.add(item);
+        }
+        return rows;
+    }
+
+    private List<StaffShiftRow> readStaffShiftRows(Workbook workbook, DataFormatter formatter, FormulaEvaluator evaluator) {
+        Sheet sheet = getSheet(workbook, "Staff Shifts", 1);
+        if (sheet == null) {
+            return List.of();
+        }
+
+        List<StaffShiftRow> rows = new ArrayList<>();
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (isBlankRow(row, 37, formatter, evaluator)) {
+                continue;
+            }
+
+            StaffShiftRow item = new StaffShiftRow();
+            item.setName(readCell(row, 0, formatter, evaluator));
+            item.setStaffId(readCell(row, 1, formatter, evaluator));
+            item.setTeam(readCell(row, 2, formatter, evaluator));
+            item.setRegion(readCell(row, 3, formatter, evaluator));
+            item.setContact(readCell(row, 4, formatter, evaluator));
+            item.setNotes(readCell(row, 5, formatter, evaluator));
+            for (int day = 1; day <= 31; day++) {
+                setShiftCode(item, day, readCell(row, day + 5, formatter, evaluator));
+            }
+            rows.add(item);
+        }
+        return rows;
+    }
+
+    private List<ColorDefinitionRow> readColorDefinitionRows(Workbook workbook, DataFormatter formatter, FormulaEvaluator evaluator) {
+        Sheet sheet = getSheet(workbook, "Color Definitions", 2);
+        if (sheet == null) {
+            return List.of();
+        }
+
+        List<ColorDefinitionRow> rows = new ArrayList<>();
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (isBlankRow(row, 4, formatter, evaluator)) {
+                continue;
+            }
+
+            ColorDefinitionRow item = new ColorDefinitionRow();
+            item.setCode(readCell(row, 0, formatter, evaluator));
+            item.setColorName(readCell(row, 1, formatter, evaluator));
+            item.setRgb(readCell(row, 2, formatter, evaluator));
+            item.setHex(readCell(row, 3, formatter, evaluator));
+            rows.add(item);
+        }
+        return rows;
+    }
+
+    private Sheet getSheet(Workbook workbook, String name, int fallbackIndex) {
+        Sheet sheet = workbook.getSheet(name);
+        if (sheet != null) {
+            return sheet;
+        }
+        return fallbackIndex < workbook.getNumberOfSheets() ? workbook.getSheetAt(fallbackIndex) : null;
+    }
+
+    private boolean isBlankRow(Row row, int columnCount, DataFormatter formatter, FormulaEvaluator evaluator) {
+        if (row == null) {
+            return true;
+        }
+
+        for (int columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+            if (readCell(row, columnIndex, formatter, evaluator) != null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String readCell(Row row, int columnIndex, DataFormatter formatter, FormulaEvaluator evaluator) {
+        if (row == null) {
             return null;
+        }
+
+        Cell cell = row.getCell(columnIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+        if (cell == null) {
+            return null;
+        }
+
+        String value = formatter.formatCellValue(cell, evaluator);
+        if (value == null) {
+            return null;
+        }
+
+        String trimmedValue = value.trim();
+        return trimmedValue.isEmpty() ? null : trimmedValue;
+    }
+
+    private void setShiftCode(StaffShiftRow row, int day, String value) {
+        switch (day) {
+            case 1 -> row.setDay1(value);
+            case 2 -> row.setDay2(value);
+            case 3 -> row.setDay3(value);
+            case 4 -> row.setDay4(value);
+            case 5 -> row.setDay5(value);
+            case 6 -> row.setDay6(value);
+            case 7 -> row.setDay7(value);
+            case 8 -> row.setDay8(value);
+            case 9 -> row.setDay9(value);
+            case 10 -> row.setDay10(value);
+            case 11 -> row.setDay11(value);
+            case 12 -> row.setDay12(value);
+            case 13 -> row.setDay13(value);
+            case 14 -> row.setDay14(value);
+            case 15 -> row.setDay15(value);
+            case 16 -> row.setDay16(value);
+            case 17 -> row.setDay17(value);
+            case 18 -> row.setDay18(value);
+            case 19 -> row.setDay19(value);
+            case 20 -> row.setDay20(value);
+            case 21 -> row.setDay21(value);
+            case 22 -> row.setDay22(value);
+            case 23 -> row.setDay23(value);
+            case 24 -> row.setDay24(value);
+            case 25 -> row.setDay25(value);
+            case 26 -> row.setDay26(value);
+            case 27 -> row.setDay27(value);
+            case 28 -> row.setDay28(value);
+            case 29 -> row.setDay29(value);
+            case 30 -> row.setDay30(value);
+            case 31 -> row.setDay31(value);
+            default -> throw new IllegalArgumentException("Unsupported day: " + day);
         }
     }
 
@@ -736,6 +934,13 @@ public class WorkspaceImportService {
     private YearMonth resolveMonth(Integer year, Integer month) {
         YearMonth now = YearMonth.now();
         return YearMonth.of(year == null ? now.getYear() : year, month == null ? now.getMonthValue() : month);
+    }
+
+    private record ParsedImportWorkbook(
+        List<ShiftDefinitionRow> shiftDefinitionRows,
+        List<StaffShiftRow> staffShiftRows,
+        List<ColorDefinitionRow> colorRows
+    ) {
     }
 
 }
