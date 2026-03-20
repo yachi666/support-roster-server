@@ -1,6 +1,7 @@
 package com.support.server.supportrosterserver.service.workspace;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,9 +19,11 @@ import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefini
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionUpsertRequest;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
+import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.exception.BadRequestException;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
+import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 
@@ -32,6 +35,7 @@ public class WorkspaceShiftDefinitionService {
 
     private final ShiftDefinitionMapper shiftDefinitionMapper;
     private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
+    private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
 
     public List<WorkspaceShiftDefinitionDto> listShiftDefinitions(String keyword) {
@@ -95,10 +99,25 @@ public class WorkspaceShiftDefinitionService {
 
     @Transactional
     public void deleteShiftDefinition(Long id) {
-        if (shiftDefinitionMapper.selectById(id) == null) {
+        ShiftDefinitionEntity shiftDefinition = shiftDefinitionMapper.selectById(id);
+        if (shiftDefinition == null) {
             throw new ResourceNotFoundException("ShiftDefinition", "id", id);
         }
 
+        List<ShiftDefinitionTeamRelEntity> teamRelations = shiftDefinitionTeamRelMapper.selectList(
+            Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                .eq(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, id)
+        );
+        Set<Long> teamIds = new LinkedHashSet<>();
+        if (shiftDefinition.getTeamId() != null) {
+            teamIds.add(shiftDefinition.getTeamId());
+        }
+        teamRelations.stream()
+            .map(ShiftDefinitionTeamRelEntity::getTeamId)
+            .filter(Objects::nonNull)
+            .forEach(teamIds::add);
+
+        rosterAssignmentMapper.delete(buildAssignmentCleanupQuery(id, shiftDefinition.getCode(), teamIds));
         shiftDefinitionTeamRelMapper.delete(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
             .eq(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, id));
         shiftDefinitionMapper.deleteById(id);
@@ -188,6 +207,19 @@ public class WorkspaceShiftDefinitionService {
             relation.setTeamId(teamId);
             shiftDefinitionTeamRelMapper.insert(relation);
         }
+    }
+
+    private LambdaQueryWrapper<RosterAssignmentEntity> buildAssignmentCleanupQuery(Long shiftDefinitionId, String shiftCode, Set<Long> teamIds) {
+        LambdaQueryWrapper<RosterAssignmentEntity> query = Wrappers.<RosterAssignmentEntity>lambdaQuery()
+            .eq(RosterAssignmentEntity::getShiftDefinitionId, shiftDefinitionId);
+
+        if (shiftCode != null && !shiftCode.isBlank() && !teamIds.isEmpty()) {
+            query.or(wrapper -> wrapper
+                .eq(RosterAssignmentEntity::getShiftCode, shiftCode)
+                .in(RosterAssignmentEntity::getTeamId, teamIds));
+        }
+
+        return query;
     }
 
     private void validateCodeAvailability(Long currentDefinitionId, String code, List<Long> teamIds) {
