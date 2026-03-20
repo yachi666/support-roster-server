@@ -1,0 +1,11 @@
+logging:
+  level:
+    root: INFO
+    org.springframework.web: INFO
+    org.springframework.jdbc: WARN
+    com.support.server.supportrosterserver: DEBUG
+
+support:
+  logging:
+    file:
+      path: logs

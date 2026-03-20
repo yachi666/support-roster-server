@@ -1,6 +1,8 @@
 spring:
   application:
     name: support-roster-server
+  profiles:
+    default: local
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/support}
     username: ${DB_USERNAME:lzn}
@@ -47,3 +49,6 @@ management:
 support:
   avatar:
     base-url: https://photos.global.image/casual/square
+  logging:
+    file:
+      path: ${LOG_PATH:logs}

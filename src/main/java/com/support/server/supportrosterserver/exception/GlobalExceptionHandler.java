@@ -1,5 +1,7 @@
 package com.support.server.supportrosterserver.exception;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -13,15 +15,19 @@ import com.support.server.supportrosterserver.dto.ErrorResponse;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LogManager.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(
             BadRequestException ex,
             WebRequest request) {
+        String path = extractPath(request);
+        log.warn("Bad request on {}: {}", path, ex.getMessage());
         ErrorResponse error = new ErrorResponse(
             HttpStatus.BAD_REQUEST.value(),
             "Bad Request",
             ex.getMessage(),
-            request.getDescription(false).replace("uri=", "")
+            path
         );
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
@@ -30,11 +36,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleResourceNotFound(
             ResourceNotFoundException ex,
             WebRequest request) {
+        String path = extractPath(request);
+        log.info("Resource not found on {}: {}", path, ex.getMessage());
         ErrorResponse error = new ErrorResponse(
             HttpStatus.NOT_FOUND.value(),
             "Not Found",
             ex.getMessage(),
-            request.getDescription(false).replace("uri=", "")
+            path
         );
         return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
     }
@@ -47,11 +55,13 @@ public class GlobalExceptionHandler {
             .findFirst()
             .map(FieldError::getDefaultMessage)
             .orElse("Validation failed");
+        String path = extractPath(request);
+        log.warn("Validation failed on {}: {}", path, message);
         ErrorResponse error = new ErrorResponse(
             HttpStatus.BAD_REQUEST.value(),
             "Bad Request",
             message,
-            request.getDescription(false).replace("uri=", "")
+            path
         );
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
@@ -60,12 +70,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGlobalException(
             Exception ex,
             WebRequest request) {
+        String path = extractPath(request);
+        log.error("Unhandled exception on {}", path, ex);
         ErrorResponse error = new ErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
             "Internal Server Error",
             ex.getMessage(),
-            request.getDescription(false).replace("uri=", "")
+            path
         );
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    private String extractPath(WebRequest request) {
+        return request.getDescription(false).replace("uri=", "");
     }
 }

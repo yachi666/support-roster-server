@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Properties>
+        <Property name="CONSOLE_LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} [traceId=%X{traceId}] - %msg%n%throwable</Property>
+        <Property name="FILE_LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} [traceId=%X{traceId}] - %msg%n%throwable</Property>
+        <Property name="LOG_DIR">${spring:support.logging.file.path:-logs}</Property>
+        <Property name="LOG_FILE">${LOG_DIR}/application.log</Property>
+    </Properties>
+
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${CONSOLE_LOG_PATTERN}" />
+        </Console>
+
+        <RollingFile name="RollingFile"
+                     fileName="${LOG_FILE}"
+                     filePattern="${LOG_DIR}/application-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="${FILE_LOG_PATTERN}" />
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true" />
+                <SizeBasedTriggeringPolicy size="20 MB" />
+            </Policies>
+            <DefaultRolloverStrategy max="14" />
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <Logger name="org.springframework.web" level="${spring:logging.level.org.springframework.web:-${env:LOG_LEVEL_SPRING_WEB:-INFO}}">
+            <AppenderRef ref="Console" />
+            <AppenderRef ref="RollingFile" />
+        </Logger>
+        <Logger name="org.springframework.jdbc" level="${spring:logging.level.org.springframework.jdbc:-${env:LOG_LEVEL_SPRING_JDBC:-WARN}}">
+            <AppenderRef ref="Console" />
+            <AppenderRef ref="RollingFile" />
+        </Logger>
+        <Logger name="com.support.server.supportrosterserver" level="${spring:logging.level.com.support.server.supportrosterserver:-${env:LOG_LEVEL_APP:-INFO}}" additivity="false">
+            <AppenderRef ref="Console" />
+            <AppenderRef ref="RollingFile" />
+        </Logger>
+
+        <Root level="${spring:logging.level.root:-${env:LOG_LEVEL_ROOT:-INFO}}">
+            <AppenderRef ref="Console" />
+            <AppenderRef ref="RollingFile" />
+        </Root>
+    </Loggers>
+</Configuration>
