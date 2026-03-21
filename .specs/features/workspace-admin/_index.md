@@ -1,39 +1,47 @@
-# Workspace Admin Spec Index
+# Workspace Admin 分册目录
 
-## 范围
+## 文档定位
 
-- 本目录承载 `/api/workspace/**` 管理后台能力的资源级规范。
-- 每个文档聚焦单一资源或单一能力，避免将人员、班次、团队、排班、导入等主题继续混写在单个文档内。
+本分册描述 `/api/workspace/**` 管理后台能力，覆盖聚合首页、主数据维护、月度排班、校验中心与 Excel 导入导出。
 
-## 文档导航
+## 阅读路径
 
-| 文档 | 说明 | 对应 OpenAPI |
-|------|------|------|
-| `overview.md` | Workspace 后台能力边界、持久化栈、核心表与跨资源约束 | `../../../api/openapi.yaml` |
-| `dashboard-overview.md` | 总览看板聚合接口与输出结构 | `../../../api/paths/workspace/overview.yaml` |
-| `role-groups.md` | 历史兼容说明，记录已废弃的 role-group 后台资源 | `../../../api/paths/workspace/role-groups.yaml` |
-| `staff.md` | 人员目录的查询、创建、更新、删除与筛选约束 | `../../../api/paths/workspace/staff.yaml` |
-| `shift-definitions.md` | 班次定义的 CRUD 规则与可见性约束 | `../../../api/paths/workspace/shift-definitions.yaml` |
-| `teams.md` | 团队资源自身的维护规则 | `../../../api/paths/workspace/teams.yaml` |
-| `roster.md` | 月度排班查询、单元格保存与存储约定 | `../../../api/paths/workspace/roster.yaml` |
-| `validation.md` | 校验中心输出结构与规则来源 | `../../../api/paths/workspace/validation.yaml` |
-| `import-export.md` | Excel 导入预览、应用与导出流程 | `../../../api/paths/workspace/import-export.yaml` |
+| 目标 | 建议顺序 |
+|---|---|
+| 先理解整体边界 | [overview.md](./overview.md) → 资源文档 |
+| 评审首页聚合 | [dashboard-overview.md](./dashboard-overview.md) |
+| 评审主数据维护 | [staff.md](./staff.md) / [shift-definitions.md](./shift-definitions.md) / [teams.md](./teams.md) |
+| 评审排班写入链路 | [roster.md](./roster.md) → [validation.md](./validation.md) |
+| 评审导入流程 | [import-export.md](./import-export.md) → [validation.md](./validation.md) |
 
-## 源码映射
+## 资源目录
 
-| 资源文档 | Controller | Service | DTO |
-|------|------|------|------|
-| `dashboard-overview.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceOverviewController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceOverviewService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceOverviewResponse.java` |
+| 文档 | 能力 | 对应 OpenAPI |
+|---|---|---|
+| [overview.md](./overview.md) | workspace 能力边界、核心表、跨资源约束 | [../../../api/openapi.yaml](../../../api/openapi.yaml) |
+| [dashboard-overview.md](./dashboard-overview.md) | 工作台首页聚合 | [../../../api/paths/workspace/overview.yaml](../../../api/paths/workspace/overview.yaml) |
+| [staff.md](./staff.md) | 人员目录 CRUD | [../../../api/paths/workspace/staff.yaml](../../../api/paths/workspace/staff.yaml) |
+| [shift-definitions.md](./shift-definitions.md) | 班次定义 CRUD | [../../../api/paths/workspace/shift-definitions.yaml](../../../api/paths/workspace/shift-definitions.yaml) |
+| [teams.md](./teams.md) | 团队管理 CRUD | [../../../api/paths/workspace/teams.yaml](../../../api/paths/workspace/teams.yaml) |
+| [roster.md](./roster.md) | 月度排班查询与保存 | [../../../api/paths/workspace/roster.yaml](../../../api/paths/workspace/roster.yaml) |
+| [validation.md](./validation.md) | 校验中心 | [../../../api/paths/workspace/validation.yaml](../../../api/paths/workspace/validation.yaml) |
+| [import-export.md](./import-export.md) | 导入预览、应用、导出与模板下载 | [../../../api/paths/workspace/import-export.yaml](../../../api/paths/workspace/import-export.yaml) |
+| [role-groups.md](./role-groups.md) | 已废弃的历史兼容说明 | [../../../api/paths/workspace/role-groups.yaml](../../../api/paths/workspace/role-groups.yaml) |
+
+## 契约与源码映射
+
+| 文档 | Controller | Service | DTO |
+|---|---|---|---|
+| `dashboard-overview.md` | [WorkspaceOverviewController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceOverviewController.java) | [WorkspaceOverviewService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceOverviewService.java) | [WorkspaceOverviewResponse.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceOverviewResponse.java) |
+| `staff.md` | [WorkspaceStaffController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceStaffController.java) | [WorkspaceStaffService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceStaffService.java) | [WorkspaceStaffDto.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceStaffDto.java) / [WorkspaceStaffUpsertRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceStaffUpsertRequest.java) |
+| `shift-definitions.md` | [WorkspaceShiftDefinitionController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceShiftDefinitionController.java) | [WorkspaceShiftDefinitionService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceShiftDefinitionService.java) | [WorkspaceShiftDefinitionDto.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionDto.java) / [WorkspaceShiftDefinitionUpsertRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionUpsertRequest.java) |
+| `teams.md` | [WorkspaceTeamController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceTeamController.java) | [WorkspaceTeamService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceTeamService.java) | [WorkspaceTeamDto.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceTeamDto.java) / [WorkspaceTeamUpsertRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceTeamUpsertRequest.java) |
+| `roster.md` | [WorkspaceRosterController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceRosterController.java) | [WorkspaceRosterService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceRosterService.java) | [WorkspaceMonthlyRosterResponse.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceMonthlyRosterResponse.java) / [WorkspaceRosterSaveRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceRosterSaveRequest.java) |
+| `validation.md` | [WorkspaceValidationController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceValidationController.java) | [WorkspaceValidationService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceValidationService.java) | [WorkspaceValidationResponse.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceValidationResponse.java) |
+| `import-export.md` | [WorkspaceImportExportController.java](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceImportExportController.java) | [WorkspaceImportService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceImportService.java) | [WorkspaceImportPreviewResponse.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceImportPreviewResponse.java) / [WorkspaceImportApplyResponse.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceImportApplyResponse.java) |
 | `role-groups.md` | 已废弃 | 已废弃 | 已废弃 |
-| `staff.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceStaffController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceStaffService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceStaffDto.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceStaffUpsertRequest.java` |
-| `shift-definitions.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceShiftDefinitionController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceShiftDefinitionService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionDto.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionUpsertRequest.java` |
-| `teams.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceTeamController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceTeamService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceTeamDto.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceTeamUpsertRequest.java` |
-| `roster.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceRosterController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceRosterService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceMonthlyRosterResponse.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceRosterSaveRequest.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceRosterCellUpdateRequest.java` |
-| `validation.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceValidationController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceValidationService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceValidationResponse.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceValidationSummaryDto.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceValidationIssueDto.java` |
-| `import-export.md` | `../../../src/main/java/com/support/server/supportrosterserver/controller/workspace/WorkspaceImportExportController.java` | `../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceImportService.java` | `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceImportPreviewResponse.java`, `../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceImportApplyResponse.java` |
 
-## 维护规则
+## 维护提示
 
-- 新增 workspace 资源接口时，优先在本目录新增对应文档，而不是继续扩展总览文档。
-- 涉及多个资源的共性约束写入 `overview.md`，具体资源规则落在对应单文档。
-- 若 OpenAPI、controller 与 feature spec 发生差异，应同时修正本目录中的资源文档。
+- 资源级差异应落到具体文档，不在本目录页堆叠细节。
+- 若 workspace 新增资源，应同时补充本页的“资源目录”和“契约与源码映射”两张表。

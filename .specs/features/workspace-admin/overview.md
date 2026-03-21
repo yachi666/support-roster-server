@@ -1,8 +1,12 @@
-# Workspace Admin Overview
+# Workspace Admin 总览
+
+## 文档定位
+
+本文是 `/api/workspace/**` 管理接口的总览章节，用于建立后台能力边界、资源关系、核心表与跨资源约束。资源级字段映射与接口细节继续下沉到 `workspace-admin/` 子文档。
 
 ## 能力边界
 
-workspace 后台能力统一挂载在 `/api/workspace/**`，覆盖以下资源：
+workspace 后台统一覆盖以下资源：
 
 - 总览看板
 - 人员目录
@@ -12,60 +16,88 @@ workspace 后台能力统一挂载在 `/api/workspace/**`，覆盖以下资源�
 - 校验中心
 - Excel 导入导出
 
-## 对应 OpenAPI 契约
+## 资源地图
 
-- 聚合入口：[api/openapi.yaml](../../../api/openapi.yaml)
-- 结构说明：[.specs/api/openapi-layout.md](../../api/openapi-layout.md)
-- workspace 路径目录：[api/paths/workspace](../../../api/paths/workspace)
+```mermaid
+graph TD
+    OVERVIEW[overview 总览]
+    DASH[dashboard-overview]
+    STAFF[staff]
+    SHIFT[shift-definitions]
+    TEAM[teams]
+    ROSTER[roster]
+    VALIDATION[validation]
+    IMPORT[import-export]
 
-## 源码入口
+    OVERVIEW --> DASH
+    OVERVIEW --> STAFF
+    OVERVIEW --> SHIFT
+    OVERVIEW --> TEAM
+    OVERVIEW --> ROSTER
+    OVERVIEW --> VALIDATION
+    OVERVIEW --> IMPORT
+    IMPORT --> VALIDATION
+    ROSTER --> VALIDATION
+    SHIFT --> ROSTER
+    TEAM --> SHIFT
+    TEAM --> STAFF
+```
 
-- controller 目录：[src/main/java/com/support/server/supportrosterserver/controller/workspace](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace)
-- service 目录：[src/main/java/com/support/server/supportrosterserver/service/workspace](../../../src/main/java/com/support/server/supportrosterserver/service/workspace)
-- DTO 目录：[src/main/java/com/support/server/supportrosterserver/dto/workspace](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace)
+## 契约与源码入口
 
-## 技术方案
+| 类型 | 位置 |
+|---|---|
+| OpenAPI 聚合入口 | [api/openapi.yaml](../../../api/openapi.yaml) |
+| workspace 路径目录 | [api/paths/workspace](../../../api/paths/workspace) |
+| Controller 目录 | [src/main/java/com/support/server/supportrosterserver/controller/workspace](../../../src/main/java/com/support/server/supportrosterserver/controller/workspace) |
+| Service 目录 | [src/main/java/com/support/server/supportrosterserver/service/workspace](../../../src/main/java/com/support/server/supportrosterserver/service/workspace) |
+| DTO 目录 | [src/main/java/com/support/server/supportrosterserver/dto/workspace](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace) |
 
-### 持久化栈
+## 技术基线
 
-- 数据库：PostgreSQL
-- ORM：MyBatis-Plus
-- 主键：雪花算法
-- 审计字段：所有核心表均包含 `create_time`、`update_time`
-
-### 初始化方式
-
-- 建表 DDL 位于 `.specs/db/ddl/001_init_workspace_tables.sql`
-- 本地开发库以 `src/main/resources/schema.sql` 为准；由于 `spring.sql.init.mode=never`，实际联调通常需要手动执行迁移 SQL
+| 主题 | 当前选型 | 说明 |
+|---|---|---|
+| 数据库 | `PostgreSQL` | workspace 主存储 |
+| ORM | `MyBatis-Plus` | mapper 与实体持久化 |
+| 主键 | 雪花 ID | 对外以字符串传输 Long |
+| 审计字段 | `create_time` / `update_time` | 所有核心表统一要求 |
+| 初始化 | `schema.sql` + `.specs/db/ddl/*.sql` | 联调时通常需手动执行迁移 SQL |
 
 ## 核心表
 
-| 表名 | 说明 |
-|------|------|
-| `workspace_team` | 团队主表，承载展示色、排序、显示状态 |
+| 表名 | 作用 |
+|---|---|
+| `workspace_team` | 团队主数据、顺序、颜色、显示状态 |
 | `workspace_staff` | 人员主数据 |
-| `workspace_shift_definition` | 班次定义，当前按团队维度组织 |
-| `workspace_roster_assignment` | 排班事实表，按人 + 日期 + 班次编码存储 |
+| `workspace_shift_definition` | 班次定义主数据 |
+| `workspace_roster_assignment` | 月排班事实表 |
 | `workspace_import_batch` | 导入批次 |
 | `workspace_import_record` | 导入预览记录 |
 | `workspace_import_issue` | 导入与校验问题 |
 | `workspace_operation_log` | 后台关键操作日志 |
 
-遗留兼容说明：`workspace_role_group`、`workspace_team_role_group_rel` 与部分 `role_group_id` 列仍可能存在于数据库中，但当前 workspace 主链路已统一以 `team` 作为业务分组维度。
+遗留兼容说明：`workspace_role_group`、`workspace_team_role_group_rel` 与部分 `role_group_id` 列仍可能存在，但主链路已统一迁移到 `team` 维度。
 
 ## 跨资源约束
 
-- 月排班不保存为整月 JSON，而是按“员工 + 自然日 + 班次编码”写入事实表。
-- 校验结果既用于导入预览，也用于校验中心接口返回。
-- viewer 只读接口继续保留，通过服务层从数据库适配输出，不与 workspace 写接口合并。
+- 月排班按“员工 + 自然日 + 班次编码”保存，不使用整月 JSON 覆盖存储。
+- 校验问题既服务导入预览，也服务校验中心接口。
+- viewer 只读接口继续通过服务层适配输出，不与 workspace 写接口合并。
+- Long 主键对外按字符串传输，避免浏览器精度问题。
 
-## 资源文档
+## 继续阅读
 
-- [dashboard-overview.md](./dashboard-overview.md) 对应 [api/paths/workspace/overview.yaml](../../../api/paths/workspace/overview.yaml)
-- [staff.md](./staff.md) 对应 [api/paths/workspace/staff.yaml](../../../api/paths/workspace/staff.yaml)
-- [shift-definitions.md](./shift-definitions.md) 对应 [api/paths/workspace/shift-definitions.yaml](../../../api/paths/workspace/shift-definitions.yaml)
-- [teams.md](./teams.md) 对应 [api/paths/workspace/teams.yaml](../../../api/paths/workspace/teams.yaml)
-- [roster.md](./roster.md) 对应 [api/paths/workspace/roster.yaml](../../../api/paths/workspace/roster.yaml)
-- [validation.md](./validation.md) 对应 [api/paths/workspace/validation.yaml](../../../api/paths/workspace/validation.yaml)
-- [import-export.md](./import-export.md) 对应 [api/paths/workspace/import-export.yaml](../../../api/paths/workspace/import-export.yaml)
-- [role-groups.md](./role-groups.md) 仅保留为历史兼容说明，不再代表当前 workspace 主资源模型
+- [dashboard-overview.md](./dashboard-overview.md)
+- [staff.md](./staff.md)
+- [shift-definitions.md](./shift-definitions.md)
+- [teams.md](./teams.md)
+- [roster.md](./roster.md)
+- [validation.md](./validation.md)
+- [import-export.md](./import-export.md)
+- [role-groups.md](./role-groups.md)
+
+## 维护提示
+
+- 本页只保留后台共性事实与资源关系，不堆叠资源级字段明细。
+- 若新增 workspace 资源，需同步更新本页资源地图、`_index.md` 目录与 OpenAPI 路径组织。
+

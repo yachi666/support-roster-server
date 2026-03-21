@@ -75,11 +75,11 @@ class CorsConfigTest {
     @Test
     void shouldHandlePrivateNetworkAccessRequest() throws Exception {
         mockMvc.perform(options("/api/test")
-                .header("Origin", "http://hk120050033.hk.hsbc:8091")
+                .header("Origin", "http://123456.hk.com:8091")
                 .header("Access-Control-Request-Method", "GET")
                 .header("Access-Control-Request-Private-Network", "true"))
             .andExpect(status().isOk())
-            .andExpect(header().string("Access-Control-Allow-Origin", "http://hk120050033.hk.hsbc:8091"))
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://123456.hk.com:8091"))
             .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
             .andExpect(header().string("Access-Control-Allow-Private-Network", "true"));
     }

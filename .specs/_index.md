@@ -1,267 +1,126 @@
-# Support Roster Server - 技术规范文档
+# Support Roster Server 技术手册
 
-## 项目简述
+## 文档定位
 
-**Support Roster Server** 是一个基于 Spring Boot 的技术支持排班管理系统后端服务。该系统当前同时承载公开查看页接口与 workspace 管理后台接口，核心价值在于：
+本目录用于维护 **Support Roster Server** 的正式技术规范。文档以“技术手册 / 规格书”方式组织，目标是让读者能够从总览进入专题，再从专题进入资源级细节，而不必在零散笔记中反复跳转。
 
-- **排班可视化管理**：为跨时区、跨团队的技术支持人员提供清晰的排班视图
-- **多团队协同支持**：支持 L1、L2、L2+、L3、Incident Manager、DevOps 等多层级支持团队
-- **时区智能转换**：自动处理不同地区（中国、印度、亚太、EMEA）的时区转换
-- **管理后台可写**：通过 PostgreSQL + MyBatis-Plus 提供人员、班次、团队、排班、校验与导入管理能力
-- **Excel 导入兼容**：保留现有 Excel 模板作为导入来源，而非运行时唯一数据源
+系统当前同时承载两类能力：
 
----
+- **viewer 只读接口**：公开查看页，统一挂载在 `/api/**`
+- **workspace 管理接口**：后台可写能力，统一挂载在 `/api/workspace/**`
+- **数据与兼容链路**：运行时以 PostgreSQL 为主，同时保留 Excel 导入模板与历史 Excel 结构说明
 
-## Spec 导航原则
+## 阅读导引
 
-- 正式技术规范统一维护在 `.specs/` 目录下。
-- 根入口 `_index.md` 只负责总览和一级导航，不承载过多主题细节。
-- 主题内容按目录拆分，优先归类到 `api/`、`domain/`、`data/`、`db/`、`constraints/`、`features/`。
-- 每个主题目录通过 `_index.md` 管理本主题内的文档导航。
-- 当前已有的历史根级 spec 文件继续保留并由主题索引统一引用，后续新增内容优先进入对应主题目录。
+| 章节 | 入口 | 适用场景 | 继续阅读 |
+|---|---|---|---|
+| 第 1 章 接口规范 | [api/_index.md](./api/_index.md) | 评审 API 契约、路由与状态码 | [api-standard.md](./api-standard.md) |
+| 第 2 章 领域模型 | [domain/_index.md](./domain/_index.md) | 理解角色、团队、班次与排班规则 | [domain-logic.md](./domain-logic.md) |
+| 第 3 章 数据架构 | [data/_index.md](./data/_index.md) | 追踪 Excel 来源、加载与兼容约束 | [data-architecture.md](./data-architecture.md) |
+| 第 4 章 实现约束 | [constraints/_index.md](./constraints/_index.md) | 查看代码结构、异常、日志与测试约定 | [constraints-and-conventions.md](./constraints-and-conventions.md) |
+| 第 5 章 数据库规范 | [db/_index.md](./db/_index.md) | 设计表结构、DDL 与初始化脚本 | [db/db-spec.md](./db/db-spec.md) |
+| 第 6 章 功能专题 | [features/_index.md](./features/_index.md) | 沿功能域阅读 workspace / viewer 能力 | [features/workspace-admin/_index.md](./features/workspace-admin/_index.md)、[features/viewer/_index.md](./features/viewer/_index.md) |
+| 附录 变更记录 | [CHANGELOG.md](./CHANGELOG.md) | 回溯规范演进历史 | 按日期逆序阅读 |
 
-## 模块地图
+## 文档拓扑
 
 ```mermaid
-graph TB
-    subgraph "规范文档结构"
-        ROOT["_index.md<br/>主入口文档"]
-        API_INDEX["api/_index.md<br/>接口规范索引"]
-        DOMAIN_INDEX["domain/_index.md<br/>业务规范索引"]
-        DATA_INDEX["data/_index.md<br/>数据规范索引"]
-        DB_INDEX["db/_index.md<br/>数据库规范索引"]
-        CONSTRAINTS_INDEX["constraints/_index.md<br/>约束规范索引"]
-        FEATURES_INDEX["features/_index.md<br/>功能专题索引"]
-    end
+graph TD
+    ROOT["技术手册总入口
+_index.md"]
+    API["第 1 章
+api/_index.md"]
+    DOMAIN["第 2 章
+domain/_index.md"]
+    DATA["第 3 章
+data/_index.md"]
+    CONSTRAINTS["第 4 章
+constraints/_index.md"]
+    DB["第 5 章
+db/_index.md"]
+    FEATURES["第 6 章
+features/_index.md"]
+    WA["workspace-admin 分册"]
+    VIEWER["viewer 分册"]
+    CHANGELOG["附录
+CHANGELOG.md"]
 
-    ROOT --> API_INDEX
-    ROOT --> DOMAIN_INDEX
-    ROOT --> DATA_INDEX
-    ROOT --> DB_INDEX
-    ROOT --> CONSTRAINTS_INDEX
-    ROOT --> FEATURES_INDEX
+    ROOT --> API
+    ROOT --> DOMAIN
+    ROOT --> DATA
+    ROOT --> CONSTRAINTS
+    ROOT --> DB
+    ROOT --> FEATURES
+    ROOT --> CHANGELOG
+    FEATURES --> WA
+    FEATURES --> VIEWER
 ```
 
-## 一级目录导航
-
-| 目录/文档 | 职责 |
-|------|------|
-| `_index.md` | 项目总览、技术栈清单、一级导航 |
-| `api/_index.md` | API 规范导航与接口相关文档汇总 |
-| `domain/_index.md` | 业务实体、流程、规则文档汇总 |
-| `data/_index.md` | 数据来源、存储结构、加载机制文档汇总 |
-| `db/_index.md` | 数据库设计规范、DDL 管理约定与后续建表文档汇总 |
-| `constraints/_index.md` | 代码约束、实现约定、异常与日志规范汇总 |
-| `features/_index.md` | 功能级专题规范入口，供后续扩展 |
-| `CHANGELOG.md` | spec 变更记录 |
-
-## 当前主题文档落点
-
-| 主题 | 索引 | 当前主文档 |
-|------|------|------|
-| API | `api/_index.md` | `api-standard.md`、`api/openapi-layout.md` |
-| Domain | `domain/_index.md` | `domain-logic.md` |
-| Data | `data/_index.md` | `data-architecture.md` |
-| DB | `db/_index.md` | `db/db-spec.md` |
-| Constraints | `constraints/_index.md` | `constraints-and-conventions.md` |
-| Features | `features/_index.md` | `features/workspace-admin-backend.md`、`features/workspace-admin/_index.md`、`features/viewer/_index.md` |
-
----
-
-## 技术栈清单
-
-### 核心框架
-
-| 组件 | 版本 | 说明 |
-|------|------|------|
-| **JDK** | 25 | Java 运行时环境 |
-| **Spring Boot** | 4.0.3 | 核心框架 |
-| **Maven** | - | 构建工具 |
-
-### 关键依赖
-
-| 依赖 | 版本 | 用途 |
-|------|------|------|
-| `spring-boot-starter-web` | 4.0.3 | REST API 支持 |
-| `spring-boot-starter-json` | 4.0.3 | Jackson / `ObjectMapper` 与 JSON 序列化支持 |
-| `spring-boot-starter-actuator` | 4.0.3 | 健康检查与监控 |
-| `spring-boot-starter-log4j2` | - | 日志框架（替代默认 Logback） |
-| `spring-boot-starter-validation` | 4.0.3 | 请求校验 |
-| `postgresql` | - | PostgreSQL JDBC 驱动 |
-| `mybatis-plus-spring-boot4-starter` | 3.5.16 | MyBatis-Plus 持久化支持 |
-| `druid-spring-boot-starter` | 1.2.27 | 数据源连接池 |
-| `fesod-sheet` | 2.0.1-incubating | Excel 文件解析 |
-| `lombok` | 1.18.42 | 代码简化（Getter/Setter/Builder） |
-
-### 运行配置
-
-| 配置项 | 值 | 说明 |
-|--------|-----|------|
-| 服务端口 | `8080` | 默认 HTTP 端口 |
-| 应用名称 | `support-roster-server` | Spring Application Name |
-| 数据库 | `jdbc:postgresql://127.0.0.1:5432/support` | 默认本地开发库 |
-| Actuator 端点 | `health`, `info` | 开放的健康检查端点 |
-
----
-
-## 系统架构概览
+## 系统架构速写
 
 ```mermaid
-graph TB
-    subgraph "前端层"
-        VIEWER["Public Viewer"]
-        ADMIN["Workspace Admin UI"]
+graph LR
+    subgraph Clients[调用方]
+        V[Viewer 页面]
+        A[Workspace Admin UI]
     end
 
-    subgraph "后端层 - Support Roster Server"
-        subgraph "Controller 层"
-            VC["/api/** viewer controllers"]
-            WC["/api/workspace/** controllers"]
-        end
-
-        subgraph "Service 层"
-            VS["viewer adapter services"]
-            WS["workspace domain services"]
-        end
-
-        subgraph "Persistence 层"
-            MP["MyBatis-Plus Mappers"]
-            IMP["Excel import listeners"]
-        end
+    subgraph Server[Support Roster Server]
+        VC[Viewer Controllers
+/api/**]
+        WC[Workspace Controllers
+/api/workspace/**]
+        VS[Viewer / Adapter Services]
+        WS[Workspace Domain Services]
+        MP[MyBatis-Plus Mappers]
+        IMP[Excel Import / Preview]
     end
 
-    subgraph "数据层"
-        PG["PostgreSQL"]
-        EXCEL["Excel Import File"]
+    subgraph Data[数据层]
+        PG[(PostgreSQL)]
+        XLS[roster.xlsx / 导入文件]
     end
 
-    VIEWER --> VC
-    ADMIN --> WC
+    V --> VC
+    A --> WC
     VC --> VS
-    WC --> WS
     VS --> WS
+    WC --> WS
     WS --> MP
     WS --> IMP
     MP --> PG
-    IMP --> EXCEL
+    IMP --> XLS
 ```
 
----
+## 目录总览
 
-## 项目目录结构
+| 目录 / 文档 | 角色 | 内容焦点 |
+|---|---|---|
+| `_index.md` | 卷首导航 | 全局目录、阅读顺序、系统速写 |
+| `api/_index.md` | 接口目录 | 契约入口、OpenAPI 组织、资源阅读指引 |
+| `domain/_index.md` | 领域目录 | 实体、规则、业务流程导航 |
+| `data/_index.md` | 数据目录 | Excel 来源、加载索引、兼容约束导航 |
+| `constraints/_index.md` | 实现约束目录 | 代码、异常、日志、测试与配置规范 |
+| `db/_index.md` | 数据库目录 | 主键、审计字段、DDL 与迁移约束 |
+| `features/_index.md` | 功能专题目录 | workspace / viewer 分册入口 |
+| `features/workspace-admin/_index.md` | 工作台后台分册 | 写能力与后台聚合资源 |
+| `features/viewer/_index.md` | Viewer 分册 | 公开只读接口资源 |
+| `CHANGELOG.md` | 历史附录 | 规范变更背景、影响评估 |
 
-```
-support-roster-server/
-├── api/
-│   ├── openapi.yaml              # OpenAPI 3.0 聚合入口
-│   ├── components/
-│   │   └── common.yaml           # 共享参数、响应与 schema
-│   └── paths/
-│       ├── viewer/               # viewer controller 契约拆分
-│       └── workspace/            # workspace controller 契约拆分
-├── spec/
-│   └── source_excel.md           # Excel 数据结构说明
-├── src/
-│   ├── main/
-│   │   ├── java/com/support/server/supportrosterserver/
-│   │   │   ├── config/           # 配置类
-│   │   │   │   ├── CorsConfig.java
-│   │   │   │   └── MybatisPlusConfig.java
-│   │   │   ├── controller/       # REST 控制器
-│   │   │   │   ├── workspace/
-│   │   │   │   └── ...
-│   │   │   ├── dto/              # 数据传输对象
-│   │   │   │   ├── BackupDto.java
-│   │   │   │   ├── ContactDto.java
-│   │   │   │   ├── ErrorResponse.java
-│   │   │   │   ├── RoleGroupDto.java
-│   │   │   │   ├── ShiftDto.java
-│   │   │   │   ├── StaffDto.java
-│   │   │   │   └── TeamDto.java
-│   │   │   ├── entity/           # 实体类
-│   │   │   │   ├── workspace/
-│   │   │   │   └── ...
-│   │   │   ├── exception/        # 异常处理
-│   │   │   │   ├── GlobalExceptionHandler.java
-│   │   │   │   └── ResourceNotFoundException.java
-│   │   │   ├── mapper/           # MyBatis-Plus Mapper
-│   │   │   ├── repository/       # 导入解析与兼容层
-│   │   │   ├── service/          # 业务逻辑层
-│   │   │   │   ├── workspace/
-│   │   │   │   └── ...
-│   │   │   └── SupportRosterServerApplication.java
-│   │   └── resources/
-│   │       ├── application.yml   # 应用配置
-│   │       └── schema.sql        # 本地空库初始化脚本
-│   └── test/                     # 测试代码
-├── pom.xml                       # Maven 配置
-└── .specs/                       # 技术规范文档
-    ├── _index.md
-    ├── CHANGELOG.md
-    ├── api-standard.md
-    ├── domain-logic.md
-    ├── data-architecture.md
-    ├── constraints-and-conventions.md
-    ├── api/
-    │   └── _index.md
-    ├── domain/
-    │   └── _index.md
-    ├── data/
-    │   └── _index.md
-    ├── db/
-    │   ├── _index.md
-    │   ├── db-spec.md
-    │   └── ddl/
-    │       └── README.md
-    ├── constraints/
-    │   └── _index.md
-    └── features/
-        ├── _index.md
-        ├── workspace-admin-backend.md
-        ├── workspace-admin/
-            ├── _index.md
-            ├── overview.md
-            ├── dashboard-overview.md
-            ├── role-groups.md
-            ├── staff.md
-            ├── shift-definitions.md
-            ├── teams.md
-            ├── roster.md
-            ├── validation.md
-            └── import-export.md
-        └── viewer/
-            ├── _index.md
-            ├── overview.md
-            ├── teams.md
-            ├── shifts.md
-            ├── staff.md
-            ├── role-groups.md
-            └── shift-codes.md
-```
+## 技术基线
 
----
+| 类别 | 当前基线 | 说明 |
+|---|---|---|
+| Runtime | `JDK 25` | Java 运行环境 |
+| Framework | `Spring Boot 4.0.3` | 服务主框架 |
+| Persistence | `PostgreSQL` + `MyBatis-Plus 3.5.16` | 后台主存储与 ORM |
+| Import | `fesod-sheet 2.0.1-incubating` | Excel 解析 |
+| Logging | `spring-boot-starter-log4j2` | 日志框架 |
+| API Contract | `api/openapi.yaml` | OpenAPI 聚合入口 |
 
-## 快速开始
+## 维护说明
 
-### 启动服务
-
-```bash
-cd support-roster-server
-mvn spring-boot:run
-```
-
-### 访问端点
-
-- **API 基础路径**: `http://localhost:8080/api`
-- **Workspace 管理接口**: `http://localhost:8080/api/workspace`
-- **健康检查**: `http://localhost:8080/actuator/health`
-- **OpenAPI 文档**: 以 `api/openapi.yaml` 为主入口，按 controller 拆分到 `api/paths/viewer/` 与 `api/paths/workspace/`
-
----
-
-## 相关文档链接
-
-- [业务逻辑规范](./domain-logic.md)
-- [接口规范](./api-standard.md)
-- [数据架构](./data-architecture.md)
-- [约束与约定](./constraints-and-conventions.md)
+- 根入口只承担**导航与上下文建立**，不承载资源级细节。
+- 业务事实变更时，应优先同步对应专题文档，再回到索引页调整目录说明。
+- 任何新增接口、领域规则、数据结构或数据库约束，都应保留到源码、OpenAPI 与 spec 之间的相互映射。
+- 已废弃内容应保留最小必要历史说明，并明确标记为“已废弃 / 历史兼容”。

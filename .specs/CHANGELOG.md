@@ -1,4 +1,44 @@
-# Spec Change Log
+# 规范变更记录
+
+## 2026-03-21 - .specs 技术手册化重排
+
+### 变更背景
+
+为提升 `.specs/` 的目录感与可读性，本次将 server 侧规范进一步整理为“技术手册 / 规格书”风格，统一入口页、专题页的阅读路径，并为关键资源补充 Mermaid 图示。
+
+### 变更文件
+
+1. `.specs/_index.md`
+2. `.specs/api/_index.md`
+3. `.specs/domain/_index.md`
+4. `.specs/data/_index.md`
+5. `.specs/constraints/_index.md`
+6. `.specs/db/_index.md`
+7. `.specs/features/_index.md`
+8. `.specs/features/workspace-admin/_index.md`
+9. `.specs/features/viewer/_index.md`
+10. `.specs/features/workspace-admin/overview.md`
+11. `.specs/features/workspace-admin/roster.md`
+12. `.specs/features/workspace-admin/import-export.md`
+13. `.specs/features/viewer/overview.md`
+14. `.specs/features/workspace-admin-backend.md`
+15. `.specs/db/db-spec.md`
+16. `.specs/CHANGELOG.md`
+
+### 详细变更记录
+
+- 根入口与各级 `_index.md` 统一改为章节目录式导航，强化“先总览、再分册、再资源页”的阅读路径。
+- `workspace-admin/overview.md` 增加资源关系图，明确后台资源之间的依赖与协作。
+- `workspace-admin/roster.md` 增加查询、编辑、保存、校验与回包流程图。
+- `workspace-admin/import-export.md` 增加导入预览、应用与导出链路图。
+- `viewer/overview.md` 增加只读边界图，明确 viewer 与 workspace 的接口边界。
+- `db/db-spec.md` 保留为数据库主规范，并以图示说明规则、DDL 与初始化脚本的关系。
+
+### 影响评估
+
+- 目录导航更接近“规范书目录”，降低首次阅读成本。
+- 关键跨资源流程更直观，适合新成员快速建立系统心智模型。
+- 文档语言与章节结构更统一，后续维护成本更低。
 
 ## 2026-03-13 - Spring Boot 4 全局 CORS 配置收敛
 

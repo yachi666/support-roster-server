@@ -1,4 +1,8 @@
-# Viewer Overview
+# Viewer 总览
+
+## 文档定位
+
+本文描述公开查看页只读接口的能力边界、委托关系与兼容约束，用于帮助读者快速理解 viewer 资源为何仍保留独立命名空间与只读语义。
 
 ## 能力边界
 
@@ -11,30 +15,46 @@ viewer 接口统一挂载在 `/api/**` 下，面向公开查看页提供只读�
 - 人员列表与人员详情
 - 班次编码列表
 
-遗留兼容说明：viewer 侧 role-group 接口已废弃，对应文档仅保留历史说明。
+遗留兼容说明：viewer 侧 `role-group` 接口已废弃，仅保留历史说明文档。
 
-## 对应 OpenAPI 契约
+## 只读边界图
 
-- 聚合入口：[api/openapi.yaml](../../../api/openapi.yaml)
-- 结构说明：[.specs/api/openapi-layout.md](../../api/openapi-layout.md)
-- viewer 路径目录：[api/paths/viewer](../../../api/paths/viewer)
+```mermaid
+graph LR
+    UI[Public Viewer UI] --> API[/api/** viewer APIs]
+    API --> SERVICE[Viewer / Adapter Services]
+    SERVICE --> WS[Workspace-related data adaptation]
+    WS --> DB[(PostgreSQL)]
 
-## 源码入口
+    API -.不开放写能力.-> WRITE[/api/workspace/**]
+```
 
-- controller 目录：[src/main/java/com/support/server/supportrosterserver/controller](../../../src/main/java/com/support/server/supportrosterserver/controller)
-- service 目录：[src/main/java/com/support/server/supportrosterserver/service](../../../src/main/java/com/support/server/supportrosterserver/service)
-- DTO 目录：[src/main/java/com/support/server/supportrosterserver/dto](../../../src/main/java/com/support/server/supportrosterserver/dto)
+## 契约与源码入口
+
+| 类型 | 位置 |
+|---|---|
+| OpenAPI 聚合入口 | [api/openapi.yaml](../../../api/openapi.yaml) |
+| viewer 路径目录 | [api/paths/viewer](../../../api/paths/viewer) |
+| Controller 目录 | [src/main/java/com/support/server/supportrosterserver/controller](../../../src/main/java/com/support/server/supportrosterserver/controller) |
+| Service 目录 | [src/main/java/com/support/server/supportrosterserver/service](../../../src/main/java/com/support/server/supportrosterserver/service) |
+| DTO 目录 | [src/main/java/com/support/server/supportrosterserver/dto](../../../src/main/java/com/support/server/supportrosterserver/dto) |
 
 ## 兼容性约束
 
 - viewer 接口继续保留旧路由，不迁移到 `/api/workspace/**`。
 - 当前 viewer 数据已不再依赖运行时 Excel 内存仓库，而是通过 service 层从数据库与 workspace 相关数据适配输出。
-- viewer 接口保持只读语义，即使内部复用 workspace service，也不暴露管理端写能力。
+- 即使内部复用 workspace 相关 service，也必须保持只读语义。
 
-## 资源文档
+## 继续阅读
 
-- [teams.md](./teams.md) 对应 [api/paths/viewer/teams.yaml](../../../api/paths/viewer/teams.yaml)
-- [shifts.md](./shifts.md) 对应 [api/paths/viewer/shifts.yaml](../../../api/paths/viewer/shifts.yaml)
-- [staff.md](./staff.md) 对应 [api/paths/viewer/staff.yaml](../../../api/paths/viewer/staff.yaml)
-- [shift-codes.md](./shift-codes.md) 对应 [api/paths/viewer/shift-codes.yaml](../../../api/paths/viewer/shift-codes.yaml)
-- [role-groups.md](./role-groups.md) 仅保留为历史兼容说明，不再代表当前有效 viewer 资源
+- [teams.md](./teams.md)
+- [shifts.md](./shifts.md)
+- [staff.md](./staff.md)
+- [shift-codes.md](./shift-codes.md)
+- [role-groups.md](./role-groups.md)
+
+## 维护提示
+
+- 若 viewer 新增资源，应同时更新本页、`viewer/_index.md` 与 OpenAPI viewer 路径目录。
+- 若某字段源自 workspace 适配层，需显式标注委托关系，避免被误读为独立数据源。
+

@@ -1,16 +1,24 @@
-# Domain Spec Index
+# 第 2 章 领域模型目录
 
-## 范围
+## 文档定位
 
-- 本目录承载核心业务实体、业务流程、排班规则、团队与角色组映射等领域规范。
-- 涉及业务语义或流程变化时，应优先更新此目录索引和对应文档。
+本章聚焦业务实体、排班语义、团队与角色组关系，以及影响 viewer / workspace 两侧行为的一致性规则。
 
-## 当前文档
+## 阅读建议
 
-| 文档 | 说明 |
-|------|------|
-| `../domain-logic.md` | 核心业务实体关系、排班流程、时间计算规则、团队映射与边界条件 |
+| 阅读顺序 | 适用场景 |
+|---|---|
+| [../domain-logic.md](../domain-logic.md) | 需要理解实体关系、班次判定、时区转换与头像生成规则 |
+| [../domain-logic.md](../domain-logic.md) → [../features/workspace-admin/roster.md](../features/workspace-admin/roster.md) | 需要把领域规则映射到月度排班保存行为 |
+| [../domain-logic.md](../domain-logic.md) → [../features/viewer/shifts.md](../features/viewer/shifts.md) | 需要把领域规则映射到只读排班输出 |
 
-## 后续拆分建议
+## 本章内容
 
-- 业务规则复杂后，可拆分为 `entities.md`、`roster-flow.md`、`team-mapping.md`、`edge-cases.md`。
+| 文档 | 角色 | 重点内容 |
+|---|---|---|
+| [../domain-logic.md](../domain-logic.md) | 领域主文档 | 核心实体、业务流程、班次规则、团队映射与边界条件 |
+
+## 维护提示
+
+- 若新增团队分组规则、主要班次判定或时区映射，应先更新本章，再同步接口与数据文档。
+- 领域层的历史兼容说明应保留，例如 `roleGroup -> team` 的迁移事实，不宜在重构时被抹平。

@@ -1,226 +1,76 @@
-# 约束与约定 (Constraints and Conventions)
+# 约束与约定
 
-## 代码风格约束
+## 文档定位
 
-### 包结构规范
+本文统一描述实现层约束，包括包结构、命名规则、依赖注入、异常处理、日志、测试与配置管理。它为编码方式提供边界，但不替代 API、领域或数据库文档。
 
-```
+## 代码组织
+
+### 包结构
+
+```text
 com.support.server.supportrosterserver/
-├── config/           # 配置类
-├── controller/       # REST 控制器
-├── dto/              # 数据传输对象
-├── entity/           # 实体类
-├── exception/        # 异常类
-├── repository/       # 数据访问层
-└── service/          # 业务逻辑层
+├── config/
+├── controller/
+├── dto/
+├── entity/
+├── exception/
+├── repository/
+└── service/
 ```
 
 ### 命名约定
 
-| 类型 | 命名规则 | 示例 |
-|------|----------|------|
-| 类名 | PascalCase | `RosterService`, `ShiftController` |
-| 方法名 | camelCase | `getShiftsByDate()`, `findStaffById()` |
-| 常量 | UPPER_SNAKE_CASE | `PRIMARY_CODES`, `TEAM_MAPPING` |
+| 类型 | 规则 | 示例 |
+|---|---|---|
+| 类名 | PascalCase | `RosterService`、`ShiftController` |
+| 方法名 | camelCase | `getShiftsByDate()` |
+| 常量 | UPPER_SNAKE_CASE | `PRIMARY_CODES` |
 | 包名 | 全小写 | `com.support.server.supportrosterserver` |
-| DTO 类 | 实体名 + Dto | `StaffDto`, `ShiftDto` |
-| Entity 类 | 业务概念名 | `Staff`, `ShiftDefinition` |
-| Controller | 资源名 + Controller | `StaffController` |
-| Service | 资源名 + Service | `RosterService` |
-| Repository | 资源名 + Repository | `RosterRepository` |
+| DTO | 实体名 + `Dto` | `StaffDto`、`ShiftDto` |
+| Controller | 资源名 + `Controller` | `StaffController` |
+| Service | 资源名 + `Service` | `WorkspaceRosterService` |
+| Repository | 资源名 + `Repository` | `RosterRepository` |
 
-### Lombok 使用规范
+### Lombok 约定
 
-项目使用 Lombok 简化代码，常用注解：
+| 注解 | 用途 | 常见场景 |
+|---|---|---|
+| `@Data` | getter / setter / equals / hashCode | DTO、实体 |
+| `@NoArgsConstructor` | 无参构造 | DTO、实体 |
+| `@AllArgsConstructor` | 全参构造 | DTO |
+| `@RequiredArgsConstructor` | `final` 字段构造注入 | Service、Controller |
+| `@Getter` / `@Setter` | 细粒度生成 | 特殊场景 |
 
-| 注解 | 用途 | 使用场景 |
-|------|------|----------|
-| `@Data` | 生成 getter/setter/toString/equals/hashCode | 实体类、DTO |
-| `@NoArgsConstructor` | 无参构造函数 | 实体类、DTO |
-| `@AllArgsConstructor` | 全参构造函数 | DTO、配置类 |
-| `@RequiredArgsConstructor` | final 字段构造函数 | Service、Controller (依赖注入) |
-| `@Getter` / `@Setter` | 单独生成 getter/setter | 特殊场景 |
+## 依赖与配置约束
 
-**示例**:
+### JSON 依赖
 
-```java
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class ShiftDto {
-    private String id;
-    private String teamId;
-    private Long staffId;
-    // ...
-}
+- 使用 `ObjectMapper`、`JsonProcessingException`、Jackson 注解或 JSON HTTP 消息转换时，必须显式声明 `spring-boot-starter-json`。
+- 服务类优先通过 Spring 注入 `ObjectMapper`，避免手工 `new ObjectMapper()` 导致全局序列化配置不一致。
 
-@Service
-@RequiredArgsConstructor
-public class RosterService {
-    private final RosterRepository rosterRepository;
-    // 自动注入，无需 @Autowired
-}
-```
+### 全局 CORS
 
-### 代码组织
+- Spring MVC 应优先使用 `WebMvcConfigurer#addCorsMappings` 定义全局跨域规则。
+- 当前项目公共 HTTP 接口统一挂在 `/api/**`，跨域范围也应限制在 `/api/**`。
+- 允许所有来源访问时，推荐 `allowedOrigins("*") + allowCredentials(false)`，不要配置“任意来源 + 凭证”。
+- 若未来必须支持 Cookie / Session，应改为显式来源白名单，并同步更新测试与规范。
 
-#### Controller 层
-
-```java
-@RestController
-@RequestMapping("/api/shifts")
-@RequiredArgsConstructor
-public class ShiftController {
-    
-    private final RosterService rosterService;
-    
-    @GetMapping
-    public ResponseEntity<List<ShiftDto>> getShiftsByDate(...) {
-        return ResponseEntity.ok(rosterService.getShiftsByDate(...));
-    }
-}
-```
-
-#### Service 层
-
-```java
-@Service
-@RequiredArgsConstructor
-public class RosterService {
-    
-    private final RosterRepository rosterRepository;
-    
-    // 常量定义
-    private static final Map<String, TeamDto> TEAM_MAPPING = Map.ofEntries(...);
-    private static final Set<String> PRIMARY_CODES = Set.of(...);
-    
-    // 公共方法
-    public List<ShiftDto> getShiftsByDate(...) { ... }
-    
-    // 私有辅助方法
-    private ShiftDto convertToShiftDto(...) { ... }
-    private boolean isPrimaryShift(String code) { ... }
-}
-```
-
-#### Repository 层
-
-```java
-@Repository
-public class RosterRepository {
-    
-    // 内存存储
-    private Map<String, ShiftDefinition> shiftDefinitionMap = new HashMap<>();
-    private List<StaffShift> staffShifts = new ArrayList<>();
-    
-    @PostConstruct
-    public void init() {
-        loadRosterData();
-    }
-    
-    // 查询方法
-    public ShiftDefinition findShiftDefinition(String roleGroup, String code) { ... }
-}
-```
-
-### 构建依赖约束
-
-#### Spring Boot 4 JSON 依赖
-
-- 使用 `ObjectMapper`、`JsonProcessingException`、Jackson 注解或需要 JSON HTTP 消息转换时，必须在 `pom.xml` 中显式声明 `spring-boot-starter-json`。
-- 不要假设 `spring-boot-starter-web` 一定会在当前项目依赖图中传递提供 Jackson 编译类路径；新增 JSON 序列化/反序列化逻辑时，应同时检查对应 starter 是否已声明。
-- 服务类中优先通过 Spring 注入 `ObjectMapper`，避免手工 new 实例导致全局序列化配置不一致。
-
-#### Spring Boot 4 全局 CORS 配置
-
-- Spring MVC 应用优先使用 `WebMvcConfigurer#addCorsMappings` 统一声明全局跨域策略；只有在需要更底层过滤链接入时，才使用手工注册的 `CorsFilter`。
-- 当前项目的公共 HTTP 接口统一挂在 `/api/**`，全局跨域规则也应限制在 `/api/**`，避免把 Actuator 或非 API 路径一并暴露给任意来源。
-- 当需求是“允许所有前端访问”时，推荐使用 `allowedOrigins("*") + allowCredentials(false)`；不要配置“任意来源 + 凭证”，避免把 Cookie / Session 类请求放开给所有站点。
-- `allowedHeaders("*")` 可用于兼容常见前端自定义请求头；`allowedMethods(...)` 应显式列出项目支持的 HTTP 方法。
-- 若未来必须支持跨域 Cookie、Session 或其他凭证，请改为明确白名单来源（或受控 `allowedOriginPatterns`），并同步更新测试与规范。
-
----
-
-## 异常处理机制
-
-### 异常类层次
+## 异常处理
 
 ```mermaid
 graph TB
-    RE[RuntimeException]
-    RNF[ResourceNotFoundException]
-    GE[Exception]
-    
-    RE --> RNF
-    GE --> RNF
+    RE[RuntimeException] --> RNF[ResourceNotFoundException]
+    EX[Exception] --> RNF
 ```
 
-### 自定义异常
+### 当前异常体系
 
-#### ResourceNotFoundException
-
-**文件位置**: [exception/ResourceNotFoundException.java](../src/main/java/com/support/server/supportrosterserver/exception/ResourceNotFoundException.java)
-
-```java
-public class ResourceNotFoundException extends RuntimeException {
-    public ResourceNotFoundException(String message) {
-        super(message);
-    }
-    
-    public ResourceNotFoundException(String resourceName, String fieldName, Object fieldValue) {
-        super(String.format("%s not found with %s: '%s'", resourceName, fieldName, fieldValue));
-    }
-}
-```
-
-**使用示例**:
-
-```java
-@GetMapping("/{id}")
-public ResponseEntity<StaffDto> getStaffById(@PathVariable Long id) {
-    StaffDto staff = staffService.getStaffById(id);
-    if (staff == null) {
-        throw new ResourceNotFoundException("Staff", "id", id);
-    }
-    return ResponseEntity.ok(staff);
-}
-```
-
-### 全局异常处理器
-
-**文件位置**: [exception/GlobalExceptionHandler.java](../src/main/java/com/support/server/supportrosterserver/exception/GlobalExceptionHandler.java)
-
-```java
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-    
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleResourceNotFound(
-            ResourceNotFoundException ex,
-            WebRequest request) {
-        ErrorResponse error = new ErrorResponse(
-            HttpStatus.NOT_FOUND.value(),
-            "Not Found",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", "")
-        );
-        return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
-    }
-    
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGlobalException(
-            Exception ex,
-            WebRequest request) {
-        ErrorResponse error = new ErrorResponse(
-            HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "Internal Server Error",
-            ex.getMessage(),
-            request.getDescription(false).replace("uri=", "")
-        );
-        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-}
-```
+| 元素 | 说明 | 源码 |
+|---|---|---|
+| `ResourceNotFoundException` | 资源不存在时抛出 | [exception/ResourceNotFoundException.java](../src/main/java/com/support/server/supportrosterserver/exception/ResourceNotFoundException.java) |
+| `GlobalExceptionHandler` | 统一捕获异常并返回错误响应 | [exception/GlobalExceptionHandler.java](../src/main/java/com/support/server/supportrosterserver/exception/GlobalExceptionHandler.java) |
+| `ErrorResponse` | 统一错误响应模型 | [dto/ErrorResponse.java](../src/main/java/com/support/server/supportrosterserver/dto/ErrorResponse.java) |
 
 ### 错误响应格式
 
@@ -234,242 +84,85 @@ public class GlobalExceptionHandler {
 }
 ```
 
-### 异常处理最佳实践
+### 当前处理约定
 
-| 场景 | 处理方式 |
-|------|----------|
-| 资源不存在 | 抛出 `ResourceNotFoundException` → 404 |
-| 参数验证失败 | [TBD] 需实现 `@Valid` 校验 → 400 |
-| 业务规则违反 | [TBD] 需定义业务异常 → 422 |
-| 系统异常 | 由全局处理器捕获 → 500 |
+| 场景 | 当前做法 |
+|---|---|
+| 资源不存在 | `ResourceNotFoundException` → `404` |
+| 参数验证失败 | `TBD`，建议补充 `@Valid` → `400` |
+| 业务规则违反 | `TBD`，建议补充业务异常 → `422` |
+| 系统异常 | 全局处理器兜底 → `500` |
 
----
+## 日志约定
 
-## 日志记录标准
+- 项目使用 **Log4j2**，对应依赖为 `spring-boot-starter-log4j2`。
+- 推荐记录层次：
+  - `INFO`：关键业务操作、系统状态
+  - `DEBUG`：调试与流程细节
+  - `WARN`：潜在问题或退化路径
+  - `ERROR`：异常与失败
+- 禁止记录密码、API 密钥、认证 Token 与个人敏感信息。
 
-### 日志框架
+> `Warning`：当前代码中的日志实现仍不完整，后续应补充 controller、service 与全局异常日志。
 
-项目使用 **Log4j2** 作为日志框架（替代默认的 Logback）。
+## 依赖注入
 
-**pom.xml 配置**:
+- 推荐使用 `@RequiredArgsConstructor` + `final` 字段实现构造器注入。
+- 优势包括：依赖显式、字段不可变、便于测试、降低空指针风险。
 
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-log4j2</artifactId>
-</dependency>
-```
-
-### 日志级别
-
-| 级别 | 使用场景 |
-|------|----------|
-| `ERROR` | 系统错误、异常 |
-| `WARN` | 潜在问题、不推荐的操作 |
-| `INFO` | 关键业务操作、系统状态 |
-| `DEBUG` | 调试信息、详细流程 |
-| `TRACE` | 最详细的追踪信息 |
-
-### 日志规范 [TBD]
-
-**[Warning]** 当前代码中未实现日志记录，建议添加以下日志：
-
-#### Controller 层日志
-
-```java
-@Slf4j
-@RestController
-public class ShiftController {
-    
-    @GetMapping
-    public ResponseEntity<List<ShiftDto>> getShiftsByDate(
-            @RequestParam LocalDate date,
-            @RequestParam(required = false) String teamId,
-            @RequestParam(required = false, defaultValue = "UTC") String timezone) {
-        log.info("Fetching shifts for date: {}, teamId: {}, timezone: {}", date, teamId, timezone);
-        // ...
-    }
-}
-```
-
-#### Service 层日志
-
-```java
-@Slf4j
-@Service
-public class RosterService {
-    
-    public List<ShiftDto> getShiftsByDate(LocalDate date, String teamId, String timezone) {
-        log.debug("Processing shift query for date: {}", date);
-        // ...
-        log.info("Found {} shifts for date: {}", shifts.size(), date);
-        return shifts;
-    }
-}
-```
-
-#### 异常日志
-
-```java
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-    
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex, WebRequest request) {
-        log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
-        // ...
-    }
-}
-```
-
-### 敏感信息保护
-
-**禁止**在日志中记录以下信息：
-- 密码
-- API 密钥
-- 个人敏感信息（如完整身份证号、银行卡号）
-- 认证 Token
-
----
-
-## 依赖注入规范
-
-### 构造器注入（推荐）
-
-使用 `@RequiredArgsConstructor` + `final` 字段：
-
-```java
-@Service
-@RequiredArgsConstructor
-public class RosterService {
-    private final RosterRepository rosterRepository;
-    // 自动生成构造器注入
-}
-```
-
-### 优势
-
-1. **不可变性**：依赖字段为 `final`，确保初始化后不可变
-2. **可测试性**：便于单元测试中 Mock 依赖
-3. **明确依赖**：构造器参数明确列出所有依赖
-4. **避免空指针**：Spring 保证构造器注入的依赖非空
-
----
-
-## API 设计规范
-
-### RESTful 设计原则
+## API 设计约定
 
 | HTTP 方法 | 用途 | 示例 |
-|-----------|------|------|
+|---|---|---|
 | `GET` | 查询资源 | `GET /api/staff` |
 | `POST` | 创建资源 | `POST /api/staff` |
-| `PUT` | 更新资源（全量） | `PUT /api/staff/123` |
-| `PATCH` | 更新资源（部分） | `PATCH /api/staff/123` |
+| `PUT` | 全量更新 | `PUT /api/staff/123` |
+| `PATCH` | 部分更新 | `PATCH /api/staff/123` |
 | `DELETE` | 删除资源 | `DELETE /api/staff/123` |
 
-### 响应封装
+- 统一使用 `ResponseEntity<T>` 封装响应。
+- 资源路径采用小写、复数、连字符风格。
 
-统一使用 `ResponseEntity<T>` 封装响应：
+## 测试约定
 
-```java
-// 成功响应
-return ResponseEntity.ok(data);
+| 项目 | 规则 |
+|---|---|
+| 单元测试命名 | `{ClassName}Test.java` |
+| 集成测试命名 | `{ClassName}IT.java` |
+| 推荐覆盖 | Service 层逻辑、Controller 集成、边界条件、异常场景 |
 
-// 创建成功
-return ResponseEntity.created(uri).body(createdResource);
-
-// 无内容
-return ResponseEntity.noContent().build();
-
-// 未找到
-return ResponseEntity.notFound().build();
-```
-
----
-
-## 测试规范
-
-### 测试类命名
-
-- 单元测试：`{ClassName}Test.java`
-- 集成测试：`{ClassName}IT.java`
-
-### 测试结构
-
-```java
-@SpringBootTest
-class RosterServiceTest {
-    
-    @Autowired
-    private RosterService rosterService;
-    
-    @Test
-    void getShiftsByDate_shouldReturnShifts_whenDateIsValid() {
-        // Given
-        LocalDate date = LocalDate.of(2024, 1, 15);
-        
-        // When
-        List<ShiftDto> shifts = rosterService.getShiftsByDate(date, null, "UTC");
-        
-        // Then
-        assertThat(shifts).isNotEmpty();
-    }
-}
-```
-
-### 测试覆盖要求 [TBD]
-
-**[Warning]** 当前测试覆盖率较低，建议补充：
-- Service 层单元测试
-- Controller 层集成测试
-- 边界条件测试
-- 异常场景测试
-
----
+> `Warning`：当前测试覆盖率仍偏低，需继续补充。
 
 ## 配置管理
 
-### 配置文件
+### 当前基础配置
 
-**application.yml**:
+- 应用名：`support-roster-server`
+- 端口：`8080`
+- Actuator 暴露：`health`、`info`
 
-```yaml
-spring:
-  application:
-    name: support-roster-server
+### 环境配置建议 `TBD`
 
-server:
-  port: 8080
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
+```text
+application.yml
+application-dev.yml
+application-test.yml
+application-prod.yml
 ```
-
-### 环境配置 [TBD]
-
-建议添加多环境配置：
-
-```
-application.yml           # 公共配置
-application-dev.yml       # 开发环境
-application-test.yml      # 测试环境
-application-prod.yml      # 生产环境
-```
-
----
 
 ## 待改进项清单
 
 | 优先级 | 项目 | 说明 |
-|--------|------|------|
+|---|---|---|
 | 🔴 高 | 身份验证 | 实现认证授权机制 |
 | 🔴 高 | 参数校验 | 添加 `@Valid` 校验 |
 | 🟡 中 | 日志记录 | 完善各层日志 |
-| 🟡 中 | 异常处理 | 添加业务异常类 |
+| 🟡 中 | 异常处理 | 增加业务异常类 |
 | 🟡 中 | 测试覆盖 | 提高测试覆盖率 |
-| 🟢 低 | 数据库迁移 | 从 Excel 迁移到数据库 |
-| 🟢 低 | API 文档 | 集成 Swagger/Knife4j |
+| 🟢 低 | 数据库迁移 | 从 Excel 历史链路继续向数据库收敛 |
+| 🟢 低 | API 文档 | 集成 Swagger / Knife4j |
+
+## 维护提示
+
+- 对尚未落地的约定，应保留 `TBD` 或 `Warning` 标记，不把计划性内容写成既成事实。
+- 若实现约定与 feature 文档冲突，应优先核对源码，再同步修正两侧文档。

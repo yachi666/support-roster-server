@@ -1,12 +1,10 @@
 # OpenAPI 契约目录结构
 
-## 目标
+## 文档定位
 
-- 避免将所有 API 契约堆叠在单个 `api/openapi.yaml` 中。
-- 契约文件按 controller 维度维护，降低单次修改的冲突面。
-- 将 workspace 管理接口与 viewer 只读接口在目录层级上明确隔离。
+本文档说明 `api/openapi.yaml` 的拆分方式、controller 与路径文件的映射关系，以及维护 OpenAPI 契约时应遵守的目录规则。
 
-## 当前目录结构
+## 目录结构
 
 ```text
 api/
@@ -15,6 +13,7 @@ api/
 │   └── common.yaml
 └── paths/
     ├── viewer/
+    │   ├── role-groups.yaml
     │   ├── shift-codes.yaml
     │   ├── shifts.yaml
     │   ├── staff.yaml
@@ -22,6 +21,7 @@ api/
     └── workspace/
         ├── import-export.yaml
         ├── overview.yaml
+        ├── role-groups.yaml
         ├── roster.yaml
         ├── shift-definitions.yaml
         ├── staff.yaml
@@ -31,31 +31,17 @@ api/
 
 ## 文件职责
 
-### `api/openapi.yaml`
-
-- 作为 OpenAPI 主入口文件。
-- 只保留 `openapi`、`info`、`servers`、`tags` 与 `paths` 聚合引用。
-- 不再直接承载具体路径实现和公共 schema 明细。
-
-### `api/components/common.yaml`
-
-- 承载跨 controller 复用的参数定义、通用响应与 schema。
-- 路径文件中的 `$ref` 直接引用本文件，避免重复定义同名结构。
-
-### `api/paths/viewer/*.yaml`
-
-- 与 `controller` 包下的 viewer controller 一一对应。
-- 单文件内可包含同一个 controller 暴露的多个 path item 片段，例如集合接口与详情接口。
-
-### `api/paths/workspace/*.yaml`
-
-- 与 `controller/workspace` 包下的 workspace controller 一一对应。
-- workspace 接口必须放在独立目录下，不与 viewer 契约混排。
+| 文件 / 目录 | 角色 |
+|---|---|
+| `api/openapi.yaml` | 聚合入口，只保留元信息、标签与路径引用 |
+| `api/components/common.yaml` | 共享参数、公共响应、复用 schema |
+| `api/paths/viewer/*.yaml` | viewer controller 对应的只读路径片段 |
+| `api/paths/workspace/*.yaml` | workspace controller 对应的后台路径片段 |
 
 ## Controller 映射
 
 | Controller | 契约文件 |
-|------|------|
+|---|---|
 | `TeamController` | `api/paths/viewer/teams.yaml` |
 | `ShiftController` | `api/paths/viewer/shifts.yaml` |
 | `StaffController` | `api/paths/viewer/staff.yaml` |
@@ -68,9 +54,9 @@ api/
 | `WorkspaceValidationController` | `api/paths/workspace/validation.yaml` |
 | `WorkspaceImportExportController` | `api/paths/workspace/import-export.yaml` |
 
-## 维护约束
+## 维护规则
 
-- 新增 controller 时，优先新增对应的独立路径文件，而不是继续扩展主入口文件。
-- 若新增的是 `/api/workspace/**` 接口，必须放入 `api/paths/workspace/`。
-- 若多个 controller 共享同一响应结构，应优先抽到 `api/components/common.yaml`。
-- `api/openapi.yaml` 只作为聚合入口，不应再次演变回大而全文件。
+- 新增 controller 时，优先新增独立路径文件，而不是继续把细节写回 `api/openapi.yaml`。
+- `/api/workspace/**` 路径必须位于 `api/paths/workspace/`，viewer 只读路径必须位于 `api/paths/viewer/`。
+- 多个路径共享的参数或 schema，应抽取到 `api/components/common.yaml`。
+- 历史兼容路径若仍保留契约文件，应在对应 feature 文档中标记为“已废弃 / 历史兼容”。
