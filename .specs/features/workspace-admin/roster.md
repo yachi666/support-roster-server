@@ -20,7 +20,8 @@ flowchart LR
     EDIT --> SAVE[POST /api/workspace/roster/save]
     SAVE --> CHECK[校验班次与团队关系]
     CHECK --> STORE[按员工+日期+shiftDefinitionId 写入事实表]
-    STORE --> RESULT[返回最新月视图与 validationWarning]
+    STORE --> RESULT[返回最新月视图]
+    VIEW -.异步.-> VALIDATION[GET /api/workspace/validation]
 ```
 
 ## 契约与源码映射
@@ -40,12 +41,14 @@ flowchart LR
 - 返回模型：`WorkspaceMonthlyRosterResponse`。
 - 响应按团队分组输出 `groups`，每组包含人员和按日排班 `schedule`。
 - 额外返回 `shiftDetailsByTeam`，供前端 hover 时展示班次含义、时间窗口、时区与跨天信息。
+- `GET /api/workspace/roster` 应聚焦月视图主数据装配，不在主查询链路内同步执行 live validation，以降低大月视图首屏延迟。
 
 ## 保存语义
 
 - 保存请求体包含 `year`、`month` 与 `updates`。
 - 每条 `updates` 表示一个“员工 + 日期单元格”的增量修改，而非整月覆盖。
 - 保存成功后返回最新整月视图，避免前端只局部拼装回包。
+- 校验提示由 `GET /api/workspace/validation` 独立提供，前端可在月视图渲染完成后异步拉取。
 
 ## 存储约定
 
@@ -59,7 +62,7 @@ flowchart LR
 - `updates[].staffId` 必须引用已存在人员。
 - Long 主键对外按字符串传输，服务端再转换为 `Long`。
 - `shiftCode` 要么匹配有效班次定义，要么符合清空单元格的服务层约定。
-- 保存后产生的校验结果通过 `validationWarning` 与校验中心接口共同体现。
+- 校验结果通过校验中心接口体现；`WorkspaceMonthlyRosterResponse.validationWarning` 仅保留兼容字段，不应作为实时校验结果的唯一来源。
 
 ## 请求字段与 DTO 映射
 
@@ -91,9 +94,9 @@ flowchart LR
 | `shiftCodeOptions` | `shiftCodeOptions` | 全局可选班次编码 |
 | `shiftCodeOptionsByTeam` | `shiftCodeOptionsByTeam` | 团队维度的可选班次编码 |
 | `shiftDetailsByTeam` | `shiftDetailsByTeam` | 团队维度的班次详细元数据 |
-| `validationWarning` | `validationWarning` | 月排班校验提示 |
+| `validationWarning` | `validationWarning` | 兼容保留字段；实时月排班告警应从校验中心接口获取 |
 
 ## 维护提示
 
 - 若保存策略从“增量更新”改为其他模式，必须同步修订本文、前端 Monthly Roster spec 与 OpenAPI 契约。
-- 若 `shiftDetailsByTeam` 或 `validationWarning` 结构变化，应同时更新前后端相关文档。
+- 若 `shiftDetailsByTeam`、主查询性能策略或 `validationWarning` 兼容语义变化，应同时更新前后端相关文档。

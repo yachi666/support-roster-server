@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.support.server.supportrosterserver.dto.auth.AuthActivateRequest;
 import com.support.server.supportrosterserver.dto.auth.AuthChangePasswordRequest;
 import com.support.server.supportrosterserver.dto.auth.AuthCurrentUserDto;
 import com.support.server.supportrosterserver.dto.auth.AuthLoginRequest;
@@ -27,6 +28,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthLoginResponse> login(@Valid @RequestBody AuthLoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/activate")
+    public ResponseEntity<AuthLoginResponse> activate(@Valid @RequestBody AuthActivateRequest request) {
+        return ResponseEntity.ok(authService.activate(request));
     }
 
     @PostMapping("/logout")

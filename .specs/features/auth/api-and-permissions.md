@@ -4,7 +4,8 @@
 
 | 接口 | 方法 | 说明 | 匿名可调 |
 |---|---|---|---|
-| `/api/auth/login` | `POST` | 使用 `staffId` 登录；未激活账号可走首登设密 | 是 |
+| `/api/auth/login` | `POST` | 使用 `staffId + password` 登录已激活账号 | 是 |
+| `/api/auth/activate` | `POST` | 使用 `staffId + newPassword` 完成首登设密并建立会话 | 是 |
 | `/api/auth/logout` | `POST` | 注销当前登录态 | 否 |
 | `/api/auth/me` | `GET` | 返回当前用户、角色、team 范围与权限摘要 | 否 |
 | `/api/auth/change-password` | `POST` | 当前用户修改自己的密码 | 否 |
@@ -59,6 +60,7 @@
 | 已登录但 team 范围不足 | `403` | 例如 editor 修改未授权 team 数据 |
 | 账号被禁用 | `403` | 当前账号状态不允许登录或继续操作 |
 | 首登设密参数非法 | `400` | staffId 不存在、密码不符合规则等 |
+| 已激活账号重复首登设密 | `400` | 明确提示密码已初始化，应直接登录 |
 
 ## `me` 返回约定
 
@@ -77,5 +79,6 @@
 ## 前后端协作要求
 
 - 前端仅通过 `/api/auth/me` 建立当前用户视图，不自行拼接权限。
+- 前端本地存储裸 token，请求时统一组装 `Authorization: Bearer <token>`，避免刷新恢复会话时 header 形态漂移。
 - 页面级按钮禁用与路由访问控制应基于 `role + permissions + editableTeamIds`。
 - 后端 Service 层必须再次校验，禁止只在 Controller 或前端做授权判断。

@@ -61,7 +61,7 @@ graph TD
 | ORM | `MyBatis-Plus` | mapper 与实体持久化 |
 | 主键 | 雪花 ID | 对外以字符串传输 Long |
 | 审计字段 | `create_time` / `update_time` | 所有核心表统一要求 |
-| 初始化 | `schema.sql` + `.specs/db/ddl/*.sql` | 联调时通常需手动执行迁移 SQL |
+| 初始化 | `Flyway` + `.specs/db/ddl/*.sql` | 应用启动自动执行版本化迁移，DDL spec 目录仍作为正式设计来源 |
 
 ## 核心表
 
@@ -100,4 +100,3 @@ graph TD
 
 - 本页只保留后台共性事实与资源关系，不堆叠资源级字段明细。
 - 若新增 workspace 资源，需同步更新本页资源地图、`_index.md` 目录与 OpenAPI 路径组织。
-

@@ -11,7 +11,7 @@
 | 1 | 主键策略 | 所有表统一使用雪花 ID；Java / MyBatis-Plus 侧使用 `@TableId(type = IdType.ASSIGN_ID)` |
 | 2 | 审计字段 | 所有表必须包含 `create_time`、`update_time`，并由数据库自动维护 |
 | 3 | DDL 存放 | 所有正式建表与迁移 SQL 必须位于 `.specs/db/ddl/` |
-| 4 | 启动初始化兼容 | `src/main/resources/schema.sql` 必须兼容 Spring JDBC `ScriptUtils` 语句切分规则 |
+| 4 | 启动迁移机制 | 运行时数据库结构对齐统一由 Flyway 执行，迁移脚本位于 `src/main/resources/db/migration/` |
 
 ## 主键策略
 
@@ -34,8 +34,8 @@
 flowchart LR
     RULE[数据库规则] --> SPEC[db-spec.md]
     SPEC --> DDL[.specs/db/ddl/*.sql]
-    DDL --> INIT[src/main/resources/schema.sql]
-    DDL --> MIGRATION[增量迁移执行]
+    DDL --> MIGRATION[src/main/resources/db/migration/*.sql]
+    MIGRATION --> STARTUP[Flyway startup migrate]
 ```
 
 - 正式 DDL 统一维护在目录：`.specs/db/ddl/`。
@@ -45,11 +45,15 @@ flowchart LR
   - `020_create_shift_table.sql`
 - 若一次变更涉及多张表，可按变更批次组织，但不得散落到其他 spec 或临时文档中。
 
-## Spring Boot 运行时初始化兼容性
+## Flyway 启动迁移约定
 
-- 若 `src/main/resources/schema.sql` 作为 Spring Boot 运行时初始化脚本执行，SQL 必须兼容 Spring JDBC `ScriptUtils` 的切分规则。
-- PostgreSQL 的 `FUNCTION` / `TRIGGER` 若包含过程体内部分号，不能直接使用 `$$ ... $$` 形式并假定初始化器能自动识别完整函数体。
-- 此类函数应改写为 Spring 初始化器可安全执行的形式，或迁移到专用迁移工具中执行。
+- 运行时数据库结构迁移统一由 Flyway 在应用启动阶段执行。
+- 迁移脚本目录为 `src/main/resources/db/migration/`，命名遵循 Flyway 版本规则，例如：
+  - `V1__workspace_schema.sql`
+  - `V2__add_xxx.sql`
+- 面向已有环境的迁移脚本必须保持幂等，避免因重复部署或历史环境差异导致启动失败。
+- PostgreSQL 的 `FUNCTION` / `TRIGGER` 可直接放入 Flyway SQL 中统一管理，不再以 Spring JDBC `schema.sql` 兼容性为约束。
+- 若当前环境已存在旧库但尚未建立 Flyway 历史表，应通过 `baseline-on-migrate` 配合版本化迁移平滑接管，而不是继续新增零散的 `@PostConstruct` 补丁。
 
 ## 落地检查清单
 
@@ -58,7 +62,8 @@ flowchart LR
 - [ ] 表结构是否包含 `create_time` / `update_time`。
 - [ ] 时间字段是否由数据库自动维护。
 - [ ] 对应 SQL 是否已存放到 `.specs/db/ddl/`。
-- [ ] `schema.sql` 中的 PostgreSQL 函数 / 触发器定义是否兼容 Spring Boot 初始化器。
+- [ ] 对应 Flyway 迁移是否已落到 `src/main/resources/db/migration/`。
+- [ ] 迁移脚本是否支持现有环境平滑升级。
 
 ## 维护提示
 

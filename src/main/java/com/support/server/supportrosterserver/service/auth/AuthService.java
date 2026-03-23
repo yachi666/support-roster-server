@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.auth.AccountStatus;
 import com.support.server.supportrosterserver.auth.AuthenticatedAccount;
+import com.support.server.supportrosterserver.dto.auth.AuthActivateRequest;
 import com.support.server.supportrosterserver.dto.auth.AuthChangePasswordRequest;
 import com.support.server.supportrosterserver.dto.auth.AuthCurrentTeamDto;
 import com.support.server.supportrosterserver.dto.auth.AuthCurrentUserDto;
@@ -45,40 +46,39 @@ public class AuthService {
     @Transactional
     public AuthLoginResponse login(AuthLoginRequest request) {
         String normalizedStaffId = normalizeStaffId(request.getStaffId());
-        WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-            .eq(WorkspaceAccountEntity::getStaffCode, normalizedStaffId)
-            .last("limit 1"));
-        if (account == null) {
-            throw new BadRequestException("Account does not exist for the provided staff ID.");
-        }
-        if (AccountStatus.DISABLED.getCode().equalsIgnoreCase(account.getAccountStatus())) {
-            throw new ForbiddenException("Account is disabled.");
-        }
+        WorkspaceAccountEntity account = requireAccountByStaffId(normalizedStaffId);
 
         if (AccountStatus.PENDING_ACTIVATION.getCode().equalsIgnoreCase(account.getAccountStatus())) {
-            String candidatePassword = firstNonBlank(request.getNewPassword(), request.getPassword());
-            validateNewPassword(candidatePassword);
-            account.setPasswordHash(passwordEncoder.encode(candidatePassword));
-            account.setPasswordSetAt(LocalDateTime.now());
-            account.setAccountStatus(AccountStatus.ACTIVE.getCode());
-            workspaceAccountMapper.updateById(account);
-            workspaceOperationLogService.log(normalizedStaffId, "Activate workspace account", "workspace_account", account.getId(), "First-login password setup completed");
-        } else {
-            if (request.getPassword() == null || request.getPassword().isBlank()) {
-                throw new BadRequestException("Password is required.");
-            }
-            if (account.getPasswordHash() == null || account.getPasswordHash().isBlank() || !passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
-                throw new BadRequestException("Staff ID or password is incorrect.");
-            }
+            throw new BadRequestException("Account password has not been initialized. Please use first-time activation.");
         }
 
-        StpUtil.login(account.getId());
-        account.setLastLoginAt(LocalDateTime.now());
-        workspaceAccountMapper.updateById(account);
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new BadRequestException("Password is required.");
+        }
+        if (account.getPasswordHash() == null || account.getPasswordHash().isBlank() || !passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
+            throw new BadRequestException("Staff ID or password is incorrect.");
+        }
 
-        AuthCurrentUserDto currentUser = getCurrentUser();
-        workspaceOperationLogService.log(currentUser.getStaffName(), "Login workspace", "workspace_account", account.getId(), "Login succeeded via local password");
-        return new AuthLoginResponse("Bearer " + StpUtil.getTokenValue(), currentUser);
+        return establishSession(account, "Login succeeded via local password");
+    }
+
+    @Transactional
+    public AuthLoginResponse activate(AuthActivateRequest request) {
+        String normalizedStaffId = normalizeStaffId(request.getStaffId());
+        WorkspaceAccountEntity account = requireAccountByStaffId(normalizedStaffId);
+
+        if (!AccountStatus.PENDING_ACTIVATION.getCode().equalsIgnoreCase(account.getAccountStatus())) {
+            throw new BadRequestException("Password has already been initialized. Please sign in.");
+        }
+
+        validateNewPassword(request.getNewPassword());
+        account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        account.setPasswordSetAt(LocalDateTime.now());
+        account.setAccountStatus(AccountStatus.ACTIVE.getCode());
+        workspaceAccountMapper.updateById(account);
+        workspaceOperationLogService.log(normalizedStaffId, "Activate workspace account", "workspace_account", account.getId(), "First-login password setup completed");
+
+        return establishSession(account, "Login succeeded via first-time activation");
     }
 
     public AuthCurrentUserDto getCurrentUser() {
@@ -159,10 +159,26 @@ public class AuthService {
         return staffId.trim();
     }
 
-    private String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first;
+    private WorkspaceAccountEntity requireAccountByStaffId(String normalizedStaffId) {
+        WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
+            .eq(WorkspaceAccountEntity::getStaffCode, normalizedStaffId)
+            .last("limit 1"));
+        if (account == null) {
+            throw new BadRequestException("Account does not exist for the provided staff ID.");
         }
-        return second;
+        if (AccountStatus.DISABLED.getCode().equalsIgnoreCase(account.getAccountStatus())) {
+            throw new ForbiddenException("Account is disabled.");
+        }
+        return account;
+    }
+
+    private AuthLoginResponse establishSession(WorkspaceAccountEntity account, String loginDetail) {
+        StpUtil.login(account.getId());
+        account.setLastLoginAt(LocalDateTime.now());
+        workspaceAccountMapper.updateById(account);
+
+        AuthCurrentUserDto currentUser = getCurrentUser();
+        workspaceOperationLogService.log(currentUser.getStaffName(), "Login workspace", "workspace_account", account.getId(), loginDetail);
+        return new AuthLoginResponse("Bearer " + StpUtil.getTokenValue(), currentUser);
     }
 }

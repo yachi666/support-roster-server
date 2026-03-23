@@ -46,7 +46,6 @@ public class WorkspaceRosterService {
     private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
-    private final WorkspaceValidationService validationService;
     private final AvatarUrlResolver avatarUrlResolver;
     private final AuthContextService authContextService;
     private final WorkspaceShiftTimeSupport shiftTimeSupport;
@@ -143,12 +142,6 @@ public class WorkspaceRosterService {
             .distinct()
             .toList();
 
-        String validationWarning = validationService.validateLiveData(targetMonth).stream()
-            .filter(issue -> "high".equalsIgnoreCase(issue.getSeverity()))
-            .map(issue -> issue.getDescription())
-            .findFirst()
-            .orElse("");
-
         return new WorkspaceMonthlyRosterResponse(
             targetMonth.getYear(),
             targetMonth.getMonthValue(),
@@ -157,7 +150,7 @@ public class WorkspaceRosterService {
             shiftCodeOptionsByTeam,
             shiftCodeColorMap,
             shiftDetailsByTeam,
-            validationWarning
+            ""
         );
     }
 

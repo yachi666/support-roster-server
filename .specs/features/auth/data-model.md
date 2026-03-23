@@ -75,4 +75,4 @@ stateDiagram-v2
 ## DDL 组织
 
 - 正式 DDL 文件放入 `.specs/db/ddl/005_workspace_auth_tables.sql`。
-- 运行时初始化脚本 `src/main/resources/schema.sql` 需要同步合并认证表结构。
+- 运行时数据库结构由 Flyway 迁移接管，对应脚本需同步合并到 `src/main/resources/db/migration/`。
