@@ -15,6 +15,7 @@ import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTe
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 class WorkspaceShiftDefinitionServiceTest {
 
@@ -22,6 +23,7 @@ class WorkspaceShiftDefinitionServiceTest {
     private ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private RosterAssignmentMapper rosterAssignmentMapper;
     private WorkspaceLookupService lookupService;
+    private AuthContextService authContextService;
     private WorkspaceShiftDefinitionService workspaceShiftDefinitionService;
 
     @BeforeEach
@@ -30,11 +32,14 @@ class WorkspaceShiftDefinitionServiceTest {
         shiftDefinitionTeamRelMapper = mock(ShiftDefinitionTeamRelMapper.class);
         rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
+        authContextService = mock(AuthContextService.class);
         workspaceShiftDefinitionService = new WorkspaceShiftDefinitionService(
             shiftDefinitionMapper,
             shiftDefinitionTeamRelMapper,
             rosterAssignmentMapper,
-            lookupService
+            lookupService,
+            authContextService,
+            new WorkspaceShiftTimeSupport()
         );
     }
 

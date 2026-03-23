@@ -11,6 +11,7 @@
   - `001_init_tables.sql`
   - `010_create_staff_table.sql`
   - `020_create_shift_table.sql`
+- 与部署强相关、用于数据预置或上线引导的 SQL 模板，也应放在本目录统一维护，例如 `006_auth_bootstrap_admin_seed.sql`。
 - 若单次变更涉及多张表，可按同一批次组织，但文件仍需位于本目录。
 - 目录中的 SQL 应与 [../db-spec.md](../db-spec.md) 保持一致。
 

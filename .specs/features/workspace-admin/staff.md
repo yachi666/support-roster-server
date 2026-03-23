@@ -43,7 +43,6 @@
 `WorkspaceStaffDto` 同时承担列表与详情模型，除基础信息外，还会携带：
 
 - `teamId`
-- `teamCode`
 - `teamName`
 - `rosterTags`
 
@@ -87,7 +86,6 @@
 | `timezone` | `timezone` | 时区 |
 | `roleName` | `roleName` | 角色名 |
 | `teamId` | `teamId` | 所属团队主键 |
-| `teamCode` | `teamCode` | 所属团队编码 |
 | `teamName` | `teamName` | 所属团队名称 |
 | `status` | `status` | 状态 |
 | `avatar` | `avatar` | 实时拼接头像 URL |

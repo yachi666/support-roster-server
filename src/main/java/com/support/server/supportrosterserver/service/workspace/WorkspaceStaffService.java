@@ -21,6 +21,7 @@ import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -32,11 +33,16 @@ public class WorkspaceStaffService {
     private final StaffMapper staffMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
+    private final AuthContextService authContextService;
 
     public List<WorkspaceStaffDto> listStaff(String keyword) {
         LambdaQueryWrapper<StaffEntity> query = Wrappers.<StaffEntity>lambdaQuery()
             .orderByAsc(StaffEntity::getStaffCode)
             .orderByAsc(StaffEntity::getName);
+        List<Long> readableTeamIds = authContextService.readableTeamIds();
+        if (!readableTeamIds.isEmpty()) {
+            query.in(StaffEntity::getTeamId, readableTeamIds);
+        }
         if (keyword != null && !keyword.isBlank()) {
             query.and(wrapper -> wrapper
                 .like(StaffEntity::getName, keyword)
@@ -57,11 +63,13 @@ public class WorkspaceStaffService {
         if (entity == null) {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
+        authContextService.requireReadableTeam(entity.getTeamId());
         return toDto(entity, lookupService.teamMap().get(entity.getTeamId()));
     }
 
     @Transactional
     public WorkspaceStaffDto createStaff(WorkspaceStaffUpsertRequest request) {
+        authContextService.requireWritableTeam(request.getTeamId());
         StaffEntity entity = new StaffEntity();
         apply(entity, request);
         staffMapper.insert(entity);
@@ -74,6 +82,8 @@ public class WorkspaceStaffService {
         if (entity == null) {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
+        authContextService.requireWritableTeam(entity.getTeamId());
+        authContextService.requireWritableTeam(request.getTeamId());
         apply(entity, request);
         staffMapper.updateById(entity);
         return getStaff(id);
@@ -85,6 +95,7 @@ public class WorkspaceStaffService {
         if (entity == null) {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
+        authContextService.requireWritableTeam(entity.getTeamId());
         staffMapper.deleteById(id);
     }
 
@@ -122,7 +133,7 @@ public class WorkspaceStaffService {
             entity.getSlack(),
             entity.getRegion(),
             entity.getPhone(),
-            team == null ? List.of() : List.of(team.getTeamCode())
+            team == null ? List.of() : List.of(team.getName())
         );
     }
 
@@ -147,7 +158,6 @@ public class WorkspaceStaffService {
             lookupService.normalizeWorkspaceTimezone(entity.getTimezone()),
             entity.getRoleName(),
             entity.getTeamId(),
-            team == null ? null : team.getTeamCode(),
             team == null ? null : team.getName(),
             entity.getStatus(),
             avatarUrlResolver.resolve(entity.getStaffCode()),

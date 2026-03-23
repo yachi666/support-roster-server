@@ -10,10 +10,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WorkspaceRosterShiftDetailDto {
+    private Long shiftDefinitionId;
     private String code;
     private String meaning;
     private LocalTime startTime;
     private LocalTime endTime;
+    private Integer durationMinutes;
     private String timezone;
     private Boolean primaryShift;
     private String colorHex;

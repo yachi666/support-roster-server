@@ -12,7 +12,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 public class WorkspaceTeamDto {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
-    private String teamCode;
     private String name;
     private String color;
     private Integer displayOrder;

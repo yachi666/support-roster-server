@@ -12,6 +12,8 @@ import org.springframework.web.context.request.WebRequest;
 
 import com.support.server.supportrosterserver.dto.ErrorResponse;
 
+import cn.dev33.satoken.exception.NotLoginException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -64,6 +66,36 @@ public class GlobalExceptionHandler {
             path
         );
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleForbidden(
+            ForbiddenException ex,
+            WebRequest request) {
+        String path = extractPath(request);
+        log.warn("Forbidden request on {}: {}", path, ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.FORBIDDEN.value(),
+            "Forbidden",
+            ex.getMessage(),
+            path
+        );
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(NotLoginException.class)
+    public ResponseEntity<ErrorResponse> handleNotLogin(
+            NotLoginException ex,
+            WebRequest request) {
+        String path = extractPath(request);
+        log.warn("Unauthenticated request on {}: {}", path, ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.UNAUTHORIZED.value(),
+            "Unauthorized",
+            "Login is required.",
+            path
+        );
+        return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(Exception.class)

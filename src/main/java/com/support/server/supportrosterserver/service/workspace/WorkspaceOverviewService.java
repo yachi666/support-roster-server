@@ -17,6 +17,7 @@ import com.support.server.supportrosterserver.entity.workspace.OperationLogEntit
 import com.support.server.supportrosterserver.exception.BadRequestException;
 import com.support.server.supportrosterserver.mapper.OperationLogMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,13 +28,19 @@ public class WorkspaceOverviewService {
     private final WorkspaceValidationService validationService;
     private final OperationLogMapper operationLogMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
+    private final AuthContextService authContextService;
 
     public WorkspaceOverviewResponse getOverview(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
         var validation = validationService.getValidation(targetMonth.getYear(), targetMonth.getMonthValue());
         long totalIssues = validation.getIssues().size();
-        long totalAssignments = rosterAssignmentMapper.selectCount(com.baomidou.mybatisplus.core.toolkit.Wrappers.<com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity>lambdaQuery()
-            .between(com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth()));
+        var assignmentQuery = com.baomidou.mybatisplus.core.toolkit.Wrappers.<com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity>lambdaQuery()
+            .between(com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth());
+        List<Long> readableTeamIds = authContextService.readableTeamIds();
+        if (!readableTeamIds.isEmpty()) {
+            assignmentQuery.in(com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity::getTeamId, readableTeamIds);
+        }
+        long totalAssignments = rosterAssignmentMapper.selectCount(assignmentQuery);
         int completion = totalAssignments == 0 ? 0 : (int) Math.max(0, 100 - Math.min(100, totalIssues));
 
         List<WorkspaceSummaryStatDto> stats = List.of(

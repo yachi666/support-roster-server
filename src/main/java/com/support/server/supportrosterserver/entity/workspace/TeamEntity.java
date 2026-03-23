@@ -16,8 +16,6 @@ public class TeamEntity extends BaseEntity {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    private String teamCode;
-
     private String name;
 
     private String color;

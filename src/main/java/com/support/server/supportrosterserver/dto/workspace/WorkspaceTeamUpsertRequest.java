@@ -7,9 +7,6 @@ import lombok.Data;
 @Data
 public class WorkspaceTeamUpsertRequest {
     @NotBlank
-    private String teamCode;
-
-    @NotBlank
     private String name;
 
     @NotBlank

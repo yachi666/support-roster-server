@@ -36,6 +36,7 @@ import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -49,6 +50,7 @@ class WorkspaceImportServiceTest {
     private StaffMapper staffMapper;
     private RosterAssignmentMapper rosterAssignmentMapper;
     private WorkspaceLookupService lookupService;
+    private AuthContextService authContextService;
     private WorkspaceImportService workspaceImportService;
 
     @BeforeEach
@@ -61,6 +63,7 @@ class WorkspaceImportServiceTest {
         staffMapper = mock(StaffMapper.class);
         rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
+        authContextService = mock(AuthContextService.class);
 
         workspaceImportService = new WorkspaceImportService(
             importBatchMapper,
@@ -72,8 +75,12 @@ class WorkspaceImportServiceTest {
             rosterAssignmentMapper,
             mock(com.support.server.supportrosterserver.mapper.TeamMapper.class),
             lookupService,
-            new ObjectMapper()
+            new ObjectMapper(),
+            authContextService,
+            new WorkspaceShiftTimeSupport()
         );
+
+        when(authContextService.currentActor(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -234,6 +241,7 @@ class WorkspaceImportServiceTest {
         entity.setMeaning(meaning);
         entity.setStartTime(startTime);
         entity.setEndTime(endTime);
+        entity.setDurationMinutes(new WorkspaceShiftTimeSupport().durationFromTimes(startTime, endTime));
         entity.setTimezone("HKT");
         entity.setVisible(true);
         entity.setColorHex(colorHex);

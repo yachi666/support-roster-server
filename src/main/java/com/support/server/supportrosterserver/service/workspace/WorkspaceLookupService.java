@@ -43,6 +43,17 @@ public class WorkspaceLookupService {
         return entity;
     }
 
+    public TeamEntity findTeamByName(String teamName) {
+        if (teamName == null || teamName.isBlank()) {
+            return null;
+        }
+        String normalized = teamName.trim().toLowerCase(Locale.ROOT);
+        return listTeams().stream()
+            .filter(team -> team.getName() != null && team.getName().trim().toLowerCase(Locale.ROOT).equals(normalized))
+            .findFirst()
+            .orElse(null);
+    }
+
     public String normalizeWorkspaceTimezone(String timezone) {
         if (timezone == null || timezone.isBlank()) {
             return "UTC";

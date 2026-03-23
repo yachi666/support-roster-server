@@ -23,6 +23,7 @@ import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 class WorkspaceRosterServiceTest {
 
@@ -31,6 +32,7 @@ class WorkspaceRosterServiceTest {
     private ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private WorkspaceLookupService lookupService;
     private WorkspaceValidationService validationService;
+    private AuthContextService authContextService;
     private WorkspaceRosterService workspaceRosterService;
 
     @BeforeEach
@@ -40,6 +42,7 @@ class WorkspaceRosterServiceTest {
         shiftDefinitionTeamRelMapper = mock(ShiftDefinitionTeamRelMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
         validationService = mock(WorkspaceValidationService.class);
+        authContextService = mock(AuthContextService.class);
 
         workspaceRosterService = new WorkspaceRosterService(
             staffMapper,
@@ -48,15 +51,18 @@ class WorkspaceRosterServiceTest {
             mock(RosterAssignmentMapper.class),
             lookupService,
             validationService,
-            new AvatarUrlResolver("https://photos.global.image/casual/square")
+            new AvatarUrlResolver("https://photos.global.image/casual/square"),
+            authContextService,
+            new WorkspaceShiftTimeSupport()
         );
+
+        when(authContextService.readableTeamIds()).thenReturn(List.of(301L));
     }
 
     @Test
     void shouldReturnTeamScopedShiftOptionsForMonthlyRoster() {
         TeamEntity team = new TeamEntity();
         team.setId(301L);
-        team.setTeamCode("china-support");
         team.setName("China Support");
         team.setColor("#0f766e");
         team.setVisible(true);
@@ -118,6 +124,7 @@ class WorkspaceRosterServiceTest {
         entity.setCode(code);
         entity.setColorHex(colorHex);
         entity.setVisible(true);
+        entity.setDurationMinutes(8 * 60);
         return entity;
     }
 }

@@ -17,12 +17,12 @@ public class WorkspaceShiftDefinitionDto {
     private Long id;
     @JsonSerialize(using = ToStringSerializer.class)
     private Long teamId;
-    private String teamCode;
     private String teamName;
     private String code;
     private String meaning;
     private LocalTime startTime;
     private LocalTime endTime;
+    private Integer durationMinutes;
     private String timezone;
     private Boolean primaryShift;
     private Boolean visible;

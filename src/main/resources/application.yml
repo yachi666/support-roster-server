@@ -49,6 +49,19 @@ management:
 support:
   avatar:
     base-url: https://photos.global.image/casual/square
+  auth:
+    bootstrap-admin-staff-code: ${SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE:}
   logging:
     file:
       path: ${LOG_PATH:logs}
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  is-read-header: true
+  is-read-cookie: false
+  is-read-body: false
+  timeout: 2592000
+  active-timeout: -1
+  is-concurrent: true
+  is-share: false

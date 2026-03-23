@@ -19,7 +19,7 @@ flowchart LR
     VIEW --> EDIT[前端编辑单元格工作副本]
     EDIT --> SAVE[POST /api/workspace/roster/save]
     SAVE --> CHECK[校验班次与团队关系]
-    CHECK --> STORE[按员工+日期+班次编码写入事实表]
+    CHECK --> STORE[按员工+日期+shiftDefinitionId 写入事实表]
     STORE --> RESULT[返回最新月视图与 validationWarning]
 ```
 
@@ -49,9 +49,10 @@ flowchart LR
 
 ## 存储约定
 
-- 排班事实按“员工 + 自然日 + 班次编码”粒度保存。
+- 排班事实按“员工 + 自然日 + `shiftDefinitionId`”粒度保存，并保留 `shiftCode` 作为冗余快照。
 - 不使用整月 JSON 覆盖式存储。
 - 班次存在性校验基于“团队 + 班次定义关联关系”，而不是 `workspace_shift_definition.team_id` 单字段。
+- 月视图展示班次编码时，以 assignment 关联到的最新班次定义为准，因此 `code` 改名会反映到历史格子。
 
 ## 资源约束
 
@@ -96,4 +97,3 @@ flowchart LR
 
 - 若保存策略从“增量更新”改为其他模式，必须同步修订本文、前端 Monthly Roster spec 与 OpenAPI 契约。
 - 若 `shiftDetailsByTeam` 或 `validationWarning` 结构变化，应同时更新前后端相关文档。
-

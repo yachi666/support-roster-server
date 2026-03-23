@@ -60,6 +60,7 @@ import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.TeamMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -84,6 +85,8 @@ public class WorkspaceImportService {
     private final TeamMapper teamMapper;
     private final WorkspaceLookupService lookupService;
     private final ObjectMapper objectMapper;
+    private final AuthContextService authContextService;
+    private final WorkspaceShiftTimeSupport shiftTimeSupport;
 
     @Transactional
     public WorkspaceImportPreviewResponse previewImport(MultipartFile file, Integer year, Integer month, String operator) {
@@ -96,7 +99,7 @@ public class WorkspaceImportService {
         batch.setRosterMonth(targetMonth.getMonthValue());
         batch.setFileName(file.getOriginalFilename());
         batch.setStatus("PREVIEWING");
-        batch.setOperatorName(operator == null || operator.isBlank() ? "system" : operator);
+        batch.setOperatorName(authContextService.currentActor(operator));
         importBatchMapper.insert(batch);
 
         Path tempFile = null;
@@ -109,6 +112,7 @@ public class WorkspaceImportService {
             Map<String, String> colorHexByCode = new HashMap<>();
             List<ImportRecordEntity> records = new ArrayList<>();
             List<ImportIssueEntity> issues = new ArrayList<>();
+            Set<Long> referencedTeamIds = new HashSet<>();
             Map<String, TeamEntity> teamsByName = lookupService.listTeams().stream()
                 .collect(java.util.stream.Collectors.toMap(
                     team -> team.getName().toLowerCase(Locale.ROOT),
@@ -138,7 +142,9 @@ public class WorkspaceImportService {
                 if (row.getStartTime() != null && row.getStartTime().startsWith("#")) {
                     continue;
                 }
-                if (parseTime(row.getStartTime()) == null && parseTime(row.getEndTime()) == null && row.getTimezone() == null) {
+                Integer durationMinutes = parseDurationMinutes(row.getStartTime(), row.getEndTime());
+                LocalTime startTime = parseTime(row.getStartTime());
+                if (startTime == null && durationMinutes == null && row.getTimezone() == null) {
                     continue;
                 }
                 boolean valid = true;
@@ -147,7 +153,7 @@ public class WorkspaceImportService {
                     valid = false;
                     issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Code", "Shift definition code is missing.", row.getTeam(), null, null));
                 }
-                if (parseTime(row.getStartTime()) == null || parseTime(row.getEndTime()) == null) {
+                if (startTime == null || durationMinutes == null) {
                     valid = false;
                     issues.add(buildIssue(batch.getId(), "medium", "Invalid Shift Definition", "Shift definition time range is invalid for team '" + row.getTeam() + "'.", row.getTeam(), null, null));
                 }
@@ -156,6 +162,7 @@ public class WorkspaceImportService {
                     issues.add(buildIssue(batch.getId(), "medium", "Missing Team", "Team '" + row.getTeam() + "' does not exist.", row.getTeam(), null, null));
                 }
                 for (TeamEntity team : teams) {
+                    referencedTeamIds.add(team.getId());
                     validShiftKeys.add(team.getId() + "|" + row.getCode());
                 }
                 Map<String, Object> payload = new HashMap<>();
@@ -163,7 +170,7 @@ public class WorkspaceImportService {
                 payload.put("code", row.getCode());
                 payload.put("meaning", row.getMeaning());
                 payload.put("startTime", row.getStartTime());
-                payload.put("endTime", row.getEndTime());
+                payload.put("durationMinutes", durationMinutes);
                 payload.put("timezone", lookupService.normalizeWorkspaceTimezone(row.getTimezone()));
                 payload.put("showOnRosterPage", row.getShowOnRosterPage());
                 payload.put("remark", row.getRemark());
@@ -190,6 +197,9 @@ public class WorkspaceImportService {
                 }
                 boolean valid = true;
                 TeamEntity team = row.getTeam() == null ? null : teamsByName.get(row.getTeam().trim().toLowerCase(Locale.ROOT));
+                if (team != null) {
+                    referencedTeamIds.add(team.getId());
+                }
                 if (row.getStaffId() == null || row.getStaffId().isBlank()) {
                     valid = false;
                     issues.add(buildIssue(batch.getId(), "medium", "Invalid Staff ID", "Staff ID is missing for row '" + row.getName() + "'.", row.getTeam(), row.getName(), null));
@@ -222,6 +232,8 @@ public class WorkspaceImportService {
                 }
                 records.add(buildRecord(batch.getId(), "Staff Shifts", rowIndex++, "STAFF_SHIFT", row, valid));
             }
+
+            authContextService.requireWritableTeams(referencedTeamIds);
 
             records.forEach(importRecordMapper::insert);
             issues.forEach(importIssueMapper::insert);
@@ -272,11 +284,14 @@ public class WorkspaceImportService {
             .eq(ImportRecordEntity::getValid, true)
             .orderByAsc(ImportRecordEntity::getRecordType)
             .orderByAsc(ImportRecordEntity::getRowNumber));
+        Set<Long> importTeamIds = collectImportTeamIds(records);
+        authContextService.requireWritableTeams(importTeamIds);
 
         YearMonth targetMonth = YearMonth.of(batch.getRosterYear(), batch.getRosterMonth());
 
         rosterAssignmentMapper.delete(Wrappers.<RosterAssignmentEntity>lambdaQuery()
-            .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth()));
+            .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth())
+            .in(RosterAssignmentEntity::getTeamId, importTeamIds));
 
         for (ImportRecordEntity record : records) {
             if ("SHIFT_DEFINITION".equals(record.getRecordType())) {
@@ -298,7 +313,9 @@ public class WorkspaceImportService {
                 entity.setCode(String.valueOf(payload.get("code")));
                 entity.setMeaning((String) payload.get("meaning"));
                 entity.setStartTime(parseTime((String) payload.get("startTime")));
-                entity.setEndTime(parseTime((String) payload.get("endTime")));
+                Integer durationMinutes = readDurationMinutes(payload.get("durationMinutes"));
+                entity.setDurationMinutes(durationMinutes);
+                entity.setEndTime(shiftTimeSupport.deriveEndTime(entity.getStartTime(), durationMinutes));
                 entity.setTimezone(lookupService.normalizeWorkspaceTimezone((String) payload.get("timezone")));
                 entity.setVisible("Y".equalsIgnoreCase(String.valueOf(payload.get("showOnRosterPage"))));
                 entity.setPrimaryShift(PRIMARY_CODES.contains(entity.getCode()));
@@ -317,9 +334,7 @@ public class WorkspaceImportService {
                 continue;
             }
             StaffShiftRow row = readValue(record.getPayloadJson(), StaffShiftRow.class);
-            TeamEntity team = teamMapper.selectOne(Wrappers.<TeamEntity>lambdaQuery()
-                .eq(TeamEntity::getName, row.getTeam())
-                .last("limit 1"));
+            TeamEntity team = lookupService.findTeamByName(row.getTeam());
             if (team == null) {
                 throw new BadRequestException("No team found for '" + row.getTeam() + "'.");
             }
@@ -361,7 +376,7 @@ public class WorkspaceImportService {
                 assignment.setTeamId(team.getId());
                 assignment.setShiftDefinitionId(shiftDefinition.getId());
                 assignment.setAssignmentDate(targetMonth.atDay(day));
-                assignment.setShiftCode(shiftCode);
+                assignment.setShiftCode(shiftDefinition.getCode());
                 assignment.setSourceType("IMPORT");
                 assignment.setNotes(null);
                 rosterAssignmentMapper.insert(assignment);
@@ -370,7 +385,7 @@ public class WorkspaceImportService {
 
         batch.setStatus("APPLIED");
         batch.setAppliedTime(LocalDateTime.now());
-        batch.setOperatorName(operator == null || operator.isBlank() ? batch.getOperatorName() : operator);
+        batch.setOperatorName(authContextService.currentActor(operator));
         importBatchMapper.updateById(batch);
         markBatchIssuesResolved(batch.getId());
 
@@ -417,11 +432,20 @@ public class WorkspaceImportService {
     public ResponseEntity<byte[]> exportRoster(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
+        List<Long> readableTeamIds = authContextService.readableTeamIds();
         List<ShiftDefinitionEntity> shiftDefinitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
             .orderByAsc(ShiftDefinitionEntity::getTeamId)
-            .orderByAsc(ShiftDefinitionEntity::getCode));
+            .orderByAsc(ShiftDefinitionEntity::getCode))
+            .stream()
+            .filter(definition -> shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                    .eq(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, definition.getId()))
+                .stream()
+                .map(ShiftDefinitionTeamRelEntity::getTeamId)
+                .anyMatch(readableTeamIds::contains))
+            .toList();
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
             .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth())
+            .in(RosterAssignmentEntity::getTeamId, readableTeamIds)
             .orderByAsc(RosterAssignmentEntity::getStaffId)
             .orderByAsc(RosterAssignmentEntity::getAssignmentDate));
         Map<Long, Long> assignmentCountByStaffId = assignments.stream().collect(Collectors.groupingBy(
@@ -429,11 +453,20 @@ public class WorkspaceImportService {
             Collectors.counting()
         ));
         Map<String, String> schedule = new HashMap<>();
+        Map<Long, ShiftDefinitionEntity> shiftDefinitionById = shiftDefinitions.stream()
+            .collect(Collectors.toMap(ShiftDefinitionEntity::getId, definition -> definition, (left, right) -> left, LinkedHashMap::new));
         for (RosterAssignmentEntity assignment : assignments) {
-            schedule.put(assignment.getStaffId() + "|" + assignment.getAssignmentDate().getDayOfMonth(), assignment.getShiftCode());
+            ShiftDefinitionEntity definition = shiftDefinitionById.get(assignment.getShiftDefinitionId());
+            schedule.put(
+                assignment.getStaffId() + "|" + assignment.getAssignmentDate().getDayOfMonth(),
+                definition == null || definition.getCode() == null || definition.getCode().isBlank()
+                    ? assignment.getShiftCode()
+                    : definition.getCode()
+            );
         }
         List<StaffEntity> staffList = dedupeStaffForExport(
-            staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()),
+            staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()
+                .in(StaffEntity::getTeamId, readableTeamIds)),
             teamMap,
             assignmentCountByStaffId
         );
@@ -482,6 +515,30 @@ public class WorkspaceImportService {
         return workbook;
     }
 
+    private Set<Long> collectImportTeamIds(List<ImportRecordEntity> records) {
+        Set<Long> teamIds = new HashSet<>();
+        for (ImportRecordEntity record : records) {
+            if ("SHIFT_DEFINITION".equals(record.getRecordType())) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> payload = readValue(record.getPayloadJson(), Map.class);
+                @SuppressWarnings("unchecked")
+                List<String> teamNames = (List<String>) payload.get("teams");
+                resolveTeams(teamNames, teamMapper.selectList(Wrappers.<TeamEntity>lambdaQuery()))
+                    .stream()
+                    .map(TeamEntity::getId)
+                    .forEach(teamIds::add);
+            }
+            if ("STAFF_SHIFT".equals(record.getRecordType())) {
+                StaffShiftRow row = readValue(record.getPayloadJson(), StaffShiftRow.class);
+                TeamEntity team = lookupService.findTeamByName(row.getTeam());
+                if (team != null) {
+                    teamIds.add(team.getId());
+                }
+            }
+        }
+        return teamIds;
+    }
+
     private void createHeaderRow(Sheet sheet, List<String> headers) {
         Row headerRow = sheet.createRow(0);
         for (int columnIndex = 0; columnIndex < headers.size(); columnIndex++) {
@@ -510,7 +567,7 @@ public class WorkspaceImportService {
                 safeString(shiftDefinition.getCode()),
                 safeString(shiftDefinition.getMeaning()),
                 formatTime(shiftDefinition.getStartTime()),
-                formatTime(shiftDefinition.getEndTime()),
+                formatTime(shiftTimeSupport.deriveEndTime(shiftDefinition.getStartTime(), shiftTimeSupport.resolveDurationMinutes(shiftDefinition))),
                 lookupService.normalizeWorkspaceTimezone(shiftDefinition.getTimezone()),
                 Boolean.TRUE.equals(shiftDefinition.getVisible()) ? "Y" : "N",
                 safeString(shiftDefinition.getRemark())
@@ -891,8 +948,51 @@ public class WorkspaceImportService {
         }
         String[] parts = value.split(":");
         try {
-            return LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), parts.length > 2 ? Integer.parseInt(parts[2]) : 0);
+            if (parts.length < 2) {
+                return null;
+            }
+            int hours = Integer.parseInt(parts[0]);
+            int minutes = Integer.parseInt(parts[1]);
+            if (hours == 24 && minutes == 0) {
+                return LocalTime.MIDNIGHT;
+            }
+            return LocalTime.of(hours, minutes, parts.length > 2 ? Integer.parseInt(parts[2]) : 0);
         } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private Integer parseDurationMinutes(String startValue, String endValue) {
+        LocalTime startTime = parseTime(startValue);
+        if (startTime == null) {
+            return null;
+        }
+        if (endValue == null || endValue.isBlank()) {
+            return null;
+        }
+        String normalizedEnd = endValue.trim();
+        if ("24:00".equals(normalizedEnd) || "24:00:00".equals(normalizedEnd)) {
+            int startMinutes = startTime.getHour() * 60 + startTime.getMinute();
+            int durationMinutes = 1440 - startMinutes;
+            return durationMinutes == 0 ? 1440 : durationMinutes;
+        }
+        LocalTime endTime = parseTime(endValue);
+        if (endTime == null) {
+            return null;
+        }
+        return shiftTimeSupport.durationFromTimes(startTime, endTime);
+    }
+
+    private Integer readDurationMinutes(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ex) {
             return null;
         }
     }
