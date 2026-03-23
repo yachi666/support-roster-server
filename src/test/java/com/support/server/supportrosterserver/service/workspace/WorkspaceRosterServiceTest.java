@@ -31,7 +31,6 @@ class WorkspaceRosterServiceTest {
     private ShiftDefinitionMapper shiftDefinitionMapper;
     private ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private WorkspaceLookupService lookupService;
-    private WorkspaceValidationService validationService;
     private AuthContextService authContextService;
     private WorkspaceRosterService workspaceRosterService;
 
@@ -41,7 +40,6 @@ class WorkspaceRosterServiceTest {
         shiftDefinitionMapper = mock(ShiftDefinitionMapper.class);
         shiftDefinitionTeamRelMapper = mock(ShiftDefinitionTeamRelMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
-        validationService = mock(WorkspaceValidationService.class);
         authContextService = mock(AuthContextService.class);
 
         workspaceRosterService = new WorkspaceRosterService(
@@ -50,7 +48,6 @@ class WorkspaceRosterServiceTest {
             shiftDefinitionTeamRelMapper,
             mock(RosterAssignmentMapper.class),
             lookupService,
-            validationService,
             new AvatarUrlResolver("https://photos.global.image/casual/square"),
             authContextService,
             new WorkspaceShiftTimeSupport()
@@ -94,7 +91,6 @@ class WorkspaceRosterServiceTest {
             buildRelation(502L, 301L),
             buildRelation(503L, 301L)
         ));
-        when(validationService.validateLiveData(any())).thenReturn(List.of());
 
         WorkspaceMonthlyRosterResponse response = workspaceRosterService.getMonthlyRoster(2026, 3);
 

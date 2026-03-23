@@ -25,7 +25,7 @@
 
 ### 1. 认证表结构
 
-- 若当前环境尚未包含认证表，请先对齐 `schema.sql` 或执行 `005_workspace_auth_tables.sql` 对应变更。
+- 若当前环境尚未包含认证表，请先确认应用启动时已执行 Flyway 迁移，或手动执行与 `005_workspace_auth_tables.sql` 对齐的正式变更。
 - 若环境已运行新版 schema，可跳过结构创建，只做数据核验。
 
 ### 2. 首个管理员 staff 准备
