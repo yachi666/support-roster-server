@@ -217,7 +217,8 @@ public class WorkspaceValidationService {
     private List<WorkspaceValidationIssueDto> loadImportIssues(YearMonth targetMonth) {
         List<Long> batchIds = importBatchMapper.selectList(Wrappers.<ImportBatchEntity>lambdaQuery()
                 .eq(ImportBatchEntity::getRosterYear, targetMonth.getYear())
-                .eq(ImportBatchEntity::getRosterMonth, targetMonth.getMonthValue()))
+                .eq(ImportBatchEntity::getRosterMonth, targetMonth.getMonthValue())
+                .ne(ImportBatchEntity::getStatus, "APPLIED"))
             .stream()
             .map(ImportBatchEntity::getId)
             .toList();
