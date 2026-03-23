@@ -48,7 +48,7 @@ flowchart LR
 - 保存请求体包含 `year`、`month` 与 `updates`。
 - 每条 `updates` 表示一个“员工 + 日期单元格”的增量修改，而非整月覆盖。
 - 保存成功后返回最新整月视图，避免前端只局部拼装回包。
-- 校验提示由 `GET /api/workspace/validation` 独立提供，前端可在月视图渲染完成后异步拉取。
+- 校验提示由 `GET /api/workspace/validation` 独立提供，前端可在月视图渲染完成后以 `summaryOnly=true` 异步拉取摘要与最高优先级的 `high` 问题；若没有 `high` 问题则不显示主警告。
 
 ## 存储约定
 

@@ -1,6 +1,9 @@
 package com.support.server.supportrosterserver.service.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -62,6 +65,7 @@ class WorkspaceValidationServiceTest {
         );
 
         when(authContextService.canReadTeam(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
+        when(authContextService.readableTeamIds()).thenReturn(List.of(100L));
     }
 
     @Test
@@ -106,6 +110,100 @@ class WorkspaceValidationServiceTest {
         assertTrue(issues.stream().anyMatch(issue -> issue.getType().equals("Time Zone Ambiguity")));
         assertFalse(issues.stream().anyMatch(issue -> issue.getType().equals("Missing Primary Coverage")));
         assertFalse(issues.stream().anyMatch(issue -> issue.getType().equals("Invalid Shift Code")));
+    }
+
+    @Test
+    void shouldReturnSummaryOnlyPayloadForRosterConsumers() {
+        StaffEntity staff = new StaffEntity();
+        staff.setId(1L);
+        staff.setName("Alex");
+        staff.setTeamId(100L);
+
+        TeamEntity team = new TeamEntity();
+        team.setId(100L);
+        team.setName("AP L2");
+        team.setVisible(true);
+
+        ShiftDefinitionEntity shiftDefinition = new ShiftDefinitionEntity();
+        shiftDefinition.setId(1000L);
+        shiftDefinition.setTeamId(100L);
+        shiftDefinition.setCode("DS");
+        shiftDefinition.setPrimaryShift(true);
+        shiftDefinition.setVisible(true);
+        shiftDefinition.setStartTime(LocalTime.of(9, 0));
+        shiftDefinition.setEndTime(LocalTime.of(18, 0));
+        shiftDefinition.setDurationMinutes(9 * 60);
+
+        when(importBatchMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(importIssueMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(staffMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(staff));
+        when(shiftDefinitionMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(shiftDefinition));
+        when(shiftDefinitionTeamRelMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(buildRelation(1000L, 100L)));
+        when(rosterAssignmentMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(lookupService.teamMap()).thenReturn(java.util.Map.of(100L, team));
+        when(lookupService.listTeams()).thenReturn(List.of(team));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(100L));
+
+        var response = validationService.getValidation(2026, 3, true);
+
+        assertTrue(response.getIssues().isEmpty());
+        assertEquals(0, response.getSummary().getHigh());
+        assertEquals(0, response.getSummary().getMedium());
+        assertEquals(1, response.getSummary().getLow());
+        assertNull(response.getTopIssue());
+    }
+
+    @Test
+    void shouldOnlyExposeHighSeverityIssueAsTopIssueForRosterWarning() {
+        StaffEntity staff = new StaffEntity();
+        staff.setId(1L);
+        staff.setName("Alex");
+        staff.setTeamId(100L);
+
+        TeamEntity team = new TeamEntity();
+        team.setId(100L);
+        team.setName("AP L2");
+        team.setVisible(true);
+
+        ShiftDefinitionEntity shiftDefinition = new ShiftDefinitionEntity();
+        shiftDefinition.setId(1000L);
+        shiftDefinition.setTeamId(100L);
+        shiftDefinition.setCode("DS");
+        shiftDefinition.setPrimaryShift(true);
+        shiftDefinition.setVisible(true);
+        shiftDefinition.setStartTime(LocalTime.of(9, 0));
+        shiftDefinition.setEndTime(LocalTime.of(18, 0));
+        shiftDefinition.setDurationMinutes(9 * 60);
+
+        RosterAssignmentEntity firstAssignment = new RosterAssignmentEntity();
+        firstAssignment.setStaffId(1L);
+        firstAssignment.setTeamId(100L);
+        firstAssignment.setShiftDefinitionId(1000L);
+        firstAssignment.setShiftCode("DS");
+        firstAssignment.setAssignmentDate(LocalDate.of(2026, 3, 1));
+
+        RosterAssignmentEntity secondAssignment = new RosterAssignmentEntity();
+        secondAssignment.setStaffId(1L);
+        secondAssignment.setTeamId(100L);
+        secondAssignment.setShiftDefinitionId(1000L);
+        secondAssignment.setShiftCode("DS");
+        secondAssignment.setAssignmentDate(LocalDate.of(2026, 3, 1));
+
+        when(importBatchMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(importIssueMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(staffMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(staff));
+        when(shiftDefinitionMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(shiftDefinition));
+        when(shiftDefinitionTeamRelMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(buildRelation(1000L, 100L)));
+        when(rosterAssignmentMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(firstAssignment, secondAssignment));
+        when(lookupService.teamMap()).thenReturn(java.util.Map.of(100L, team));
+        when(lookupService.listTeams()).thenReturn(List.of(team));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(100L));
+
+        var response = validationService.getValidation(2026, 3, true);
+
+        assertEquals(1, response.getSummary().getHigh());
+        assertNotNull(response.getTopIssue());
+        assertEquals("Overlapping Assignment", response.getTopIssue().getType());
     }
 
     private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {

@@ -106,6 +106,18 @@ class WorkspaceRosterServiceTest {
         assertTrue(response.getValidationWarning().isEmpty());
     }
 
+    @Test
+    void shouldReturnEmptyRosterWhenUserCannotReadAnyTeam() {
+        when(authContextService.readableTeamIds()).thenReturn(List.of());
+
+        WorkspaceMonthlyRosterResponse response = workspaceRosterService.getMonthlyRoster(2026, 3);
+
+        assertTrue(response.getGroups().isEmpty());
+        assertTrue(response.getShiftCodeOptions().isEmpty());
+        assertTrue(response.getShiftCodeOptionsByTeam().isEmpty());
+        assertTrue(response.getShiftDetailsByTeam().isEmpty());
+    }
+
     private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {
         ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
         relation.setShiftDefinitionId(shiftDefinitionId);

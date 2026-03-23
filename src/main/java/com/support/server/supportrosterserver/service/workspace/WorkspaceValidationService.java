@@ -5,6 +5,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -58,24 +59,30 @@ public class WorkspaceValidationService {
     private final WorkspaceShiftTimeSupport shiftTimeSupport;
 
     public WorkspaceValidationResponse getValidation(Integer year, Integer month) {
+        return getValidation(year, month, false);
+    }
+
+    public WorkspaceValidationResponse getValidation(Integer year, Integer month, boolean summaryOnly) {
         YearMonth targetMonth = resolveMonth(year, month);
-        List<WorkspaceValidationIssueDto> issues = new ArrayList<>();
-        issues.addAll(loadImportIssues(targetMonth));
-        issues.addAll(validateLiveData(targetMonth));
-        issues = filterIssuesByReadableTeams(issues);
-
-        long high = issues.stream().filter(issue -> "high".equalsIgnoreCase(issue.getSeverity())).count();
-        long medium = issues.stream().filter(issue -> "medium".equalsIgnoreCase(issue.getSeverity())).count();
-        long low = issues.stream().filter(issue -> "low".equalsIgnoreCase(issue.getSeverity())).count();
-
-        return new WorkspaceValidationResponse(new WorkspaceValidationSummaryDto(high, medium, low), issues);
+        Map<Long, TeamEntity> teamMap = lookupService.teamMap();
+        Set<Long> readableTeamIds = new LinkedHashSet<>(authContextService.readableTeamIds());
+        Map<String, Long> teamIdByName = buildTeamIdByName(teamMap);
+        ValidationAccumulator accumulator = new ValidationAccumulator(!summaryOnly, readableTeamIds, teamIdByName);
+        loadImportIssues(targetMonth, accumulator);
+        validateLiveData(targetMonth, accumulator, teamMap);
+        return accumulator.toResponse();
     }
 
     public List<WorkspaceValidationIssueDto> validateLiveData(YearMonth targetMonth) {
-        AtomicLong idGenerator = new AtomicLong(1_000_000L);
-        List<WorkspaceValidationIssueDto> issues = new ArrayList<>();
-
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
+        Set<Long> readableTeamIds = new LinkedHashSet<>(authContextService.readableTeamIds());
+        Map<String, Long> teamIdByName = buildTeamIdByName(teamMap);
+        ValidationAccumulator accumulator = new ValidationAccumulator(true, readableTeamIds, teamIdByName);
+        validateLiveData(targetMonth, accumulator, teamMap);
+        return accumulator.issues;
+    }
+
+    private void validateLiveData(YearMonth targetMonth, ValidationAccumulator accumulator, Map<Long, TeamEntity> teamMap) {
         List<ShiftDefinitionEntity> definitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery());
         Map<Long, Set<Long>> teamIdsByDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery())
             .stream()
@@ -90,8 +97,8 @@ public class WorkspaceValidationService {
             if (def.getStartTime() == null || shiftTimeSupport.resolveDurationMinutes(def) == 0) {
                 Long firstTeamId = teamIdsByDefinitionId.getOrDefault(def.getId(), Set.of()).stream().findFirst().orElse(def.getTeamId());
                 TeamEntity team = firstTeamId == null ? null : teamMap.get(firstTeamId);
-                issues.add(new WorkspaceValidationIssueDto(
-                    idGenerator.getAndIncrement(),
+                accumulator.record(
+                    accumulator.nextSyntheticId(),
                     "medium",
                     "Invalid Shift Definition",
                     "Shift definition time range is incomplete for code '" + def.getCode() + "'.",
@@ -99,7 +106,7 @@ public class WorkspaceValidationService {
                     "-",
                     false,
                     RESOLUTION_KIND_MANUAL
-                ));
+                );
             }
         }
 
@@ -107,8 +114,8 @@ public class WorkspaceValidationService {
                 .orderByAsc(StaffEntity::getName))) {
             if (staff.getTimezone() == null || staff.getTimezone().isBlank()) {
                 TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
-                issues.add(new WorkspaceValidationIssueDto(
-                    idGenerator.getAndIncrement(),
+                accumulator.record(
+                    accumulator.nextSyntheticId(),
                     "low",
                     "Time Zone Ambiguity",
                     "Staff " + staff.getName() + " has no timezone assigned.",
@@ -116,11 +123,11 @@ public class WorkspaceValidationService {
                     "-",
                     false,
                     RESOLUTION_KIND_MANUAL
-                ));
+                );
             }
             if (staff.getTeamId() == null || teamMap.get(staff.getTeamId()) == null) {
-                issues.add(new WorkspaceValidationIssueDto(
-                    idGenerator.getAndIncrement(),
+                accumulator.record(
+                    accumulator.nextSyntheticId(),
                     "medium",
                     "Missing Team",
                     "Staff " + staff.getName() + " references a team that does not exist.",
@@ -128,7 +135,7 @@ public class WorkspaceValidationService {
                     "-",
                     false,
                     RESOLUTION_KIND_MANUAL
-                ));
+                );
             }
         }
 
@@ -139,22 +146,18 @@ public class WorkspaceValidationService {
             .orderByAsc(RosterAssignmentEntity::getAssignmentDate));
 
         Map<String, List<RosterAssignmentEntity>> assignmentsByStaffDay = new HashMap<>();
-        Map<String, List<RosterAssignmentEntity>> assignmentsByTeamDay = new HashMap<>();
         for (RosterAssignmentEntity assignment : assignments) {
             String staffDayKey = assignment.getStaffId() + "|" + assignment.getAssignmentDate();
             assignmentsByStaffDay.computeIfAbsent(staffDayKey, ignored -> new ArrayList<>()).add(assignment);
-
-            String teamDayKey = assignment.getTeamId() + "|" + assignment.getAssignmentDate();
-            assignmentsByTeamDay.computeIfAbsent(teamDayKey, ignored -> new ArrayList<>()).add(assignment);
 
             ShiftDefinitionEntity shiftDefinition = shiftDefinitionById.get(assignment.getShiftDefinitionId());
             Set<Long> shiftDefinitionTeamIds = shiftDefinition == null
                 ? Set.of()
                 : teamIdsByDefinitionId.getOrDefault(assignment.getShiftDefinitionId(), Set.of());
             if (shiftDefinition == null || !shiftDefinitionTeamIds.contains(assignment.getTeamId())) {
-                TeamEntity team = assignment.getTeamId() == null ? null : lookupService.teamMap().get(assignment.getTeamId());
-                issues.add(new WorkspaceValidationIssueDto(
-                    idGenerator.getAndIncrement(),
+                TeamEntity team = assignment.getTeamId() == null ? null : teamMap.get(assignment.getTeamId());
+                accumulator.record(
+                    accumulator.nextSyntheticId(),
                     "medium",
                     "Invalid Shift Definition",
                     "Assignment references a shift definition that is missing or no longer available for the team.",
@@ -162,16 +165,16 @@ public class WorkspaceValidationService {
                     assignment.getAssignmentDate().format(DATE_FORMATTER),
                     false,
                     RESOLUTION_KIND_MANUAL
-                ));
+                );
             }
         }
 
         for (List<RosterAssignmentEntity> sameDayAssignments : assignmentsByStaffDay.values()) {
             if (sameDayAssignments.size() > 1) {
                 RosterAssignmentEntity sample = sameDayAssignments.get(0);
-                TeamEntity team = sample.getTeamId() == null ? null : lookupService.teamMap().get(sample.getTeamId());
-                issues.add(new WorkspaceValidationIssueDto(
-                    idGenerator.getAndIncrement(),
+                TeamEntity team = sample.getTeamId() == null ? null : teamMap.get(sample.getTeamId());
+                accumulator.record(
+                    accumulator.nextSyntheticId(),
                     "high",
                     "Overlapping Assignment",
                     "Staff " + sample.getStaffId() + " has multiple assignments on the same day.",
@@ -179,11 +182,9 @@ public class WorkspaceValidationService {
                     sample.getAssignmentDate().format(DATE_FORMATTER),
                     false,
                     RESOLUTION_KIND_MANUAL
-                ));
+                );
             }
         }
-
-        return issues;
     }
 
     public WorkspaceValidationResolveResponse resolveIssues(WorkspaceValidationResolveRequest request) {
@@ -224,7 +225,7 @@ public class WorkspaceValidationService {
         );
     }
 
-    private List<WorkspaceValidationIssueDto> loadImportIssues(YearMonth targetMonth) {
+    private void loadImportIssues(YearMonth targetMonth, ValidationAccumulator accumulator) {
         List<Long> batchIds = importBatchMapper.selectList(Wrappers.<ImportBatchEntity>lambdaQuery()
                 .eq(ImportBatchEntity::getRosterYear, targetMonth.getYear())
                 .eq(ImportBatchEntity::getRosterMonth, targetMonth.getMonthValue())
@@ -234,17 +235,17 @@ public class WorkspaceValidationService {
             .toList();
 
         if (batchIds.isEmpty()) {
-            return List.of();
+            return;
         }
 
-        return importIssueMapper.selectList(Wrappers.<ImportIssueEntity>lambdaQuery()
+        importIssueMapper.selectList(Wrappers.<ImportIssueEntity>lambdaQuery()
                 .in(ImportIssueEntity::getBatchId, batchIds)
                 .eq(ImportIssueEntity::getResolved, false)
                 .orderByDesc(ImportIssueEntity::getCreateTime)
                 .last("limit 100"))
             .stream()
             .filter(issue -> !"Missing Primary Coverage".equals(issue.getIssueType()))
-            .map(issue -> new WorkspaceValidationIssueDto(
+            .forEach(issue -> accumulator.record(
                 issue.getId(),
                 issue.getSeverity(),
                 issue.getIssueType(),
@@ -253,20 +254,17 @@ public class WorkspaceValidationService {
                 issue.getIssueDate() == null ? "-" : issue.getIssueDate().format(DATE_FORMATTER),
                 true,
                 RESOLUTION_KIND_IMPORT_ISSUE
-            ))
-            .toList();
+            ));
     }
 
-    private List<WorkspaceValidationIssueDto> filterIssuesByReadableTeams(List<WorkspaceValidationIssueDto> issues) {
-        return issues.stream()
-            .filter(issue -> {
-                if (issue.getTeam() == null || issue.getTeam().isBlank() || "-".equals(issue.getTeam())) {
-                    return true;
-                }
-                Long teamId = mapTeamNameToId(issue.getTeam());
-                return teamId == null || authContextService.canReadTeam(teamId);
-            })
-            .toList();
+    private Map<String, Long> buildTeamIdByName(Map<Long, TeamEntity> teamMap) {
+        Map<String, Long> normalizedMap = new HashMap<>();
+        for (TeamEntity team : teamMap.values()) {
+            if (team.getName() != null && !team.getName().isBlank()) {
+                normalizedMap.put(normalizeTeamName(team.getName()), team.getId());
+            }
+        }
+        return normalizedMap;
     }
 
     private Long mapTeamNameToId(String teamName) {
@@ -274,8 +272,83 @@ public class WorkspaceValidationService {
         return team == null ? null : team.getId();
     }
 
+    private String normalizeTeamName(String teamName) {
+        return teamName == null ? "" : teamName.trim().toLowerCase(Locale.ROOT);
+    }
+
     private YearMonth resolveMonth(Integer year, Integer month) {
         YearMonth now = YearMonth.now();
         return YearMonth.of(year == null ? now.getYear() : year, month == null ? now.getMonthValue() : month);
+    }
+
+    private final class ValidationAccumulator {
+        private final boolean collectIssues;
+        private final Set<Long> readableTeamIds;
+        private final Map<String, Long> teamIdByName;
+        private final AtomicLong syntheticIdGenerator = new AtomicLong(1_000_000L);
+        private final List<WorkspaceValidationIssueDto> issues;
+        private long high;
+        private long medium;
+        private long low;
+        private WorkspaceValidationIssueDto topIssue;
+
+        private ValidationAccumulator(boolean collectIssues, Set<Long> readableTeamIds, Map<String, Long> teamIdByName) {
+            this.collectIssues = collectIssues;
+            this.readableTeamIds = readableTeamIds;
+            this.teamIdByName = teamIdByName;
+            this.issues = collectIssues ? new ArrayList<>() : List.of();
+        }
+
+        private long nextSyntheticId() {
+            return syntheticIdGenerator.getAndIncrement();
+        }
+
+        private void record(Long id, String severity, String type, String description, String team, String date, boolean resolvable, String resolutionKind) {
+            if (!isReadableTeam(team)) {
+                return;
+            }
+
+            incrementSummary(severity);
+
+            WorkspaceValidationIssueDto issueForTop = null;
+            if (collectIssues || (topIssue == null && "high".equalsIgnoreCase(severity))) {
+                issueForTop = new WorkspaceValidationIssueDto(id, severity, type, description, team, date, resolvable, resolutionKind);
+            }
+
+            if (collectIssues) {
+                issues.add(issueForTop);
+            }
+
+            if (topIssue == null && "high".equalsIgnoreCase(severity)) {
+                topIssue = issueForTop;
+            }
+        }
+
+        private boolean isReadableTeam(String team) {
+            if (team == null || team.isBlank() || "-".equals(team)) {
+                return true;
+            }
+
+            Long teamId = teamIdByName.get(normalizeTeamName(team));
+            return teamId == null || readableTeamIds.contains(teamId);
+        }
+
+        private void incrementSummary(String severity) {
+            if ("high".equalsIgnoreCase(severity)) {
+                high += 1;
+            } else if ("medium".equalsIgnoreCase(severity)) {
+                medium += 1;
+            } else if ("low".equalsIgnoreCase(severity)) {
+                low += 1;
+            }
+        }
+
+        private WorkspaceValidationResponse toResponse() {
+            return new WorkspaceValidationResponse(
+                new WorkspaceValidationSummaryDto(high, medium, low),
+                issues,
+                topIssue
+            );
+        }
     }
 }

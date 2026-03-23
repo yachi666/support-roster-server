@@ -575,6 +575,8 @@ schemas:
     properties:
       summary:
         $ref: '#/schemas/WorkspaceValidationSummary'
+      topIssue:
+        $ref: '#/schemas/WorkspaceValidationIssue'
       issues:
         type: array
         items:

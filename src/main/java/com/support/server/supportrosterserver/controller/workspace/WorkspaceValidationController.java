@@ -27,8 +27,9 @@ public class WorkspaceValidationController {
     @GetMapping
     public ResponseEntity<WorkspaceValidationResponse> getValidation(
             @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) Integer month) {
-        return ResponseEntity.ok(workspaceValidationService.getValidation(year, month));
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false, defaultValue = "false") Boolean summaryOnly) {
+        return ResponseEntity.ok(workspaceValidationService.getValidation(year, month, Boolean.TRUE.equals(summaryOnly)));
     }
 
     @PostMapping("/resolve")
