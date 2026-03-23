@@ -233,6 +233,7 @@ public class WorkspaceImportService {
             batch.setValidRecords((int) validRecordCount);
             batch.setInvalidRecords(issues.size());
             importBatchMapper.updateById(batch);
+            cleanupPreviousPreviewBatches(targetMonth, batch.getId());
 
             return new WorkspaceImportPreviewResponse(
                 batch.getId(),
@@ -371,8 +372,46 @@ public class WorkspaceImportService {
         batch.setAppliedTime(LocalDateTime.now());
         batch.setOperatorName(operator == null || operator.isBlank() ? batch.getOperatorName() : operator);
         importBatchMapper.updateById(batch);
+        markBatchIssuesResolved(batch.getId());
 
         return new WorkspaceImportApplyResponse(batch.getId(), batch.getRosterYear(), batch.getRosterMonth(), batch.getStatus(), records.size());
+    }
+
+    private void cleanupPreviousPreviewBatches(YearMonth targetMonth, Long currentBatchId) {
+        List<Long> staleBatchIds = importBatchMapper.selectList(Wrappers.<ImportBatchEntity>lambdaQuery()
+                .eq(ImportBatchEntity::getRosterYear, targetMonth.getYear())
+                .eq(ImportBatchEntity::getRosterMonth, targetMonth.getMonthValue())
+                .ne(ImportBatchEntity::getStatus, "APPLIED")
+                .ne(ImportBatchEntity::getId, currentBatchId))
+            .stream()
+            .map(ImportBatchEntity::getId)
+            .toList();
+
+        if (staleBatchIds.isEmpty()) {
+            return;
+        }
+
+        importIssueMapper.delete(Wrappers.<ImportIssueEntity>lambdaQuery()
+            .in(ImportIssueEntity::getBatchId, staleBatchIds));
+        importRecordMapper.delete(Wrappers.<ImportRecordEntity>lambdaQuery()
+            .in(ImportRecordEntity::getBatchId, staleBatchIds));
+        importBatchMapper.delete(Wrappers.<ImportBatchEntity>lambdaQuery()
+            .in(ImportBatchEntity::getId, staleBatchIds));
+    }
+
+    private void markBatchIssuesResolved(Long batchId) {
+        if (batchId == null) {
+            return;
+        }
+
+        List<ImportIssueEntity> batchIssues = importIssueMapper.selectList(Wrappers.<ImportIssueEntity>lambdaQuery()
+            .eq(ImportIssueEntity::getBatchId, batchId)
+            .eq(ImportIssueEntity::getResolved, false));
+
+        for (ImportIssueEntity issue : batchIssues) {
+            issue.setResolved(true);
+            importIssueMapper.updateById(issue);
+        }
     }
 
     public ResponseEntity<byte[]> exportRoster(Integer year, Integer month) {

@@ -24,11 +24,11 @@ class WorkspaceOverviewControllerTest {
             List.of(new WorkspaceActivityDto("System", "refreshed roster", "1 mins ago")),
             List.of(new WorkspaceQuickActionDto("Export Final Roster", "Download validated schedule", "teal", "export"))
         );
-        when(service.getOverview()).thenReturn(payload);
+        when(service.getOverview(2026, 3)).thenReturn(payload);
 
         WorkspaceOverviewController controller = new WorkspaceOverviewController(service);
 
-        var response = controller.getOverview();
+        var response = controller.getOverview(2026, 3);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("84%", response.getBody().getStats().get(0).getValue());
