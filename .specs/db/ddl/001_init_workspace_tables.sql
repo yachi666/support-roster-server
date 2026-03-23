@@ -25,7 +25,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_role_group_code
 
 CREATE TABLE IF NOT EXISTS workspace_team (
     id BIGINT PRIMARY KEY,
-    team_code VARCHAR(128) NOT NULL,
     name VARCHAR(255) NOT NULL,
     color VARCHAR(64) NOT NULL,
     display_order INTEGER NOT NULL DEFAULT 0,
@@ -36,8 +35,8 @@ CREATE TABLE IF NOT EXISTS workspace_team (
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_team_code
-    ON workspace_team (team_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_team_name_normalized
+    ON workspace_team (LOWER(BTRIM(name)))
     WHERE deleted = FALSE;
 
 CREATE TABLE IF NOT EXISTS workspace_team_role_group_rel (
@@ -80,7 +79,8 @@ CREATE TABLE IF NOT EXISTS workspace_shift_definition (
     code VARCHAR(64) NOT NULL,
     meaning VARCHAR(255) NOT NULL,
     start_time TIME NOT NULL,
-    end_time TIME NOT NULL,
+    end_time TIME,
+    duration_minutes INTEGER NOT NULL DEFAULT 480,
     timezone VARCHAR(128) NOT NULL,
     primary_shift BOOLEAN NOT NULL DEFAULT FALSE,
     visible BOOLEAN NOT NULL DEFAULT TRUE,

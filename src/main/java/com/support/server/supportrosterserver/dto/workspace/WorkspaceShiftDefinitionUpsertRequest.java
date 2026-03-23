@@ -3,6 +3,8 @@ package com.support.server.supportrosterserver.dto.workspace;
 import java.time.LocalTime;
 import java.util.List;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -23,7 +25,9 @@ public class WorkspaceShiftDefinitionUpsertRequest {
     private LocalTime startTime;
 
     @NotNull
-    private LocalTime endTime;
+    @Min(1)
+    @Max(1440)
+    private Integer durationMinutes;
 
     @NotBlank
     private String timezone;

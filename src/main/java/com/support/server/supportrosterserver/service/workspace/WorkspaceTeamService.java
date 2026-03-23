@@ -16,6 +16,7 @@ import com.support.server.supportrosterserver.dto.workspace.WorkspaceTeamUpsertR
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.exception.BadRequestException;
 import com.support.server.supportrosterserver.mapper.TeamMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,6 +26,7 @@ public class WorkspaceTeamService {
 
     private final TeamMapper teamMapper;
     private final WorkspaceLookupService lookupService;
+    private final AuthContextService authContextService;
 
     public List<WorkspaceTeamDto> listTeams() {
         return lookupService.listTeams().stream()
@@ -34,6 +36,7 @@ public class WorkspaceTeamService {
 
     @Transactional
     public WorkspaceTeamDto createTeam(WorkspaceTeamUpsertRequest request) {
+        authContextService.requireAdmin();
         TeamEntity entity = new TeamEntity();
         apply(entity, request);
         teamMapper.insert(entity);
@@ -42,6 +45,7 @@ public class WorkspaceTeamService {
 
     @Transactional
     public WorkspaceTeamDto updateTeam(Long id, WorkspaceTeamUpsertRequest request) {
+        authContextService.requireAdmin();
         TeamEntity entity = lookupService.requireTeam(id);
         apply(entity, request);
         teamMapper.updateById(entity);
@@ -50,6 +54,7 @@ public class WorkspaceTeamService {
 
     @Transactional
     public List<WorkspaceTeamDto> reorderTeams(List<Long> teamIds) {
+        authContextService.requireAdmin();
         List<TeamEntity> currentTeams = lookupService.listTeams();
 
         if (teamIds.size() != currentTeams.size()) {
@@ -83,6 +88,7 @@ public class WorkspaceTeamService {
 
     @Transactional
     public void deleteTeam(Long id) {
+        authContextService.requireAdmin();
         lookupService.requireTeam(id);
         teamMapper.deleteById(id);
     }
@@ -91,7 +97,7 @@ public class WorkspaceTeamService {
         return lookupService.listTeams().stream()
             .filter(team -> Boolean.TRUE.equals(team.getVisible()))
             .map(team -> new com.support.server.supportrosterserver.dto.TeamDto(
-                team.getTeamCode(),
+                String.valueOf(team.getId()),
                 team.getName(),
                 team.getColor(),
                 team.getDisplayOrder()
@@ -102,7 +108,6 @@ public class WorkspaceTeamService {
     private WorkspaceTeamDto toDto(TeamEntity team) {
         return new WorkspaceTeamDto(
             team.getId(),
-            team.getTeamCode(),
             team.getName(),
             team.getColor(),
             team.getDisplayOrder(),
@@ -112,11 +117,32 @@ public class WorkspaceTeamService {
     }
 
     private void apply(TeamEntity entity, WorkspaceTeamUpsertRequest request) {
-        entity.setTeamCode(request.getTeamCode());
-        entity.setName(request.getName());
-        entity.setColor(request.getColor());
+        String normalizedName = normalizeTeamName(request.getName());
+        ensureUniqueTeamName(entity.getId(), normalizedName);
+
+        entity.setName(normalizedName);
+        entity.setColor(request.getColor() == null ? null : request.getColor().trim());
         entity.setDisplayOrder(request.getDisplayOrder());
         entity.setVisible(request.getVisible());
-        entity.setDescription(request.getDescription());
+        entity.setDescription(request.getDescription() == null || request.getDescription().isBlank() ? null : request.getDescription().trim());
     }
+
+    private void ensureUniqueTeamName(Long currentTeamId, String normalizedName) {
+        boolean exists = lookupService.listTeams().stream()
+            .filter(team -> currentTeamId == null || !team.getId().equals(currentTeamId))
+            .map(TeamEntity::getName)
+            .map(this::normalizeTeamName)
+            .anyMatch(normalizedName::equals);
+        if (exists) {
+            throw new BadRequestException("Team name '" + normalizedName + "' already exists.");
+        }
+    }
+
+    private String normalizeTeamName(String name) {
+        if (name == null || name.isBlank()) {
+            throw new BadRequestException("Team name is required.");
+        }
+        return name.trim().replaceAll("\\s+", " ");
+    }
+
 }

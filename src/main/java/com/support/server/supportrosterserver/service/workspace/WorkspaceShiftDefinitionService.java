@@ -26,6 +26,7 @@ import com.support.server.supportrosterserver.exception.ResourceNotFoundExceptio
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,6 +38,8 @@ public class WorkspaceShiftDefinitionService {
     private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
+    private final AuthContextService authContextService;
+    private final WorkspaceShiftTimeSupport shiftTimeSupport;
 
     public List<WorkspaceShiftDefinitionDto> listShiftDefinitions(String keyword) {
         LambdaQueryWrapper<ShiftDefinitionEntity> query = Wrappers.<ShiftDefinitionEntity>lambdaQuery()
@@ -57,6 +60,9 @@ public class WorkspaceShiftDefinitionService {
         );
 
         return definitions.stream()
+            .filter(definition -> teamsByShiftDefinitionId.getOrDefault(definition.getId(), List.of()).stream()
+                .map(TeamEntity::getId)
+                .anyMatch(authContextService::canReadTeam))
             .map(definition -> toDto(definition, teamsByShiftDefinitionId.getOrDefault(definition.getId(), List.of())))
             .toList();
     }
@@ -69,11 +75,13 @@ public class WorkspaceShiftDefinitionService {
 
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
         Map<Long, List<TeamEntity>> teamsByShiftDefinitionId = loadTeamsByShiftDefinitionId(List.of(id), teamMap);
+        authContextService.requireReadableAnyTeam(teamsByShiftDefinitionId.getOrDefault(id, List.of()).stream().map(TeamEntity::getId).toList());
         return toDto(entity, teamsByShiftDefinitionId.getOrDefault(id, List.of()));
     }
 
     @Transactional
     public WorkspaceShiftDefinitionDto createShiftDefinition(WorkspaceShiftDefinitionUpsertRequest request) {
+        authContextService.requireWritableTeams(request.getTeamIds());
         validateCodeAvailability(null, request.getCode(), request.getTeamIds());
 
         ShiftDefinitionEntity entity = new ShiftDefinitionEntity();
@@ -89,11 +97,20 @@ public class WorkspaceShiftDefinitionService {
         if (entity == null) {
             throw new ResourceNotFoundException("ShiftDefinition", "id", id);
         }
+        String previousCode = entity.getCode();
+        List<Long> existingTeamIds = loadTeamsByShiftDefinitionId(List.of(id), lookupService.teamMap()).getOrDefault(id, List.of()).stream()
+            .map(TeamEntity::getId)
+            .toList();
+        authContextService.requireWritableTeams(existingTeamIds);
+        authContextService.requireWritableTeams(request.getTeamIds());
 
         validateCodeAvailability(id, request.getCode(), request.getTeamIds());
         apply(entity, request);
         shiftDefinitionMapper.updateById(entity);
         replaceTeamRelations(id, request.getTeamIds());
+        if (!Objects.equals(previousCode, entity.getCode())) {
+            syncAssignmentShiftCodes(id, entity.getCode());
+        }
         return getShiftDefinition(id);
     }
 
@@ -116,8 +133,9 @@ public class WorkspaceShiftDefinitionService {
             .map(ShiftDefinitionTeamRelEntity::getTeamId)
             .filter(Objects::nonNull)
             .forEach(teamIds::add);
+        authContextService.requireWritableTeams(teamIds);
 
-        rosterAssignmentMapper.delete(buildAssignmentCleanupQuery(id, shiftDefinition.getCode(), teamIds));
+        rosterAssignmentMapper.delete(buildAssignmentCleanupQuery(id));
         shiftDefinitionTeamRelMapper.delete(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
             .eq(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, id));
         shiftDefinitionMapper.deleteById(id);
@@ -144,19 +162,19 @@ public class WorkspaceShiftDefinitionService {
         return new WorkspaceShiftDefinitionDto(
             entity.getId(),
             primaryTeam == null ? entity.getTeamId() : primaryTeam.getId(),
-            primaryTeam == null ? null : primaryTeam.getTeamCode(),
             primaryTeam == null ? null : primaryTeam.getName(),
             entity.getCode(),
             entity.getMeaning(),
             entity.getStartTime(),
-            entity.getEndTime(),
+            shiftTimeSupport.deriveEndTime(entity.getStartTime(), shiftTimeSupport.resolveDurationMinutes(entity)),
+            shiftTimeSupport.resolveDurationMinutes(entity),
             lookupService.normalizeWorkspaceTimezone(entity.getTimezone()),
             entity.getPrimaryShift(),
             entity.getVisible(),
             entity.getColorHex(),
             entity.getRemark(),
             teams.stream()
-                .map(team -> new WorkspaceShiftDefinitionTeamDto(team.getId(), team.getTeamCode(), team.getName(), team.getColor()))
+                .map(team -> new WorkspaceShiftDefinitionTeamDto(team.getId(), team.getName(), team.getColor()))
                 .toList()
         );
     }
@@ -170,7 +188,8 @@ public class WorkspaceShiftDefinitionService {
         entity.setCode(request.getCode());
         entity.setMeaning(request.getMeaning());
         entity.setStartTime(request.getStartTime());
-        entity.setEndTime(request.getEndTime());
+        entity.setDurationMinutes(shiftTimeSupport.requireValidDurationMinutes(request.getDurationMinutes()));
+        entity.setEndTime(shiftTimeSupport.deriveEndTime(request.getStartTime(), request.getDurationMinutes()));
         entity.setTimezone(lookupService.normalizeWorkspaceTimezone(request.getTimezone()));
         entity.setPrimaryShift(request.getPrimaryShift());
         entity.setVisible(request.getVisible());
@@ -209,17 +228,18 @@ public class WorkspaceShiftDefinitionService {
         }
     }
 
-    private LambdaQueryWrapper<RosterAssignmentEntity> buildAssignmentCleanupQuery(Long shiftDefinitionId, String shiftCode, Set<Long> teamIds) {
-        LambdaQueryWrapper<RosterAssignmentEntity> query = Wrappers.<RosterAssignmentEntity>lambdaQuery()
+    private LambdaQueryWrapper<RosterAssignmentEntity> buildAssignmentCleanupQuery(Long shiftDefinitionId) {
+        return Wrappers.<RosterAssignmentEntity>lambdaQuery()
             .eq(RosterAssignmentEntity::getShiftDefinitionId, shiftDefinitionId);
+    }
 
-        if (shiftCode != null && !shiftCode.isBlank() && !teamIds.isEmpty()) {
-            query.or(wrapper -> wrapper
-                .eq(RosterAssignmentEntity::getShiftCode, shiftCode)
-                .in(RosterAssignmentEntity::getTeamId, teamIds));
+    private void syncAssignmentShiftCodes(Long shiftDefinitionId, String code) {
+        List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
+            .eq(RosterAssignmentEntity::getShiftDefinitionId, shiftDefinitionId));
+        for (RosterAssignmentEntity assignment : assignments) {
+            assignment.setShiftCode(code);
+            rosterAssignmentMapper.updateById(assignment);
         }
-
-        return query;
     }
 
     private void validateCodeAvailability(Long currentDefinitionId, String code, List<Long> teamIds) {

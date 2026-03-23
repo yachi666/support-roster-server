@@ -2,7 +2,7 @@
 
 ## 文档定位
 
-本章按功能域组织专题规范，用于承接“已超出总体规范但又不属于单一领域主文档”的实现说明。当前分为 **workspace-admin** 与 **viewer** 两个分册。
+本章按功能域组织专题规范，用于承接“已超出总体规范但又不属于单一领域主文档”的实现说明。当前分为 **workspace-admin**、**viewer** 与 **auth** 三个分册。
 
 ## 分册导航
 
@@ -10,12 +10,14 @@
 |---|---|---|---|
 | Workspace Admin | [workspace-admin/_index.md](./workspace-admin/_index.md) | 后台写能力、聚合页面、导入导出、校验中心 | `/api/workspace/**` |
 | Viewer | [viewer/_index.md](./viewer/_index.md) | 公开查看页只读接口、只读 DTO 与兼容边界 | `/api/**` |
+| Auth & Access Control | [auth/_index.md](./auth/_index.md) | 登录、账号生命周期、角色与 team 级授权 | `/api/auth/**` + `/api/workspace/**` |
 | Workspace 总览旧入口 | [workspace-admin-backend.md](./workspace-admin-backend.md) | 快速建立后台专题上下文 | 作为总览页保留 |
 
 ## 当前专题结构
 
 | 文档 | 角色 |
 |---|---|
+| [auth/_index.md](./auth/_index.md) | 登录、账号生命周期、角色与 team 级授权 |
 | [workspace-admin/overview.md](./workspace-admin/overview.md) | workspace 跨资源总览 |
 | [workspace-admin/dashboard-overview.md](./workspace-admin/dashboard-overview.md) | 工作台首页聚合接口 |
 | [workspace-admin/staff.md](./workspace-admin/staff.md) | 人员目录 |

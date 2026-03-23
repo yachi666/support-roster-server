@@ -30,6 +30,8 @@ public class ShiftDefinitionEntity extends BaseEntity {
 
     private LocalTime endTime;
 
+    private Integer durationMinutes;
+
     private String timezone;
 
     private Boolean primaryShift;

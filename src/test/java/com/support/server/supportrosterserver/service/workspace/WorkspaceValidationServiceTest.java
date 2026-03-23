@@ -25,6 +25,7 @@ import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 class WorkspaceValidationServiceTest {
 
@@ -35,6 +36,7 @@ class WorkspaceValidationServiceTest {
     private ImportIssueMapper importIssueMapper;
     private WorkspaceLookupService lookupService;
     private ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
+    private AuthContextService authContextService;
     private WorkspaceValidationService validationService;
 
     @BeforeEach
@@ -46,7 +48,20 @@ class WorkspaceValidationServiceTest {
         importIssueMapper = mock(ImportIssueMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
         shiftDefinitionTeamRelMapper = mock(ShiftDefinitionTeamRelMapper.class);
-        validationService = new WorkspaceValidationService(staffMapper, shiftDefinitionMapper, rosterAssignmentMapper, importBatchMapper, importIssueMapper, lookupService, shiftDefinitionTeamRelMapper);
+        authContextService = mock(AuthContextService.class);
+        validationService = new WorkspaceValidationService(
+            staffMapper,
+            shiftDefinitionMapper,
+            rosterAssignmentMapper,
+            importBatchMapper,
+            importIssueMapper,
+            lookupService,
+            shiftDefinitionTeamRelMapper,
+            authContextService,
+            new WorkspaceShiftTimeSupport()
+        );
+
+        when(authContextService.canReadTeam(org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
     }
 
     @Test
@@ -58,7 +73,6 @@ class WorkspaceValidationServiceTest {
 
         TeamEntity team = new TeamEntity();
         team.setId(100L);
-        team.setTeamCode("ap-l2");
         team.setName("AP L2");
         team.setVisible(true);
 
@@ -70,10 +84,12 @@ class WorkspaceValidationServiceTest {
         shiftDefinition.setVisible(true);
         shiftDefinition.setStartTime(LocalTime.of(9, 0));
         shiftDefinition.setEndTime(LocalTime.of(18, 0));
+        shiftDefinition.setDurationMinutes(9 * 60);
 
         RosterAssignmentEntity assignment = new RosterAssignmentEntity();
         assignment.setStaffId(1L);
         assignment.setTeamId(100L);
+        assignment.setShiftDefinitionId(1000L);
         assignment.setShiftCode("DS");
         assignment.setAssignmentDate(LocalDate.of(2026, 3, 1));
 

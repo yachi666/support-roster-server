@@ -25,7 +25,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_role_group_code
 
 CREATE TABLE IF NOT EXISTS workspace_team (
     id BIGINT PRIMARY KEY,
-    team_code VARCHAR(128) NOT NULL,
     name VARCHAR(255) NOT NULL,
     color VARCHAR(64) NOT NULL,
     display_order INTEGER NOT NULL DEFAULT 0,
@@ -36,8 +35,13 @@ CREATE TABLE IF NOT EXISTS workspace_team (
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_team_code
-    ON workspace_team (team_code)
+DROP INDEX IF EXISTS uk_workspace_team_code;
+
+ALTER TABLE IF EXISTS workspace_team
+    DROP COLUMN IF EXISTS team_code;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_team_name_normalized
+    ON workspace_team (LOWER(BTRIM(name)))
     WHERE deleted = 0;
 
 CREATE TABLE IF NOT EXISTS workspace_team_role_group_rel (
@@ -75,6 +79,42 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_staff_code
     ON workspace_staff (staff_code)
     WHERE deleted = 0;
 
+CREATE TABLE IF NOT EXISTS workspace_account (
+    id BIGINT PRIMARY KEY,
+    staff_id BIGINT NOT NULL REFERENCES workspace_staff (id),
+    staff_code VARCHAR(128) NOT NULL,
+    role_code VARCHAR(32) NOT NULL,
+    account_status VARCHAR(32) NOT NULL DEFAULT 'PENDING_ACTIVATION',
+    password_hash VARCHAR(255),
+    password_set_at TIMESTAMP,
+    auth_source VARCHAR(32) NOT NULL DEFAULT 'LOCAL_PASSWORD',
+    external_subject VARCHAR(255),
+    notes TEXT,
+    last_login_at TIMESTAMP,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_id
+    ON workspace_account (staff_id)
+    WHERE deleted = 0;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_code
+    ON workspace_account (staff_code)
+    WHERE deleted = 0;
+
+CREATE TABLE IF NOT EXISTS workspace_account_team_scope (
+    id BIGINT PRIMARY KEY,
+    account_id BIGINT NOT NULL REFERENCES workspace_account (id),
+    team_id BIGINT NOT NULL REFERENCES workspace_team (id),
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_team_scope
+    ON workspace_account_team_scope (account_id, team_id);
+
 CREATE TABLE IF NOT EXISTS workspace_shift_definition (
     id BIGINT PRIMARY KEY,
     team_id BIGINT REFERENCES workspace_team (id),
@@ -82,7 +122,8 @@ CREATE TABLE IF NOT EXISTS workspace_shift_definition (
     code VARCHAR(64) NOT NULL,
     meaning VARCHAR(255) NOT NULL,
     start_time TIME NOT NULL,
-    end_time TIME NOT NULL,
+    end_time TIME,
+    duration_minutes INTEGER NOT NULL DEFAULT 480,
     timezone VARCHAR(128) NOT NULL,
     primary_shift BOOLEAN NOT NULL DEFAULT FALSE,
     visible BOOLEAN NOT NULL DEFAULT TRUE,
@@ -108,6 +149,28 @@ WHERE staff.team_id IS NULL
 
 ALTER TABLE IF EXISTS workspace_shift_definition
     ADD COLUMN IF NOT EXISTS team_id BIGINT REFERENCES workspace_team (id);
+
+ALTER TABLE IF EXISTS workspace_shift_definition
+    ADD COLUMN IF NOT EXISTS duration_minutes INTEGER;
+
+UPDATE workspace_shift_definition
+SET duration_minutes = CASE
+    WHEN start_time IS NULL OR end_time IS NULL THEN 480
+    ELSE MOD(
+        CAST(EXTRACT(EPOCH FROM end_time) / 60 AS INTEGER)
+        - CAST(EXTRACT(EPOCH FROM start_time) / 60 AS INTEGER)
+        + 1440,
+        1440
+    )
+END
+WHERE duration_minutes IS NULL;
+
+UPDATE workspace_shift_definition
+SET duration_minutes = 1440
+WHERE duration_minutes = 0;
+
+ALTER TABLE IF EXISTS workspace_shift_definition
+    ALTER COLUMN duration_minutes SET NOT NULL;
 
 UPDATE workspace_shift_definition shift_definition
 SET team_id = rel.team_id
@@ -245,6 +308,18 @@ CREATE TRIGGER trg_workspace_team_role_group_rel_update_time
 DROP TRIGGER IF EXISTS trg_workspace_staff_update_time ON workspace_staff;
 CREATE TRIGGER trg_workspace_staff_update_time
     BEFORE UPDATE ON workspace_staff
+    FOR EACH ROW
+    EXECUTE FUNCTION set_update_time();
+
+DROP TRIGGER IF EXISTS trg_workspace_account_update_time ON workspace_account;
+CREATE TRIGGER trg_workspace_account_update_time
+    BEFORE UPDATE ON workspace_account
+    FOR EACH ROW
+    EXECUTE FUNCTION set_update_time();
+
+DROP TRIGGER IF EXISTS trg_workspace_account_team_scope_update_time ON workspace_account_team_scope;
+CREATE TRIGGER trg_workspace_account_team_scope_update_time
+    BEFORE UPDATE ON workspace_account_team_scope
     FOR EACH ROW
     EXECUTE FUNCTION set_update_time();
 

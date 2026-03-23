@@ -28,7 +28,6 @@
 
 团队资源承载以下字段：
 
-- `teamCode`
 - `name`
 - `color`
 - `displayOrder`
@@ -49,7 +48,6 @@
 
 | 请求字段 | Request DTO | Response DTO 字段 | 必填 | 说明 |
 |---|---|---|---|---|
-| `teamCode` | `WorkspaceTeamUpsertRequest.teamCode` | `teamCode` | 是 | 团队编码 |
 | `name` | `WorkspaceTeamUpsertRequest.name` | `name` | 是 | 团队名称 |
 | `color` | `WorkspaceTeamUpsertRequest.color` | `color` | 是 | 展示色 |
 | `displayOrder` | `WorkspaceTeamUpsertRequest.displayOrder` | `displayOrder` | 是 | 排序 |
@@ -67,7 +65,6 @@
 | DTO 字段 | OpenAPI 字段 | 说明 |
 |---|---|---|
 | `id` | `id` | 主键 |
-| `teamCode` | `teamCode` | 团队编码 |
 | `name` | `name` | 名称 |
 | `color` | `color` | 颜色 |
 | `displayOrder` | `displayOrder` | 排序 |
@@ -77,3 +74,4 @@
 ## 维护提示
 
 - 团队是当前主分组维度；若再次引入 role-group 类资源，应明确其与 `team` 的关系，而不是隐式恢复旧模型。
+- `name` 是团队唯一业务标识，服务端按“去首尾空格 + 大小写不敏感”执行唯一约束。

@@ -254,8 +254,6 @@ schemas:
     properties:
       id:
         type: string
-      teamCode:
-        type: string
       name:
         type: string
       color:
@@ -273,10 +271,8 @@ schemas:
 
   WorkspaceTeamUpsertRequest:
     type: object
-    required: [teamCode, name, color, displayOrder, visible, roleGroupIds]
+    required: [name, color, displayOrder, visible]
     properties:
-      teamCode:
-        type: string
       name:
         type: string
       color:
@@ -287,10 +283,6 @@ schemas:
         type: boolean
       description:
         type: string
-      roleGroupIds:
-        type: array
-        items:
-          type: string
 
   WorkspaceStaff:
     type: object
@@ -368,8 +360,6 @@ schemas:
         type: string
       teamId:
         type: string
-      teamCode:
-        type: string
       teamName:
         type: string
       code:
@@ -382,6 +372,8 @@ schemas:
       endTime:
         type: string
         format: time
+      durationMinutes:
+        type: integer
       timezone:
         type: string
       primaryShift:
@@ -402,8 +394,6 @@ schemas:
     properties:
       id:
         type: string
-      teamCode:
-        type: string
       name:
         type: string
       color:
@@ -411,7 +401,7 @@ schemas:
 
   WorkspaceShiftDefinitionUpsertRequest:
     type: object
-    required: [teamIds, code, meaning, startTime, endTime, timezone, primaryShift, visible]
+    required: [teamIds, code, meaning, startTime, durationMinutes, timezone, primaryShift, visible]
     properties:
       teamIds:
         type: array
@@ -425,9 +415,10 @@ schemas:
       startTime:
         type: string
         format: time
-      endTime:
-        type: string
-        format: time
+      durationMinutes:
+        type: integer
+        minimum: 1
+        maximum: 1440
       timezone:
         type: string
       primaryShift:

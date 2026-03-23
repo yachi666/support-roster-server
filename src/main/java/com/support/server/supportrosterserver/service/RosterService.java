@@ -36,6 +36,7 @@ public class RosterService {
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final ShiftDefinitionMapper shiftDefinitionMapper;
     private final StaffMapper staffMapper;
+    private final com.support.server.supportrosterserver.service.workspace.WorkspaceShiftTimeSupport shiftTimeSupport;
 
     public List<TeamDto> getAllTeams() {
         return workspaceTeamService.listViewerTeams();
@@ -78,18 +79,16 @@ public class RosterService {
 
         ZoneId sourceZone = toZoneId(shiftDefinition.getTimezone());
         ZonedDateTime start = assignment.getAssignmentDate().atTime(shiftDefinition.getStartTime() == null ? LocalTime.MIDNIGHT : shiftDefinition.getStartTime()).atZone(sourceZone);
-        ZonedDateTime end = assignment.getAssignmentDate().atTime(shiftDefinition.getEndTime() == null ? LocalTime.MIDNIGHT : shiftDefinition.getEndTime()).atZone(sourceZone);
-        if (shiftDefinition.getEndTime() != null && shiftDefinition.getStartTime() != null && shiftDefinition.getEndTime().isBefore(shiftDefinition.getStartTime())) {
-            end = end.plusDays(1);
-        }
+        int durationMinutes = shiftTimeSupport.resolveDurationMinutes(shiftDefinition);
+        ZonedDateTime end = start.plusMinutes(durationMinutes == 0 ? 0 : durationMinutes);
 
         ShiftDto dto = new ShiftDto();
         dto.setId(String.valueOf(assignment.getId()));
-        dto.setTeamId(team.getTeamCode());
+        dto.setTeamId(String.valueOf(team.getId()));
         dto.setStaffId(staff.getId());
         dto.setUserName(staff.getName());
         dto.setUserAvatar(avatarUrlResolver.resolve(staff.getStaffCode()));
-        dto.setCode(assignment.getShiftCode());
+        dto.setCode(shiftDefinition.getCode());
         dto.setMeaning(shiftDefinition.getMeaning());
         dto.setStart(start.withZoneSameInstant(targetZone).toOffsetDateTime());
         dto.setEnd(end.withZoneSameInstant(targetZone).toOffsetDateTime());

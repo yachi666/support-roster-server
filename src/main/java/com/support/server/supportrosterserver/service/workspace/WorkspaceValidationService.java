@@ -34,6 +34,7 @@ import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -53,12 +54,15 @@ public class WorkspaceValidationService {
     private final ImportIssueMapper importIssueMapper;
     private final WorkspaceLookupService lookupService;
     private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
+    private final AuthContextService authContextService;
+    private final WorkspaceShiftTimeSupport shiftTimeSupport;
 
     public WorkspaceValidationResponse getValidation(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
         List<WorkspaceValidationIssueDto> issues = new ArrayList<>();
         issues.addAll(loadImportIssues(targetMonth));
         issues.addAll(validateLiveData(targetMonth));
+        issues = filterIssuesByReadableTeams(issues);
 
         long high = issues.stream().filter(issue -> "high".equalsIgnoreCase(issue.getSeverity())).count();
         long medium = issues.stream().filter(issue -> "medium".equalsIgnoreCase(issue.getSeverity())).count();
@@ -80,12 +84,10 @@ public class WorkspaceValidationService {
                 Collectors.mapping(ShiftDefinitionTeamRelEntity::getTeamId, Collectors.toSet())
             ));
 
-        Map<String, ShiftDefinitionEntity> shiftDefinitionByTeamAndCode = new HashMap<>();
+        Map<Long, ShiftDefinitionEntity> shiftDefinitionById = new HashMap<>();
         for (ShiftDefinitionEntity def : definitions) {
-            for (Long teamId : teamIdsByDefinitionId.getOrDefault(def.getId(), Set.of())) {
-                shiftDefinitionByTeamAndCode.put(teamId + "|" + def.getCode(), def);
-            }
-            if (def.getStartTime() == null || def.getEndTime() == null) {
+            shiftDefinitionById.put(def.getId(), def);
+            if (def.getStartTime() == null || shiftTimeSupport.resolveDurationMinutes(def) == 0) {
                 Long firstTeamId = teamIdsByDefinitionId.getOrDefault(def.getId(), Set.of()).stream().findFirst().orElse(def.getTeamId());
                 TeamEntity team = firstTeamId == null ? null : teamMap.get(firstTeamId);
                 issues.add(new WorkspaceValidationIssueDto(
@@ -145,13 +147,17 @@ public class WorkspaceValidationService {
             String teamDayKey = assignment.getTeamId() + "|" + assignment.getAssignmentDate();
             assignmentsByTeamDay.computeIfAbsent(teamDayKey, ignored -> new ArrayList<>()).add(assignment);
 
-            if (!shiftDefinitionByTeamAndCode.containsKey(assignment.getTeamId() + "|" + assignment.getShiftCode())) {
+            ShiftDefinitionEntity shiftDefinition = shiftDefinitionById.get(assignment.getShiftDefinitionId());
+            Set<Long> shiftDefinitionTeamIds = shiftDefinition == null
+                ? Set.of()
+                : teamIdsByDefinitionId.getOrDefault(assignment.getShiftDefinitionId(), Set.of());
+            if (shiftDefinition == null || !shiftDefinitionTeamIds.contains(assignment.getTeamId())) {
                 TeamEntity team = assignment.getTeamId() == null ? null : lookupService.teamMap().get(assignment.getTeamId());
                 issues.add(new WorkspaceValidationIssueDto(
                     idGenerator.getAndIncrement(),
                     "medium",
-                    "Invalid Shift Code",
-                    "Code '" + assignment.getShiftCode() + "' not found in shift definitions.",
+                    "Invalid Shift Definition",
+                    "Assignment references a shift definition that is missing or no longer available for the team.",
                     team == null ? "-" : team.getName(),
                     assignment.getAssignmentDate().format(DATE_FORMATTER),
                     false,
@@ -193,6 +199,10 @@ public class WorkspaceValidationService {
         List<ImportIssueEntity> importIssues = importIssueMapper.selectList(Wrappers.<ImportIssueEntity>lambdaQuery()
             .in(ImportIssueEntity::getId, requestedIds)
             .eq(ImportIssueEntity::getResolved, false));
+        for (ImportIssueEntity issue : importIssues) {
+            Long issueTeamId = issue.getTeamName() == null ? null : mapTeamNameToId(issue.getTeamName());
+            authContextService.requireWritableTeam(issueTeamId);
+        }
 
         List<Long> resolvedIds = new ArrayList<>();
         for (ImportIssueEntity issue : importIssues) {
@@ -245,6 +255,23 @@ public class WorkspaceValidationService {
                 RESOLUTION_KIND_IMPORT_ISSUE
             ))
             .toList();
+    }
+
+    private List<WorkspaceValidationIssueDto> filterIssuesByReadableTeams(List<WorkspaceValidationIssueDto> issues) {
+        return issues.stream()
+            .filter(issue -> {
+                if (issue.getTeam() == null || issue.getTeam().isBlank() || "-".equals(issue.getTeam())) {
+                    return true;
+                }
+                Long teamId = mapTeamNameToId(issue.getTeam());
+                return teamId == null || authContextService.canReadTeam(teamId);
+            })
+            .toList();
+    }
+
+    private Long mapTeamNameToId(String teamName) {
+        TeamEntity team = lookupService.findTeamByName(teamName);
+        return team == null ? null : team.getId();
     }
 
     private YearMonth resolveMonth(Integer year, Integer month) {

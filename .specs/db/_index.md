@@ -21,6 +21,8 @@
 | `ddl/002_workspace_team_migration.sql` | 增量脚本 | team 维度迁移 |
 | `ddl/003_workspace_shift_definition_team_rel.sql` | 增量脚本 | 班次定义与团队多对多关联 |
 | `ddl/004_workspace_shift_definition_conflict_audit_cleanup.sql` | 增量脚本 | 冲突审计清理 |
+| `ddl/005_workspace_auth_tables.sql` | 增量脚本 | 账号、team 授权与 SSO 预留字段 |
+| `ddl/006_auth_bootstrap_admin_seed.sql` | 初始化模板 | 首个管理员 staff 数据准备与引导说明 |
 
 ## 维护提示
 

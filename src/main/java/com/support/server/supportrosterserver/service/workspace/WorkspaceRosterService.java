@@ -33,6 +33,7 @@ import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,6 +48,8 @@ public class WorkspaceRosterService {
     private final WorkspaceLookupService lookupService;
     private final WorkspaceValidationService validationService;
     private final AvatarUrlResolver avatarUrlResolver;
+    private final AuthContextService authContextService;
+    private final WorkspaceShiftTimeSupport shiftTimeSupport;
 
     public WorkspaceMonthlyRosterResponse getMonthlyRoster(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
@@ -54,22 +57,30 @@ public class WorkspaceRosterService {
 
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
             .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth()));
+        Map<Long, ShiftDefinitionEntity> shiftDefinitionById = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery())
+            .stream()
+            .collect(Collectors.toMap(ShiftDefinitionEntity::getId, definition -> definition));
         for (RosterAssignmentEntity assignment : assignments) {
-            scheduleMap.put(assignment.getStaffId() + "|" + assignment.getAssignmentDate().getDayOfMonth(), assignment.getShiftCode());
+            ShiftDefinitionEntity definition = shiftDefinitionById.get(assignment.getShiftDefinitionId());
+            String displayCode = definition == null || definition.getCode() == null || definition.getCode().isBlank()
+                ? assignment.getShiftCode()
+                : definition.getCode();
+            scheduleMap.put(assignment.getStaffId() + "|" + assignment.getAssignmentDate().getDayOfMonth(), displayCode);
         }
 
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
+        List<Long> readableTeamIds = authContextService.readableTeamIds();
         Map<Long, List<StaffEntity>> staffByTeamId = new LinkedHashMap<>();
         for (StaffEntity staff : staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery().orderByAsc(StaffEntity::getName))) {
             TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
-            if (team != null && Boolean.TRUE.equals(team.getVisible())) {
+            if (team != null && Boolean.TRUE.equals(team.getVisible()) && readableTeamIds.contains(team.getId())) {
                 staffByTeamId.computeIfAbsent(team.getId(), ignored -> new ArrayList<>()).add(staff);
             }
         }
 
         List<WorkspaceRosterGroupDto> groups = new ArrayList<>();
         for (TeamEntity team : lookupService.listTeams()) {
-            if (!Boolean.TRUE.equals(team.getVisible())) {
+            if (!Boolean.TRUE.equals(team.getVisible()) || !readableTeamIds.contains(team.getId())) {
                 continue;
             }
             List<WorkspaceRosterPersonDto> persons = new ArrayList<>();
@@ -90,18 +101,15 @@ public class WorkspaceRosterService {
             groups.add(new WorkspaceRosterGroupDto(team.getId(), team.getName(), team.getColor(), persons));
         }
 
-        List<ShiftDefinitionEntity> visibleShiftDefinitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
-                .eq(ShiftDefinitionEntity::getVisible, true)
-                .orderByAsc(ShiftDefinitionEntity::getTeamId)
-                .orderByAsc(ShiftDefinitionEntity::getCode));
+        List<ShiftDefinitionEntity> visibleShiftDefinitions = shiftDefinitionById.values().stream()
+            .filter(shiftDefinition -> Boolean.TRUE.equals(shiftDefinition.getVisible()))
+            .sorted(java.util.Comparator
+                .comparing(ShiftDefinitionEntity::getTeamId, java.util.Comparator.nullsLast(Long::compareTo))
+                .thenComparing(ShiftDefinitionEntity::getCode, java.util.Comparator.nullsLast(String::compareTo)))
+            .toList();
         Map<Long, List<Long>> teamIdsByShiftDefinitionId = loadTeamIdsByShiftDefinitionId(visibleShiftDefinitions.stream()
             .map(ShiftDefinitionEntity::getId)
             .toList());
-
-        List<String> shiftOptions = visibleShiftDefinitions.stream()
-            .map(ShiftDefinitionEntity::getCode)
-            .distinct()
-            .toList();
 
         Map<Long, List<String>> shiftCodeOptionsByTeam = new LinkedHashMap<>();
         Map<String, String> shiftCodeColorMap = new HashMap<>();
@@ -118,6 +126,9 @@ public class WorkspaceRosterService {
             }
 
             for (Long teamId : teamIdsByShiftDefinitionId.getOrDefault(shiftDefinition.getId(), List.of())) {
+                if (!readableTeamIds.contains(teamId)) {
+                    continue;
+                }
                 shiftCodeOptionsByTeam.computeIfAbsent(teamId, ignored -> new ArrayList<>());
                 if (!shiftCodeOptionsByTeam.get(teamId).contains(shiftDefinition.getCode())) {
                     shiftCodeOptionsByTeam.get(teamId).add(shiftDefinition.getCode());
@@ -126,6 +137,11 @@ public class WorkspaceRosterService {
                     .put(shiftDefinition.getCode(), detail);
             }
         }
+
+        List<String> shiftOptions = shiftCodeOptionsByTeam.values().stream()
+            .flatMap(List::stream)
+            .distinct()
+            .toList();
 
         String validationWarning = validationService.validateLiveData(targetMonth).stream()
             .filter(issue -> "high".equalsIgnoreCase(issue.getSeverity()))
@@ -153,6 +169,7 @@ public class WorkspaceRosterService {
             if (staff == null) {
                 throw new ResourceNotFoundException("Staff", "id", update.getStaffId());
             }
+            authContextService.requireWritableTeam(staff.getTeamId());
 
             LocalDate date = targetMonth.atDay(update.getDay());
             RosterAssignmentEntity existing = rosterAssignmentMapper.selectOne(Wrappers.<RosterAssignmentEntity>lambdaQuery()
@@ -186,7 +203,7 @@ public class WorkspaceRosterService {
             existing.setRoleGroupId(null);
             existing.setTeamId(team.getId());
             existing.setShiftDefinitionId(shiftDefinition.getId());
-            existing.setShiftCode(shiftCode);
+            existing.setShiftCode(shiftDefinition.getCode());
             existing.setSourceType("MANUAL");
             existing.setNotes(null);
 
@@ -248,16 +265,19 @@ public class WorkspaceRosterService {
 
     private WorkspaceRosterShiftDetailDto toShiftDetail(ShiftDefinitionEntity shiftDefinition) {
         LocalTime startTime = shiftDefinition.getStartTime();
-        LocalTime endTime = shiftDefinition.getEndTime();
+        int durationMinutes = shiftTimeSupport.resolveDurationMinutes(shiftDefinition);
+        LocalTime endTime = shiftTimeSupport.deriveEndTime(startTime, durationMinutes == 0 ? null : durationMinutes);
         return new WorkspaceRosterShiftDetailDto(
+            shiftDefinition.getId(),
             shiftDefinition.getCode(),
             shiftDefinition.getMeaning(),
             startTime,
             endTime,
+            durationMinutes == 0 ? null : durationMinutes,
             lookupService.normalizeWorkspaceTimezone(shiftDefinition.getTimezone()),
             shiftDefinition.getPrimaryShift(),
             shiftDefinition.getColorHex(),
-            startTime != null && endTime != null && !endTime.isAfter(startTime)
+            shiftTimeSupport.isOvernight(startTime, durationMinutes == 0 ? null : durationMinutes)
         );
     }
 }
