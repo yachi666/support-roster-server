@@ -78,10 +78,7 @@ public class WorkspaceAccessPolicyService {
         List<PageDefinition> configurableDefinitions = PAGE_DEFINITIONS.values().stream()
             .filter(PageDefinition::configurable)
             .toList();
-
-        if (requestedPolicies.size() != configurableDefinitions.size()) {
-            throw new BadRequestException("All configurable workspace page policies must be provided.");
-        }
+        requestedPolicies.keySet().forEach(this::requireDefinition);
 
         for (PageDefinition definition : configurableDefinitions) {
             WorkspacePageAccessPolicyDto requested = requestedPolicies.get(definition.pageCode());

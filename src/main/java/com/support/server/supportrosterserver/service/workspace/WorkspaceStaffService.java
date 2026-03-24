@@ -14,11 +14,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffUpsertRequest;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
@@ -33,6 +35,7 @@ public class WorkspaceStaffService {
     private final StaffMapper staffMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
+    private final WorkspaceAccountMapper workspaceAccountMapper;
     private final AuthContextService authContextService;
 
     public List<WorkspaceStaffDto> listStaff(String keyword) {
@@ -84,8 +87,10 @@ public class WorkspaceStaffService {
         }
         authContextService.requireWritableTeam(entity.getTeamId());
         authContextService.requireWritableTeam(request.getTeamId());
+        String previousStaffCode = entity.getStaffCode();
         apply(entity, request);
         staffMapper.updateById(entity);
+        syncLinkedAccountStaffCode(entity.getId(), previousStaffCode, entity.getStaffCode());
         return getStaff(id);
     }
 
@@ -181,5 +186,19 @@ public class WorkspaceStaffService {
         entity.setStatus(request.getStatus() == null || request.getStatus().isBlank() ? "Active" : request.getStatus());
         entity.setAvatar(request.getAvatar());
         entity.setNotes(request.getNotes());
+    }
+
+    private void syncLinkedAccountStaffCode(Long staffId, String previousStaffCode, String currentStaffCode) {
+        if (staffId == null || java.util.Objects.equals(previousStaffCode, currentStaffCode)) {
+            return;
+        }
+        WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
+            .eq(WorkspaceAccountEntity::getStaffId, staffId)
+            .last("limit 1"));
+        if (account == null) {
+            return;
+        }
+        account.setStaffCode(currentStaffCode);
+        workspaceAccountMapper.updateById(account);
     }
 }

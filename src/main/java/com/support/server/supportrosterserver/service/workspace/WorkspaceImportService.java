@@ -747,8 +747,10 @@ public class WorkspaceImportService {
     }
 
     private WorkspaceValidationIssueDto toDto(ImportIssueEntity issue) {
+        TeamEntity team = issue.getTeamName() == null ? null : lookupService.findTeamByName(issue.getTeamName());
         return new WorkspaceValidationIssueDto(
             issue.getId(),
+            team == null ? null : team.getId(),
             issue.getSeverity(),
             issue.getIssueType(),
             issue.getDescription(),

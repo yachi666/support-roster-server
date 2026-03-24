@@ -64,7 +64,7 @@ support:
 sa-token:
   token-name: Authorization
   token-prefix: Bearer
-  jwt-secret-key: ${SA_TOKEN_JWT_SECRET_KEY:support-roster-dev-jwt-default-key-2026-change-before-production}
+  jwt-secret-key: ${SA_TOKEN_JWT_SECRET_KEY}
   is-read-header: true
   is-read-cookie: false
   is-read-body: false
