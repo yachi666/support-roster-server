@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffDto;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffBatchCreateRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffUpsertRequest;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceStaffService;
 
@@ -41,6 +42,11 @@ public class WorkspaceStaffController {
     @PostMapping
     public ResponseEntity<WorkspaceStaffDto> createStaff(@Valid @RequestBody WorkspaceStaffUpsertRequest request) {
         return ResponseEntity.ok(workspaceStaffService.createStaff(request));
+    }
+
+    @PostMapping("/batch")
+    public ResponseEntity<List<WorkspaceStaffDto>> createStaffBatch(@Valid @RequestBody WorkspaceStaffBatchCreateRequest request) {
+        return ResponseEntity.ok(workspaceStaffService.createStaffBatch(request));
     }
 
     @PutMapping("/{id}")

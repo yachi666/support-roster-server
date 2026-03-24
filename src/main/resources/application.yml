@@ -55,6 +55,8 @@ management:
 support:
   avatar:
     base-url: https://photos.global.image/casual/square
+  employee:
+    base-url: ${SUPPORT_EMPLOYEE_BASE_URL:https://api.heet.uk}
   auth:
     bootstrap-admin-staff-code: ${SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE:}
   logging:

@@ -44,6 +44,8 @@ paths:
     $ref: ./paths/workspace/role-groups.yaml#/roleGroupCollection
   /workspace/staff:
     $ref: ./paths/workspace/staff.yaml#/staffCollection
+  /workspace/staff/batch:
+    $ref: ./paths/workspace/staff.yaml#/staffBatchCreate
   /workspace/staff/{id}:
     $ref: ./paths/workspace/staff.yaml#/staffItem
   /workspace/shift-definitions:
