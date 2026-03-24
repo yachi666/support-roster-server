@@ -19,22 +19,22 @@ import com.support.server.supportrosterserver.config.SupportEmployeeProperties;
 import com.support.server.supportrosterserver.dto.employee.EmployeeDirectoryLookupResponse;
 import com.support.server.supportrosterserver.exception.BadRequestException;
 
-@Component
-public class EmployeeDirectoryClient {
+    @Component
+    public class EmployeeDirectoryClient {
 
-    private final RestClient restClient;
+        private final RestClient restClient;
 
-    public EmployeeDirectoryClient(RestClient.Builder restClientBuilder, SupportEmployeeProperties properties) {
-        SSLContext sslContext;
-        try {
-            sslContext = SSLContextBuilder.create()
-                .loadTrustMaterial(null, TrustAllStrategy.INSTANCE)
-                .build();
+        public EmployeeDirectoryClient(SupportEmployeeProperties properties) {
+            SSLContext sslContext;
+            try {
+                sslContext = SSLContextBuilder.create()
+                    .loadTrustMaterial(null, TrustAllStrategy.INSTANCE)
+                    .build();
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to initialize employee lookup TLS settings.", ex);
         }
 
-        this.restClient = restClientBuilder
+        this.restClient = RestClient.builder()
             .requestFactory(new HttpComponentsClientHttpRequestFactory(
                 HttpClients.custom()
                     .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()

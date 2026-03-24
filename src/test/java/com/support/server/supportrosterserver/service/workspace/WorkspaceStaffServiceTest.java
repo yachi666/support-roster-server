@@ -146,6 +146,47 @@ class WorkspaceStaffServiceTest {
         Assertions.assertEquals("Duplicate staff IDs in request: A001", exception.getMessage());
     }
 
+    @Test
+    void shouldFallbackToStaffIdWhenEmployeeLookupFails() {
+        Map<Long, StaffEntity> insertedStaff = new LinkedHashMap<>();
+        when(staffMapper.insert(any(StaffEntity.class))).thenAnswer(invocation -> {
+            StaffEntity entity = invocation.getArgument(0);
+            long id = insertedStaff.size() + 1L;
+            StaffEntity stored = new StaffEntity();
+            stored.setId(id);
+            stored.setStaffCode(entity.getStaffCode());
+            stored.setName(entity.getName());
+            stored.setEmail(entity.getEmail());
+            stored.setRegion(entity.getRegion());
+            stored.setTimezone(entity.getTimezone());
+            stored.setRoleName(entity.getRoleName());
+            stored.setTeamId(entity.getTeamId());
+            stored.setStatus(entity.getStatus());
+            stored.setNotes(entity.getNotes());
+            entity.setId(id);
+            insertedStaff.put(id, stored);
+            return 1;
+        });
+        when(staffMapper.selectById(anyLong())).thenAnswer(invocation -> insertedStaff.get(invocation.getArgument(0)));
+        when(employeeDirectoryClient.getEmployee("A404")).thenThrow(new IllegalStateException("lookup failed"));
+
+        WorkspaceStaffBatchCreateRequest request = new WorkspaceStaffBatchCreateRequest();
+        request.setStaffCodes(List.of("A404"));
+        request.setTeamId(10L);
+        request.setTimezone("UTC");
+        request.setStatus("ACTIVE");
+
+        var createdStaff = workspaceStaffService.createStaffBatch(request);
+
+        Assertions.assertEquals(1, createdStaff.size());
+        Assertions.assertEquals("A404", createdStaff.get(0).getStaffCode());
+        Assertions.assertEquals("A404", createdStaff.get(0).getName());
+        Assertions.assertNull(createdStaff.get(0).getEmail());
+        Assertions.assertNull(createdStaff.get(0).getRegion());
+        Assertions.assertNull(createdStaff.get(0).getRoleName());
+        Assertions.assertEquals("ACTIVE", createdStaff.get(0).getStatus());
+    }
+
     private TeamEntity buildTeam(Long id, String name) {
         TeamEntity team = new TeamEntity();
         team.setId(id);
