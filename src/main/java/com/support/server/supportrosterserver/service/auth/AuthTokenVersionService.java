@@ -5,8 +5,8 @@ import org.springframework.stereotype.Service;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
 
 import cn.dev33.satoken.exception.NotLoginException;
-import cn.dev33.satoken.stp.SaLoginModel;
 import cn.dev33.satoken.stp.StpUtil;
+import cn.dev33.satoken.stp.parameter.SaLoginParameter;
 
 @Service
 public class AuthTokenVersionService {
@@ -27,8 +27,8 @@ public class AuthTokenVersionService {
         return nextVersion;
     }
 
-    public SaLoginModel createLoginModel(WorkspaceAccountEntity account) {
-        return SaLoginModel.create()
+    public SaLoginParameter createLoginModel(WorkspaceAccountEntity account) {
+        return SaLoginParameter.create()
             .setExtra(TOKEN_VERSION_EXTRA_KEY, currentTokenVersion(account));
     }
 
