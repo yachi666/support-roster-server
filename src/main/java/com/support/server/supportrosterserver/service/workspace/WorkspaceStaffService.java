@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class WorkspaceStaffService {
+
+    private static final Logger log = LogManager.getLogger(WorkspaceStaffService.class);
 
     private final AvatarUrlResolver avatarUrlResolver;
     private final EmployeeDirectoryClient employeeDirectoryClient;
@@ -98,7 +102,7 @@ public class WorkspaceStaffService {
 
         List<WorkspaceStaffDto> createdStaff = new ArrayList<>();
         for (String staffCode : staffCodes) {
-            EmployeeDirectoryLookupResponse employee = employeeDirectoryClient.getEmployee(staffCode);
+            EmployeeDirectoryLookupResponse employee = lookupEmployeeSafely(staffCode);
             StaffEntity entity = new StaffEntity();
             applyEmployeeLookup(entity, staffCode, employee, request);
             staffMapper.insert(entity);
@@ -223,18 +227,35 @@ public class WorkspaceStaffService {
             EmployeeDirectoryLookupResponse employee,
             WorkspaceStaffBatchCreateRequest request) {
         entity.setStaffCode(staffCode);
-        entity.setName(normalizeRequiredText(employee.displayName(), "Employee display name is missing for staff ID " + staffCode + "."));
-        entity.setEmail(normalizeOptionalText(employee.emailAddress()));
+        entity.setName(resolveEmployeeName(staffCode, employee));
+        entity.setEmail(employee == null ? null : normalizeOptionalText(employee.emailAddress()));
         entity.setPhone(null);
         entity.setSlack(null);
-        entity.setRegion(buildRegion(employee.city(), employee.country()));
+        entity.setRegion(employee == null ? null : buildRegion(employee.city(), employee.country()));
         entity.setTimezone(lookupService.normalizeWorkspaceTimezone(normalizeOptionalText(request.getTimezone())));
-        entity.setRoleName(normalizeOptionalText(employee.roleFromLDAP()));
+        entity.setRoleName(employee == null ? null : normalizeOptionalText(employee.roleFromLDAP()));
         entity.setTeamId(request.getTeamId());
         entity.setRoleGroupId(null);
         entity.setStatus(resolveStatus(request.getStatus()));
         entity.setAvatar(null);
         entity.setNotes(normalizeOptionalText(request.getNotes()));
+    }
+
+    private EmployeeDirectoryLookupResponse lookupEmployeeSafely(String staffCode) {
+        try {
+            return employeeDirectoryClient.getEmployee(staffCode);
+        } catch (RuntimeException ex) {
+            log.warn("Employee lookup failed for staff ID {}. Falling back to minimal staff profile.", staffCode, ex);
+            return null;
+        }
+    }
+
+    private String resolveEmployeeName(String staffCode, EmployeeDirectoryLookupResponse employee) {
+        if (employee == null) {
+            return staffCode;
+        }
+        String displayName = normalizeOptionalText(employee.displayName());
+        return displayName == null ? staffCode : displayName;
     }
 
     private void ensureBatchDoesNotContainDuplicates(List<String> staffCodes) {
