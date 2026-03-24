@@ -6,6 +6,7 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,12 +54,38 @@ public class WorkspaceRosterService {
     public WorkspaceMonthlyRosterResponse getMonthlyRoster(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
         Map<String, String> scheduleMap = new HashMap<>();
+        Set<Long> readableTeamIds = new LinkedHashSet<>(authContextService.readableTeamIds());
+        if (readableTeamIds.isEmpty()) {
+            return new WorkspaceMonthlyRosterResponse(
+                targetMonth.getYear(),
+                targetMonth.getMonthValue(),
+                List.of(),
+                List.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                ""
+            );
+        }
 
         List<RosterAssignmentEntity> assignments = rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
-            .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth()));
-        Map<Long, ShiftDefinitionEntity> shiftDefinitionById = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery())
-            .stream()
-            .collect(Collectors.toMap(ShiftDefinitionEntity::getId, definition -> definition));
+            .between(RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth())
+            .in(!readableTeamIds.isEmpty(), RosterAssignmentEntity::getTeamId, readableTeamIds));
+
+        List<ShiftDefinitionTeamRelEntity> visibleShiftRelations = shiftDefinitionTeamRelMapper.selectList(
+            Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                .in(!readableTeamIds.isEmpty(), ShiftDefinitionTeamRelEntity::getTeamId, readableTeamIds)
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getTeamId)
+        );
+        Set<Long> visibleShiftDefinitionIds = visibleShiftRelations.stream()
+            .map(ShiftDefinitionTeamRelEntity::getShiftDefinitionId)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, ShiftDefinitionEntity> shiftDefinitionById = visibleShiftDefinitionIds.isEmpty()
+            ? Map.of()
+            : shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery()
+                    .in(ShiftDefinitionEntity::getId, visibleShiftDefinitionIds))
+                .stream()
+                .collect(Collectors.toMap(ShiftDefinitionEntity::getId, definition -> definition));
         for (RosterAssignmentEntity assignment : assignments) {
             ShiftDefinitionEntity definition = shiftDefinitionById.get(assignment.getShiftDefinitionId());
             String displayCode = definition == null || definition.getCode() == null || definition.getCode().isBlank()
@@ -68,9 +95,10 @@ public class WorkspaceRosterService {
         }
 
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
-        List<Long> readableTeamIds = authContextService.readableTeamIds();
         Map<Long, List<StaffEntity>> staffByTeamId = new LinkedHashMap<>();
-        for (StaffEntity staff : staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery().orderByAsc(StaffEntity::getName))) {
+        for (StaffEntity staff : staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()
+                .in(!readableTeamIds.isEmpty(), StaffEntity::getTeamId, readableTeamIds)
+                .orderByAsc(StaffEntity::getName))) {
             TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
             if (team != null && Boolean.TRUE.equals(team.getVisible()) && readableTeamIds.contains(team.getId())) {
                 staffByTeamId.computeIfAbsent(team.getId(), ignored -> new ArrayList<>()).add(staff);
@@ -106,9 +134,12 @@ public class WorkspaceRosterService {
                 .comparing(ShiftDefinitionEntity::getTeamId, java.util.Comparator.nullsLast(Long::compareTo))
                 .thenComparing(ShiftDefinitionEntity::getCode, java.util.Comparator.nullsLast(String::compareTo)))
             .toList();
-        Map<Long, List<Long>> teamIdsByShiftDefinitionId = loadTeamIdsByShiftDefinitionId(visibleShiftDefinitions.stream()
-            .map(ShiftDefinitionEntity::getId)
-            .toList());
+        Map<Long, List<Long>> teamIdsByShiftDefinitionId = visibleShiftRelations.stream()
+            .collect(Collectors.groupingBy(
+                ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
+                LinkedHashMap::new,
+                Collectors.mapping(ShiftDefinitionTeamRelEntity::getTeamId, Collectors.toList())
+            ));
 
         Map<Long, List<String>> shiftCodeOptionsByTeam = new LinkedHashMap<>();
         Map<String, String> shiftCodeColorMap = new HashMap<>();

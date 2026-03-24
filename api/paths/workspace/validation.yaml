@@ -5,6 +5,13 @@ validation:
     parameters:
       - $ref: ../../components/common.yaml#/parameters/YearParam
       - $ref: ../../components/common.yaml#/parameters/MonthParam
+      - name: summaryOnly
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: Return only summary and topIssue for lightweight surfaces such as the roster page and workspace sidebar.
     responses:
       '200':
         description: Validation result

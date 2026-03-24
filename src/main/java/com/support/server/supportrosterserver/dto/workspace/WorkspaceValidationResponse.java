@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class WorkspaceValidationResponse {
     private WorkspaceValidationSummaryDto summary;
     private List<WorkspaceValidationIssueDto> issues;
+    private WorkspaceValidationIssueDto topIssue;
 }

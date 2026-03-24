@@ -7,7 +7,7 @@
 ## 资源范围
 
 - 接口：`GET /api/workspace/validation`
-- 参数：`year`、`month`
+- 参数：`year`、`month`、`summaryOnly`
 - Controller：`WorkspaceValidationController`
 - 输出模型：`WorkspaceValidationResponse`
 
@@ -27,9 +27,11 @@
 | 字段 | 说明 |
 |---|---|
 | `summary` | 按 `high`、`medium`、`low` 汇总问题数量 |
+| `topIssue` | 当前月份最高优先级的阻塞型（`high`）问题；若没有 `high` 问题则为空，供月排班页展示警告 |
 | `issues` | 问题列表，每项包含 `severity`、`type`、`description`、`team`、`date` |
 
 > `issues[].id` 在 JSON 中按字符串传输，避免浏览器对超大 `Long` 出现精度截断。
+> 当 `summaryOnly=true` 时，接口仍返回 `summary` 与 `topIssue`，但 `issues` 可为空数组，供月排班页和侧边栏减少无谓的明细传输。`topIssue` 只代表 `high` 严重级别问题，不会把 medium / low 提升为主警告。
 
 ## 核心规则
 
@@ -57,12 +59,14 @@
 |---|---|---|---|---|---|
 | `GET /api/workspace/validation` | query | `year` | `Integer year` | 否 | 年份 |
 | `GET /api/workspace/validation` | query | `month` | `Integer month` | 否 | 月份 |
+| `GET /api/workspace/validation` | query | `summaryOnly` | `Boolean summaryOnly` | 否 | 是否仅返回摘要和最高优先级问题 |
 
 ### 响应 DTO 字段
 
 | DTO 字段 | OpenAPI 字段 | 说明 |
 |---|---|---|
 | `summary` | `summary` | 汇总对象 |
+| `topIssue` | `topIssue` | 最高优先级的 `high` 问题；无 `high` 时为空 |
 | `issues` | `issues` | 问题列表 |
 
 ### 子 DTO 字段
@@ -83,3 +87,4 @@
 
 - 新增校验规则时，应同时评估其是否影响导入预览、排班保存提示与问题严重级别。
 - 若问题模型变更，应先保持导入预览与校验中心的一致性，再调整前端展示。
+- 若新增轻量消费方，应优先复用 `summaryOnly=true` 模式，而不是为摘要场景重复拉取完整 `issues` 列表。
