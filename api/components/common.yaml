@@ -326,7 +326,7 @@ schemas:
 
   WorkspaceStaffUpsertRequest:
     type: object
-    required: [staffCode, name, roleGroupId]
+    required: [staffCode, name, teamId]
     properties:
       staffCode:
         type: string
@@ -344,11 +344,28 @@ schemas:
         type: string
       roleName:
         type: string
-      roleGroupId:
+      teamId:
         type: string
       status:
         type: string
       avatar:
+        type: string
+      notes:
+        type: string
+
+  WorkspaceStaffBatchCreateRequest:
+    type: object
+    required: [staffCodes, teamId]
+    properties:
+      staffCodes:
+        type: array
+        items:
+          type: string
+      teamId:
+        type: string
+      timezone:
+        type: string
+      status:
         type: string
       notes:
         type: string

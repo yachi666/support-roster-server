@@ -36,6 +36,28 @@ staffCollection:
       '400':
         $ref: ../../components/common.yaml#/responses/BadRequest
 
+staffBatchCreate:
+  post:
+    tags: [Workspace Staff]
+    summary: Batch create workspace staff from staff IDs
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceStaffBatchCreateRequest
+    responses:
+      '200':
+        description: Created staff list
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../../components/common.yaml#/schemas/WorkspaceStaff
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+
 staffItem:
   get:
     tags: [Workspace Staff]
