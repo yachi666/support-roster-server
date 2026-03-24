@@ -26,16 +26,19 @@ class AuthServiceTest {
 
     private WorkspaceAccountMapper workspaceAccountMapper;
     private PasswordEncoder passwordEncoder;
+    private AuthTokenVersionService authTokenVersionService;
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         workspaceAccountMapper = mock(WorkspaceAccountMapper.class);
         passwordEncoder = mock(PasswordEncoder.class);
+        authTokenVersionService = mock(AuthTokenVersionService.class);
         authService = new AuthService(
             workspaceAccountMapper,
             mock(StaffMapper.class),
             mock(AuthContextService.class),
+            authTokenVersionService,
             mock(WorkspaceOperationLogService.class),
             mock(WorkspaceLookupService.class),
             passwordEncoder

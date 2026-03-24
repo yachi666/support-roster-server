@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS workspace_account (
     external_subject VARCHAR(255),
     notes TEXT,
     last_login_at TIMESTAMP,
+    token_version BIGINT NOT NULL DEFAULT 1,
     deleted INTEGER NOT NULL DEFAULT 0,
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -211,7 +212,7 @@ ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS workspace_roster_assignment (
     id BIGINT PRIMARY KEY,
     staff_id BIGINT NOT NULL REFERENCES workspace_staff (id),
-    role_group_id BIGINT NOT NULL REFERENCES workspace_role_group (id),
+    role_group_id BIGINT REFERENCES workspace_role_group (id),
     team_id BIGINT NOT NULL REFERENCES workspace_team (id),
     shift_definition_id BIGINT NOT NULL REFERENCES workspace_shift_definition (id),
     assignment_date DATE NOT NULL,

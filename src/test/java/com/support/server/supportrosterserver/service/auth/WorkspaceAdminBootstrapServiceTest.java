@@ -26,6 +26,7 @@ class WorkspaceAdminBootstrapServiceTest {
     private WorkspaceAccountMapper workspaceAccountMapper;
     private WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private WorkspaceOperationLogService workspaceOperationLogService;
+    private AuthTokenVersionService authTokenVersionService;
 
     @BeforeEach
     void setUp() {
@@ -33,6 +34,7 @@ class WorkspaceAdminBootstrapServiceTest {
         workspaceAccountMapper = mock(WorkspaceAccountMapper.class);
         workspaceAccountTeamScopeMapper = mock(WorkspaceAccountTeamScopeMapper.class);
         workspaceOperationLogService = mock(WorkspaceOperationLogService.class);
+        authTokenVersionService = mock(AuthTokenVersionService.class);
     }
 
     @Test
@@ -100,7 +102,8 @@ class WorkspaceAdminBootstrapServiceTest {
             staffMapper,
             workspaceAccountMapper,
             workspaceAccountTeamScopeMapper,
-            workspaceOperationLogService
+            workspaceOperationLogService,
+            authTokenVersionService
         );
     }
 }

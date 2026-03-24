@@ -39,6 +39,8 @@ public class WorkspaceAccountEntity extends BaseEntity {
 
     private LocalDateTime lastLoginAt;
 
+    private Long tokenVersion;
+
     @TableLogic
     private Integer deleted;
 }

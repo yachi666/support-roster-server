@@ -309,10 +309,13 @@ public class WorkspaceValidationService {
             }
 
             incrementSummary(severity);
+            Long teamId = team == null || team.isBlank() || "-".equals(team)
+                ? null
+                : teamIdByName.get(normalizeTeamName(team));
 
             WorkspaceValidationIssueDto issueForTop = null;
             if (collectIssues || (topIssue == null && "high".equalsIgnoreCase(severity))) {
-                issueForTop = new WorkspaceValidationIssueDto(id, severity, type, description, team, date, resolvable, resolutionKind);
+                issueForTop = new WorkspaceValidationIssueDto(id, teamId, severity, type, description, team, date, resolvable, resolutionKind);
             }
 
             if (collectIssues) {

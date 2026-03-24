@@ -9,3 +9,6 @@ support:
   logging:
     file:
       path: logs
+
+sa-token:
+  jwt-secret-key: ${SA_TOKEN_JWT_SECRET_KEY:support-roster-dev-jwt-local-only-key-2026-change-before-production}

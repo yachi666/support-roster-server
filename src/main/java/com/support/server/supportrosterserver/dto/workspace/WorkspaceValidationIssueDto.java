@@ -12,6 +12,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 public class WorkspaceValidationIssueDto {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long teamId;
     private String severity;
     private String type;
     private String description;

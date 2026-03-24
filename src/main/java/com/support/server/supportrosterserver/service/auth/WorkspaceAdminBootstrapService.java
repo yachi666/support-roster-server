@@ -30,19 +30,22 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
     private final WorkspaceAccountMapper workspaceAccountMapper;
     private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private final WorkspaceOperationLogService workspaceOperationLogService;
+    private final AuthTokenVersionService authTokenVersionService;
 
     public WorkspaceAdminBootstrapService(
         @Value("${support.auth.bootstrap-admin-staff-code:}") String bootstrapAdminStaffCode,
         StaffMapper staffMapper,
         WorkspaceAccountMapper workspaceAccountMapper,
         WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper,
-        WorkspaceOperationLogService workspaceOperationLogService
+        WorkspaceOperationLogService workspaceOperationLogService,
+        AuthTokenVersionService authTokenVersionService
     ) {
         this.bootstrapAdminStaffCode = bootstrapAdminStaffCode == null ? "" : bootstrapAdminStaffCode.trim();
         this.staffMapper = staffMapper;
         this.workspaceAccountMapper = workspaceAccountMapper;
         this.workspaceAccountTeamScopeMapper = workspaceAccountTeamScopeMapper;
         this.workspaceOperationLogService = workspaceOperationLogService;
+        this.authTokenVersionService = authTokenVersionService;
     }
 
     @Override
@@ -85,6 +88,7 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
         account.setExternalSubject(null);
         account.setNotes("Bootstrap admin account from support.auth.bootstrap-admin-staff-code");
         account.setLastLoginAt(null);
+        account.setTokenVersion(AuthTokenVersionService.INITIAL_TOKEN_VERSION);
         workspaceAccountMapper.insert(account);
         workspaceOperationLogService.log(
             "system",
@@ -117,6 +121,7 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
         }
 
         if (changed) {
+            authTokenVersionService.bumpTokenVersion(account);
             workspaceAccountMapper.updateById(account);
             workspaceOperationLogService.log(
                 "system",
