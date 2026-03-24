@@ -187,6 +187,6 @@ support-roster-server/
 
 ## License
 
-当前仓库尚未补充正式 License 文件。
+本仓库采用 [Apache License 2.0](./LICENSE) 发布。
 
-如果后续要按开源项目方式发布，建议在仓库根目录补充明确的许可证文件，并同步更新前后端 README。
+如无额外说明，仓库内源码与文档均按该许可证条款提供。
