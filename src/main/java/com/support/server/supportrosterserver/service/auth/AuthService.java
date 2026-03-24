@@ -34,11 +34,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final String AUTH_SOURCE_LOCAL_PASSWORD = "LOCAL_PASSWORD";
-
     private final WorkspaceAccountMapper workspaceAccountMapper;
     private final StaffMapper staffMapper;
     private final AuthContextService authContextService;
+    private final AuthTokenVersionService authTokenVersionService;
     private final WorkspaceOperationLogService workspaceOperationLogService;
     private final WorkspaceLookupService workspaceLookupService;
     private final PasswordEncoder passwordEncoder;
@@ -88,8 +87,14 @@ public class AuthService {
     @Transactional
     public void logout() {
         AuthenticatedAccount current = authContextService.requireLogin();
+        WorkspaceAccountEntity account = workspaceAccountMapper.selectById(current.accountId());
+        if (account == null) {
+            throw new ResourceNotFoundException("WorkspaceAccount", "id", current.accountId());
+        }
+        authTokenVersionService.bumpTokenVersion(account);
+        workspaceAccountMapper.updateById(account);
         workspaceOperationLogService.log(current.staffName(), "Logout workspace", "workspace_account", current.accountId(), "Manual logout");
-        StpUtil.logout(current.accountId());
+        StpUtil.logout();
     }
 
     @Transactional
@@ -106,8 +111,10 @@ public class AuthService {
         account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         account.setPasswordSetAt(LocalDateTime.now());
         account.setAccountStatus(AccountStatus.ACTIVE.getCode());
+        authTokenVersionService.bumpTokenVersion(account);
         workspaceAccountMapper.updateById(account);
         workspaceOperationLogService.log(current.staffName(), "Change password", "workspace_account", current.accountId(), "Password updated by current user");
+        StpUtil.logout();
     }
 
     private AuthCurrentUserDto toCurrentUserDto(AuthenticatedAccount current) {
@@ -173,7 +180,7 @@ public class AuthService {
     }
 
     private AuthLoginResponse establishSession(WorkspaceAccountEntity account, String loginDetail) {
-        StpUtil.login(account.getId());
+        StpUtil.login(account.getId(), authTokenVersionService.createLoginModel(account));
         account.setLastLoginAt(LocalDateTime.now());
         workspaceAccountMapper.updateById(account);
 

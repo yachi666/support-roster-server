@@ -49,12 +49,14 @@ public class WorkspaceOverviewService {
             new WorkspaceSummaryStatDto("Scheduled Assignments", String.valueOf(totalAssignments), "Imported and manual roster entries captured for the selected month", "neutral", Math.min(100, (int) totalAssignments))
         );
 
-        List<WorkspaceActivityDto> activity = operationLogMapper.selectList(Wrappers.<OperationLogEntity>lambdaQuery()
-                .orderByDesc(OperationLogEntity::getCreateTime)
-                .last("limit 8"))
-            .stream()
-            .map(log -> new WorkspaceActivityDto(log.getActor(), log.getAction(), formatRelative(log.getCreateTime())))
-            .toList();
+        List<WorkspaceActivityDto> activity = authContextService.isLoggedIn()
+            ? operationLogMapper.selectList(Wrappers.<OperationLogEntity>lambdaQuery()
+                    .orderByDesc(OperationLogEntity::getCreateTime)
+                    .last("limit 8"))
+                .stream()
+                .map(log -> new WorkspaceActivityDto(log.getActor(), log.getAction(), formatRelative(log.getCreateTime())))
+                .toList()
+            : List.of();
 
         List<WorkspaceQuickActionDto> quickActions = List.of(
             new WorkspaceQuickActionDto("Open Monthly Roster", "Continue editing the selected month", "teal", "roster"),

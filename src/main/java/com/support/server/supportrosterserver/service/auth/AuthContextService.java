@@ -34,6 +34,11 @@ public class AuthContextService {
     private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private final StaffMapper staffMapper;
     private final WorkspaceLookupService workspaceLookupService;
+    private final AuthTokenVersionService authTokenVersionService;
+
+    public boolean isLoggedIn() {
+        return StpUtil.isLogin();
+    }
 
     public AuthenticatedAccount requireLogin() {
         StpUtil.checkLogin();
@@ -49,6 +54,7 @@ public class AuthContextService {
         if (AccountStatus.DISABLED.getCode().equalsIgnoreCase(account.getAccountStatus())) {
             throw new ForbiddenException("Account is disabled.");
         }
+        authTokenVersionService.validateCurrentTokenVersion(account);
         StaffEntity staff = staffMapper.selectById(account.getStaffId());
         if (staff == null) {
             throw new ResourceNotFoundException("Staff", "id", account.getStaffId());
@@ -116,6 +122,9 @@ public class AuthContextService {
         if (teamId == null) {
             throw new ForbiddenException("Target team is required.");
         }
+        if (!isLoggedIn()) {
+            return;
+        }
         AuthenticatedAccount current = requireLogin();
         if (current.isAdmin() || current.isReadonly()) {
             return;
@@ -129,6 +138,9 @@ public class AuthContextService {
         if (teamIds == null || teamIds.isEmpty()) {
             return;
         }
+        if (!isLoggedIn()) {
+            return;
+        }
         AuthenticatedAccount current = requireLogin();
         if (current.isAdmin() || current.isReadonly()) {
             return;
@@ -140,6 +152,9 @@ public class AuthContextService {
     }
 
     public List<Long> readableTeamIds() {
+        if (!isLoggedIn()) {
+            return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
+        }
         AuthenticatedAccount current = requireLogin();
         if (current.isAdmin() || current.isReadonly()) {
             return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
@@ -161,6 +176,9 @@ public class AuthContextService {
     public boolean canReadTeam(Long teamId) {
         if (teamId == null) {
             return false;
+        }
+        if (!isLoggedIn()) {
+            return true;
         }
         AuthenticatedAccount current = requireLogin();
         return current.isAdmin() || current.isReadonly() || current.teamScopeIds().contains(teamId);

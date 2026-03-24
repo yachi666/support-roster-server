@@ -30,6 +30,7 @@ import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
 import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
+import com.support.server.supportrosterserver.service.auth.AuthTokenVersionService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -44,6 +45,7 @@ public class WorkspaceAccountService {
     private final StaffMapper staffMapper;
     private final WorkspaceLookupService workspaceLookupService;
     private final AuthContextService authContextService;
+    private final AuthTokenVersionService authTokenVersionService;
     private final WorkspaceOperationLogService workspaceOperationLogService;
 
     public List<WorkspaceAccountDto> listAccounts(String keyword) {
@@ -100,6 +102,7 @@ public class WorkspaceAccountService {
         account.setExternalSubject(null);
         account.setNotes(normalizeNotes(request.getNotes()));
         account.setLastLoginAt(null);
+        account.setTokenVersion(AuthTokenVersionService.INITIAL_TOKEN_VERSION);
         workspaceAccountMapper.insert(account);
         replaceTeamScopes(account.getId(), editableTeamIds);
 
@@ -118,8 +121,13 @@ public class WorkspaceAccountService {
 
         AccountRole role = resolveRole(request.getRoleCode());
         List<Long> editableTeamIds = normalizeEditableTeamIds(role, request.getEditableTeamIds());
+        boolean authChanged = !role.getCode().equalsIgnoreCase(account.getRoleCode())
+            || !currentEditableTeamIds(account.getId()).equals(editableTeamIds);
         account.setRoleCode(role.getCode());
         account.setNotes(normalizeNotes(request.getNotes()));
+        if (authChanged) {
+            authTokenVersionService.bumpTokenVersion(account);
+        }
         workspaceAccountMapper.updateById(account);
         replaceTeamScopes(account.getId(), editableTeamIds);
 
@@ -136,6 +144,7 @@ public class WorkspaceAccountService {
         account.setPasswordSetAt(null);
         account.setAccountStatus(AccountStatus.PENDING_ACTIVATION.getCode());
         account.setLastLoginAt(null);
+        authTokenVersionService.bumpTokenVersion(account);
         workspaceAccountMapper.updateById(account);
         AuthenticatedAccount current = authContextService.requireLogin();
         workspaceOperationLogService.log(current.staffName(), "Reset workspace password", "workspace_account", account.getId(), "Account moved to pending activation");
@@ -158,6 +167,7 @@ public class WorkspaceAccountService {
         authContextService.requireAdmin();
         WorkspaceAccountEntity account = requireAccount(id);
         account.setAccountStatus(AccountStatus.DISABLED.getCode());
+        authTokenVersionService.bumpTokenVersion(account);
         workspaceAccountMapper.updateById(account);
         AuthenticatedAccount current = authContextService.requireLogin();
         workspaceOperationLogService.log(current.staffName(), "Disable workspace account", "workspace_account", account.getId(), "Account disabled");
@@ -210,6 +220,15 @@ public class WorkspaceAccountService {
             scope.setTeamId(teamId);
             workspaceAccountTeamScopeMapper.insert(scope);
         }
+    }
+
+    private List<Long> currentEditableTeamIds(Long accountId) {
+        return workspaceAccountTeamScopeMapper.selectList(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
+                .eq(WorkspaceAccountTeamScopeEntity::getAccountId, accountId)
+                .orderByAsc(WorkspaceAccountTeamScopeEntity::getTeamId))
+            .stream()
+            .map(WorkspaceAccountTeamScopeEntity::getTeamId)
+            .toList();
     }
 
     private Map<Long, List<TeamEntity>> loadTeamsByAccountId(List<Long> accountIds) {

@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS workspace_account (
     external_subject VARCHAR(255),
     notes TEXT,
     last_login_at TIMESTAMP,
+    token_version BIGINT NOT NULL DEFAULT 1,
     deleted INTEGER NOT NULL DEFAULT 0,
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
