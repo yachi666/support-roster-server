@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
 
-import cn.dev33.satoken.stp.SaLoginModel;
+import cn.dev33.satoken.stp.parameter.SaLoginParameter;
 
 class AuthTokenVersionServiceTest {
 
@@ -19,7 +19,7 @@ class AuthTokenVersionServiceTest {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setTokenVersion(7L);
 
-        SaLoginModel loginModel = authTokenVersionService.createLoginModel(account);
+        SaLoginParameter loginModel = authTokenVersionService.createLoginModel(account);
 
         assertEquals(7L, ((Number) loginModel.getExtra(AuthTokenVersionService.TOKEN_VERSION_EXTRA_KEY)).longValue());
     }
