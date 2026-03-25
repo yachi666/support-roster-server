@@ -173,6 +173,21 @@ public class WorkspaceAccountService {
         workspaceOperationLogService.log(current.staffName(), "Disable workspace account", "workspace_account", account.getId(), "Account disabled");
     }
 
+    @Transactional
+    public void deleteAccount(Long id) {
+        authContextService.requireAdmin();
+        AuthenticatedAccount current = authContextService.requireLogin();
+        if (current.accountId() != null && current.accountId().equals(id)) {
+            throw new BadRequestException("Current signed-in account cannot delete itself.");
+        }
+        WorkspaceAccountEntity account = requireAccount(id);
+        authTokenVersionService.bumpTokenVersion(account);
+        workspaceAccountTeamScopeMapper.delete(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
+            .eq(WorkspaceAccountTeamScopeEntity::getAccountId, id));
+        workspaceAccountMapper.deleteById(id);
+        workspaceOperationLogService.log(current.staffName(), "Delete workspace account", "workspace_account", id, "Staff ID=" + account.getStaffCode());
+    }
+
     private WorkspaceAccountEntity requireAccount(Long id) {
         WorkspaceAccountEntity entity = workspaceAccountMapper.selectById(id);
         if (entity == null) {

@@ -1,17 +1,20 @@
 package com.support.server.supportrosterserver.controller.workspace;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportApplyResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPreviewResponse;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPreviewSaveRequest;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportSaveResponse;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceImportService;
 
 import lombok.RequiredArgsConstructor;
@@ -32,11 +35,9 @@ public class WorkspaceImportExportController {
         return ResponseEntity.ok(workspaceImportService.previewImport(file, year, month, operator));
     }
 
-    @PostMapping("/{batchId}/apply")
-    public ResponseEntity<WorkspaceImportApplyResponse> applyImport(
-            @PathVariable Long batchId,
-            @RequestParam(required = false) String operator) {
-        return ResponseEntity.ok(workspaceImportService.applyImport(batchId, operator));
+    @PostMapping("/save")
+    public ResponseEntity<WorkspaceImportSaveResponse> savePreview(@Valid @RequestBody WorkspaceImportPreviewSaveRequest request) {
+        return ResponseEntity.ok(workspaceImportService.savePreview(request));
     }
 
     @GetMapping("/export")

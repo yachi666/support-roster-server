@@ -9,7 +9,6 @@ public class WorkspaceStaffUpsertRequest {
     @NotBlank
     private String staffCode;
 
-    @NotBlank
     private String name;
 
     private String email;

@@ -3,224 +3,287 @@ package com.support.server.supportrosterserver.service.workspace;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPreviewResponse;
-import com.support.server.supportrosterserver.entity.workspace.ImportBatchEntity;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPreviewSaveRequest;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPreviewSaveRowRequest;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportSaveResponse;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
-import com.support.server.supportrosterserver.mapper.ImportBatchMapper;
-import com.support.server.supportrosterserver.mapper.ImportIssueMapper;
-import com.support.server.supportrosterserver.mapper.ImportRecordMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.mapper.TeamMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
-
-import tools.jackson.databind.ObjectMapper;
 
 class WorkspaceImportServiceTest {
 
-    private ImportBatchMapper importBatchMapper;
-    private ImportRecordMapper importRecordMapper;
-    private ImportIssueMapper importIssueMapper;
     private ShiftDefinitionMapper shiftDefinitionMapper;
     private ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
     private StaffMapper staffMapper;
     private RosterAssignmentMapper rosterAssignmentMapper;
+    private TeamMapper teamMapper;
     private WorkspaceLookupService lookupService;
     private AuthContextService authContextService;
     private WorkspaceImportService workspaceImportService;
 
     @BeforeEach
     void setUp() {
-        importBatchMapper = mock(ImportBatchMapper.class);
-        importRecordMapper = mock(ImportRecordMapper.class);
-        importIssueMapper = mock(ImportIssueMapper.class);
         shiftDefinitionMapper = mock(ShiftDefinitionMapper.class);
         shiftDefinitionTeamRelMapper = mock(ShiftDefinitionTeamRelMapper.class);
         staffMapper = mock(StaffMapper.class);
         rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
+        teamMapper = mock(TeamMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
         authContextService = mock(AuthContextService.class);
 
         workspaceImportService = new WorkspaceImportService(
-            importBatchMapper,
-            importRecordMapper,
-            importIssueMapper,
             shiftDefinitionMapper,
             shiftDefinitionTeamRelMapper,
             staffMapper,
             rosterAssignmentMapper,
-            mock(com.support.server.supportrosterserver.mapper.TeamMapper.class),
+            teamMapper,
             lookupService,
-            new ObjectMapper(),
             authContextService,
             new WorkspaceShiftTimeSupport()
         );
-
-        when(authContextService.currentActor(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
-    void shouldValidatePreviewWhenStaffIdContainsLetters() throws IOException {
-        TeamEntity team = new TeamEntity();
-        team.setId(301L);
-        team.setName("China Support");
+    void shouldPreviewSimplifiedWorkbookAndBlankInvalidShiftCodes() throws IOException {
+        TeamEntity team = buildTeam(101L, "China Support");
+        StaffEntity existingStaff = new StaffEntity();
+        existingStaff.setId(201L);
+        existingStaff.setStaffCode("1001");
+        existingStaff.setName("Alice");
+        existingStaff.setRoleName("L1");
+        existingStaff.setTeamId(101L);
 
-        doAnswer(invocation -> {
-            ImportBatchEntity batch = invocation.getArgument(0);
-            batch.setId(9001L);
-            return 1;
-        }).when(importBatchMapper).insert(any(ImportBatchEntity.class));
+        ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
 
         when(lookupService.listTeams()).thenReturn(List.of(team));
-        when(lookupService.normalizeWorkspaceTimezone(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(lookupService.inferTimezone("China", "China Support")).thenReturn("HKT");
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of());
-        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of());
+        when(lookupService.normalizeWorkspaceTimezone(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(101L));
+        when(staffMapper.selectList(any())).thenReturn(List.of(existingStaff));
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(buildRelation(1001L, 101L)));
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shift));
 
         MockMultipartFile file = new MockMultipartFile(
             "file",
-            "roundtrip.xlsx",
+            "preview.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            buildWorkbook()
+            buildWorkbook(List.of(Map.of("staff_id", "1001", "team", "China Support", "1", "A", "2", "ZZ")))
         );
 
         WorkspaceImportPreviewResponse response = workspaceImportService.previewImport(file, 2026, 3, "tester");
 
-        assertEquals("VALIDATED", response.getStatus());
-        assertTrue(response.getIssues().stream().noneMatch(issue -> "Invalid Staff ID".equals(issue.getType())));
+        assertEquals(1, response.getTotalRecords());
+        assertEquals(0, response.getValidRecords());
+        assertEquals(1, response.getInvalidRecords());
+        assertEquals("A", response.getGroups().get(0).getStaff().get(0).getSchedule().get(1));
+        assertEquals("", response.getGroups().get(0).getStaff().get(0).getSchedule().get(2));
+        assertTrue(response.getIssues().stream().anyMatch(issue -> "Invalid Shift Code".equals(issue.getType())));
     }
 
     @Test
-    void shouldValidateExportedWorkbookRoundtrip() throws IOException {
-        TeamEntity l1 = buildTeam(101L, "L1");
-        TeamEntity apL2 = buildTeam(102L, "AP L2");
+    void shouldRejectDuplicateStaffRowsDuringPreview() throws IOException {
+        TeamEntity team = buildTeam(101L, "China Support");
+        ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
 
-        ShiftDefinitionEntity a = buildShiftDefinition(1001L, 101L, "A", "Day Shift", LocalTime.of(9, 0), LocalTime.of(18, 0), "#FFA500");
-        ShiftDefinitionEntity b = buildShiftDefinition(1002L, 101L, "B", "Late Shift", LocalTime.of(18, 0), LocalTime.of(23, 0), "#FF8C00");
-        ShiftDefinitionEntity ds = buildShiftDefinition(1003L, 102L, "DS", "Day Shift", LocalTime.of(9, 30), LocalTime.of(18, 30), "#4169E1");
-        ShiftDefinitionEntity ns = buildShiftDefinition(1004L, 102L, "NS", "Night Shift", LocalTime.of(18, 30), LocalTime.of(9, 30), "#191970");
-        ShiftDefinitionEntity oc = buildShiftDefinition(1005L, 101L, "OC", "On Call", LocalTime.of(0, 0), LocalTime.of(8, 0), "#22C55E");
+        when(lookupService.listTeams()).thenReturn(List.of(team));
+        when(lookupService.normalizeWorkspaceTimezone(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(101L));
+        when(staffMapper.selectList(any())).thenReturn(List.of());
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(buildRelation(1001L, 101L)));
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shift));
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "duplicate.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            buildWorkbook(List.of(
+                Map.of("staff_id", "1001", "team", "China Support", "1", "A"),
+                Map.of("staff_id", "1001", "team", "China Support", "2", "A")
+            ))
+        );
+
+        WorkspaceImportPreviewResponse response = workspaceImportService.previewImport(file, 2026, 3, "tester");
+
+        assertTrue(response.getIssues().stream().anyMatch(issue -> "Duplicate Staff ID".equals(issue.getType())));
+        assertEquals(1, response.getValidRecords());
+        assertEquals(1, response.getInvalidRecords());
+    }
+
+    @Test
+    void shouldRedactOutOfScopeStaffAndTeamsDuringPreview() throws IOException {
+        TeamEntity readableTeam = buildTeam(101L, "China Support");
+        TeamEntity hiddenTeam = buildTeam(102L, "Secret Team");
+        StaffEntity hiddenStaff = new StaffEntity();
+        hiddenStaff.setId(301L);
+        hiddenStaff.setStaffCode("9001");
+        hiddenStaff.setName("Hidden User");
+        hiddenStaff.setRoleName("Secret");
+        hiddenStaff.setTeamId(102L);
+        ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
+
+        when(lookupService.listTeams()).thenReturn(List.of(readableTeam, hiddenTeam));
+        when(lookupService.normalizeWorkspaceTimezone(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(101L));
+        when(staffMapper.selectList(any())).thenReturn(List.of(hiddenStaff));
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(buildRelation(1001L, 101L)));
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shift));
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "scope.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            buildWorkbook(List.of(
+                Map.of("staff_id", "9001", "team", "China Support", "1", "A"),
+                Map.of("staff_id", "1002", "team", "Secret Team", "1", "A")
+            ))
+        );
+
+        WorkspaceImportPreviewResponse response = workspaceImportService.previewImport(file, 2026, 3, "tester");
+
+        assertTrue(response.getIssues().stream().anyMatch(issue -> "Staff Out Of Scope".equals(issue.getType())));
+        assertTrue(response.getIssues().stream().anyMatch(issue -> "Team Out Of Scope".equals(issue.getType())));
+        assertTrue(response.getGroups().isEmpty());
+    }
+
+    @Test
+    void shouldSavePreviewAndCreateMissingTeamAndStaff() {
+        ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
+        ShiftDefinitionTeamRelEntity relation = buildRelation(1001L, 301L);
+
+        when(teamMapper.selectList(any())).thenReturn(List.of());
+        when(staffMapper.selectList(any())).thenReturn(List.of());
+        when(lookupService.inferTimezone(null, "New Team")).thenReturn("UTC");
+        when(lookupService.normalizeWorkspaceTimezone("UTC")).thenReturn("UTC");
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shift));
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(relation));
+        doNothing().when(authContextService).requireWritableTeam(anyLong());
+        doAnswer(invocation -> {
+            TeamEntity entity = invocation.getArgument(0);
+            entity.setId(301L);
+            return 1;
+        }).when(teamMapper).insert(any(TeamEntity.class));
+        doAnswer(invocation -> {
+            StaffEntity entity = invocation.getArgument(0);
+            entity.setId(401L);
+            return 1;
+        }).when(staffMapper).insert(any(StaffEntity.class));
+
+        WorkspaceImportPreviewSaveRowRequest row = new WorkspaceImportPreviewSaveRowRequest();
+        row.setStaffCode("1002");
+        row.setTeamName("New Team");
+        row.setSchedule(Map.of(1, "A", 2, ""));
+
+        WorkspaceImportPreviewSaveRequest request = new WorkspaceImportPreviewSaveRequest();
+        request.setYear(2026);
+        request.setMonth(3);
+        request.setRows(List.of(row));
+
+        WorkspaceImportSaveResponse response = workspaceImportService.savePreview(request);
+
+        assertEquals(1, response.getAppliedStaffCount());
+        assertEquals(1, response.getCreatedStaffCount());
+        assertEquals(1, response.getCreatedTeamCount());
+    }
+
+    @Test
+    void shouldExportSimplifiedWorkbook() throws IOException {
+        TeamEntity team = buildTeam(101L, "L1");
+        StaffEntity staff = new StaffEntity();
+        staff.setId(201L);
+        staff.setStaffCode("1001");
+        staff.setName("Alice");
+        staff.setTeamId(101L);
+
+        ShiftDefinitionEntity a = buildShiftDefinition(1001L, "A");
+        ShiftDefinitionEntity b = buildShiftDefinition(1002L, "B");
+        RosterAssignmentEntity first = buildAssignment(201L, 101L, LocalDate.of(2026, 3, 1), 1001L, "A");
+        RosterAssignmentEntity second = buildAssignment(201L, 101L, LocalDate.of(2026, 3, 2), 1002L, "B");
+
+        when(authContextService.readableTeamIds()).thenReturn(List.of(101L));
+        when(lookupService.teamMap()).thenReturn(Map.of(101L, team));
+        when(rosterAssignmentMapper.selectList(any())).thenReturn(List.of(first, second));
+        when(staffMapper.selectList(any())).thenReturn(List.of(staff));
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(a, b));
+
+        byte[] workbookBytes = workspaceImportService.exportRoster(2026, 3).getBody();
+
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(workbookBytes))) {
+            var sheet = workbook.getSheet("Monthly Roster");
+            assertEquals("staff_id", sheet.getRow(0).getCell(0).getStringCellValue());
+            assertEquals("team", sheet.getRow(0).getCell(1).getStringCellValue());
+            assertEquals("1001", sheet.getRow(1).getCell(0).getStringCellValue());
+            assertEquals("L1", sheet.getRow(1).getCell(1).getStringCellValue());
+            assertEquals("A", sheet.getRow(1).getCell(2).getStringCellValue());
+            assertEquals("B", sheet.getRow(1).getCell(3).getStringCellValue());
+        }
+    }
+
+    @Test
+    void shouldExportOnlyReadableTeamsForEditorScope() throws IOException {
+        TeamEntity teamL1 = buildTeam(101L, "L1");
+        TeamEntity teamL2 = buildTeam(102L, "AP L2");
 
         StaffEntity alice = new StaffEntity();
         alice.setId(201L);
-        alice.setStaffCode("402X9");
+        alice.setStaffCode("1001");
         alice.setName("Alice");
-        alice.setRegion("China");
         alice.setTeamId(101L);
 
         StaffEntity bob = new StaffEntity();
         bob.setId(202L);
         bob.setStaffCode("1002");
         bob.setName("Bob");
-        bob.setRegion("China");
         bob.setTeamId(102L);
 
-        StaffEntity bobDuplicate = new StaffEntity();
-        bobDuplicate.setId(203L);
-        bobDuplicate.setStaffCode("1002");
-        bobDuplicate.setName("Bob");
-        bobDuplicate.setRegion("China");
-        bobDuplicate.setTeamId(102L);
+        ShiftDefinitionEntity shiftA = buildShiftDefinition(1001L, "A");
+        ShiftDefinitionEntity shiftB = buildShiftDefinition(1002L, "B");
+        RosterAssignmentEntity aliceAssignment = buildAssignment(201L, 101L, LocalDate.of(2026, 3, 1), 1001L, "A");
+        RosterAssignmentEntity bobAssignment = buildAssignment(202L, 102L, LocalDate.of(2026, 3, 1), 1002L, "B");
 
-        doAnswer(invocation -> {
-            ImportBatchEntity batch = invocation.getArgument(0);
-            batch.setId(9002L);
-            return 1;
-        }).when(importBatchMapper).insert(any(ImportBatchEntity.class));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(101L));
+        when(lookupService.teamMap()).thenReturn(Map.of(101L, teamL1, 102L, teamL2));
+        when(rosterAssignmentMapper.selectList(any())).thenReturn(List.of(aliceAssignment, bobAssignment));
+        when(staffMapper.selectList(any())).thenReturn(List.of(alice, bob));
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shiftA, shiftB));
 
-        when(lookupService.teamMap()).thenReturn(java.util.Map.of(101L, l1, 102L, apL2));
-        when(lookupService.listTeams()).thenReturn(List.of(l1, apL2));
-        when(lookupService.normalizeWorkspaceTimezone(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(lookupService.inferTimezone("China", "L1")).thenReturn("HKT");
-        when(lookupService.inferTimezone("China", "AP L2")).thenReturn("HKT");
-        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(a, b, ds, ns, oc));
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(1001L, 101L),
-            buildRelation(1002L, 101L),
-            buildRelation(1003L, 102L),
-            buildRelation(1004L, 102L),
-            buildRelation(1005L, 101L),
-            buildRelation(1005L, 102L)
-        ));
-        when(staffMapper.selectList(any())).thenReturn(List.of(alice, bob, bobDuplicate));
-        when(rosterAssignmentMapper.selectList(any())).thenReturn(buildMonthAssignments(alice, bob));
+        byte[] workbookBytes = workspaceImportService.exportRoster(2026, 3).getBody();
 
-        byte[] exportedWorkbook = workspaceImportService.exportRoster(2026, 3).getBody();
-        MockMultipartFile file = new MockMultipartFile(
-            "file",
-            "workspace-roster-2026-03.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            exportedWorkbook
-        );
-
-        WorkspaceImportPreviewResponse response = workspaceImportService.previewImport(file, 2026, 3, "tester");
-
-        assertEquals(1, countStaffRowsByCode(exportedWorkbook, "1002"));
-        assertEquals("VALIDATED", response.getStatus());
-        assertTrue(response.getIssues().stream().noneMatch(issue -> "Missing Primary Coverage".equals(issue.getType())));
-        assertTrue(response.getIssues().stream().noneMatch(issue -> "Missing Team".equals(issue.getType())));
-        assertTrue(response.getIssues().stream().noneMatch(issue -> "Invalid Shift Code".equals(issue.getType())));
-    }
-
-    private byte[] buildWorkbook() throws IOException {
-        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            var shiftSheet = workbook.createSheet("Shift Definitions");
-            shiftSheet.createRow(0).createCell(0).setCellValue("team");
-            var shiftRow = shiftSheet.createRow(1);
-            shiftRow.createCell(0).setCellValue("China Support");
-            shiftRow.createCell(1).setCellValue("A");
-            shiftRow.createCell(2).setCellValue("Day Shift");
-            shiftRow.createCell(3).setCellValue("09:00");
-            shiftRow.createCell(4).setCellValue("18:00");
-            shiftRow.createCell(5).setCellValue("HKT");
-            shiftRow.createCell(6).setCellValue("Y");
-            shiftRow.createCell(7).setCellValue("");
-
-            var staffSheet = workbook.createSheet("Staff Shifts");
-            staffSheet.createRow(0).createCell(0).setCellValue("name");
-            var staffRow = staffSheet.createRow(1);
-            staffRow.createCell(0).setCellValue("Alice");
-            staffRow.createCell(1).setCellValue("402X9");
-            staffRow.createCell(2).setCellValue("China Support");
-            staffRow.createCell(3).setCellValue("China");
-            staffRow.createCell(4).setCellValue("");
-            staffRow.createCell(5).setCellValue("");
-            staffRow.createCell(6).setCellValue("A");
-
-            var colorSheet = workbook.createSheet("Color Definitions");
-            colorSheet.createRow(0).createCell(0).setCellValue("code");
-            var colorRow = colorSheet.createRow(1);
-            colorRow.createCell(0).setCellValue("A");
-            colorRow.createCell(1).setCellValue("Orange");
-            colorRow.createCell(2).setCellValue("255 165 0");
-            colorRow.createCell(3).setCellValue("#FFA500");
-
-            workbook.write(outputStream);
-            return outputStream.toByteArray();
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(workbookBytes))) {
+            var sheet = workbook.getSheet("Monthly Roster");
+            assertEquals("1001", sheet.getRow(1).getCell(0).getStringCellValue());
+            assertEquals("L1", sheet.getRow(1).getCell(1).getStringCellValue());
+            assertEquals("A", sheet.getRow(1).getCell(2).getStringCellValue());
+            assertEquals(1, sheet.getLastRowNum());
         }
     }
 
@@ -228,23 +291,24 @@ class WorkspaceImportServiceTest {
         TeamEntity team = new TeamEntity();
         team.setId(id);
         team.setName(name);
+        team.setColor("#0F172A");
         team.setVisible(true);
-        team.setDisplayOrder(id.intValue());
+        team.setDisplayOrder(1);
         return team;
     }
 
-    private ShiftDefinitionEntity buildShiftDefinition(Long id, Long teamId, String code, String meaning, LocalTime startTime, LocalTime endTime, String colorHex) {
+    private ShiftDefinitionEntity buildShiftDefinition(Long id, String code) {
         ShiftDefinitionEntity entity = new ShiftDefinitionEntity();
         entity.setId(id);
-        entity.setTeamId(teamId);
         entity.setCode(code);
-        entity.setMeaning(meaning);
-        entity.setStartTime(startTime);
-        entity.setEndTime(endTime);
-        entity.setDurationMinutes(new WorkspaceShiftTimeSupport().durationFromTimes(startTime, endTime));
-        entity.setTimezone("HKT");
+        entity.setMeaning(code);
+        entity.setStartTime(LocalTime.of(9, 0));
+        entity.setEndTime(LocalTime.of(18, 0));
+        entity.setDurationMinutes(540);
+        entity.setTimezone("UTC");
         entity.setVisible(true);
-        entity.setColorHex(colorHex);
+        entity.setPrimaryShift(false);
+        entity.setColorHex("#22C55E");
         return entity;
     }
 
@@ -255,38 +319,36 @@ class WorkspaceImportServiceTest {
         return relation;
     }
 
-    private List<RosterAssignmentEntity> buildMonthAssignments(StaffEntity alice, StaffEntity bob) {
-        List<RosterAssignmentEntity> assignments = new ArrayList<>();
-        for (int day = 1; day <= 31; day++) {
-            assignments.add(buildAssignment(alice.getId(), alice.getTeamId(), LocalDate.of(2026, 3, day), day % 2 == 0 ? "B" : "A"));
-            assignments.add(buildAssignment(bob.getId(), bob.getTeamId(), LocalDate.of(2026, 3, day), day % 2 == 0 ? "NS" : "DS"));
-        }
-        return assignments;
-    }
-
-    private RosterAssignmentEntity buildAssignment(Long staffId, Long teamId, LocalDate date, String shiftCode) {
+    private RosterAssignmentEntity buildAssignment(Long staffId, Long teamId, LocalDate date, Long shiftDefinitionId, String shiftCode) {
         RosterAssignmentEntity assignment = new RosterAssignmentEntity();
         assignment.setStaffId(staffId);
         assignment.setTeamId(teamId);
         assignment.setAssignmentDate(date);
+        assignment.setShiftDefinitionId(shiftDefinitionId);
         assignment.setShiftCode(shiftCode);
         return assignment;
     }
 
-    private int countStaffRowsByCode(byte[] workbookBytes, String staffCode) throws IOException {
-        try (Workbook workbook = WorkbookFactory.create(new java.io.ByteArrayInputStream(workbookBytes))) {
-            int count = 0;
-            var sheet = workbook.getSheet("Staff Shifts");
-            for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                var row = sheet.getRow(rowIndex);
-                if (row == null || row.getCell(1) == null) {
-                    continue;
-                }
-                if (staffCode.equals(row.getCell(1).getStringCellValue())) {
-                    count++;
+    private byte[] buildWorkbook(List<Map<String, String>> rows) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("Monthly Roster");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("staff_id");
+            header.createCell(1).setCellValue("team");
+            for (int day = 1; day <= 31; day++) {
+                header.createCell(day + 1).setCellValue(String.valueOf(day));
+            }
+            int rowIndex = 1;
+            for (Map<String, String> row : rows) {
+                var sheetRow = sheet.createRow(rowIndex++);
+                sheetRow.createCell(0).setCellValue(row.getOrDefault("staff_id", ""));
+                sheetRow.createCell(1).setCellValue(row.getOrDefault("team", ""));
+                for (int day = 1; day <= 31; day++) {
+                    sheetRow.createCell(day + 1).setCellValue(row.getOrDefault(String.valueOf(day), ""));
                 }
             }
-            return count;
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
         }
     }
 }
