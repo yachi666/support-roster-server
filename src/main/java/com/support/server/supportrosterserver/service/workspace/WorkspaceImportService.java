@@ -92,6 +92,7 @@ public class WorkspaceImportService {
         Map<String, PreviewStaffState> previewStaffByCode = new LinkedHashMap<>();
         List<WorkspaceValidationIssueDto> issues = new ArrayList<>();
         Set<String> issueRowKeys = new LinkedHashSet<>();
+        Set<String> seenImportedStaffCodes = new LinkedHashSet<>();
         Set<String> newStaffCodes = new LinkedHashSet<>();
         Set<String> newTeamNames = new LinkedHashSet<>();
 
@@ -107,6 +108,21 @@ public class WorkspaceImportService {
             }
             if (normalizedTeamName.isBlank()) {
                 issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Missing Team", "team is required for every imported row.", null, null));
+                issueRowKeys.add(rowKey);
+                continue;
+            }
+            if (importContext.blockedTeamNames().contains(normalizedTeamName)) {
+                issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Team Out Of Scope", "Team '" + row.teamName() + "' is outside your accessible scope.", row.teamName(), null));
+                issueRowKeys.add(rowKey);
+                continue;
+            }
+            if (importContext.blockedStaffCodes().contains(normalizedStaffCode)) {
+                issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Staff Out Of Scope", "Staff ID '" + row.staffCode() + "' is outside your accessible scope.", row.teamName(), null));
+                issueRowKeys.add(rowKey);
+                continue;
+            }
+            if (!seenImportedStaffCodes.add(normalizedStaffCode)) {
+                issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Duplicate Staff ID", "Staff ID '" + row.staffCode() + "' appears more than once in the import file.", row.teamName(), null));
                 issueRowKeys.add(rowKey);
                 continue;
             }
@@ -251,6 +267,7 @@ public class WorkspaceImportService {
         int createdStaffCount = 0;
         Map<String, TeamEntity> resolvedTeamsByName = new LinkedHashMap<>();
         Map<String, StaffEntity> resolvedStaffByCode = new LinkedHashMap<>();
+        Set<String> seenImportedStaffCodes = new LinkedHashSet<>();
 
         for (WorkspaceImportPreviewSaveRowRequest row : request.getRows()) {
             String normalizedTeamName = normalizeKey(row.getTeamName());
@@ -279,6 +296,9 @@ public class WorkspaceImportService {
             String normalizedStaffCode = normalizeKey(row.getStaffCode());
             if (normalizedStaffCode.isBlank()) {
                 throw new BadRequestException("staff_id is required for every imported row.");
+            }
+            if (!seenImportedStaffCodes.add(normalizedStaffCode)) {
+                throw new BadRequestException("Duplicate staff_id '" + row.getStaffCode() + "' is not allowed in import preview save.");
             }
             StaffEntity staff = resolvedStaffByCode.get(normalizedStaffCode);
             if (staff == null) {
@@ -430,13 +450,27 @@ public class WorkspaceImportService {
     }
 
     private ImportContext buildImportContext(YearMonth targetMonth) {
-        Map<String, TeamEntity> teamsByName = lookupService.listTeams().stream()
-            .collect(Collectors.toMap(team -> normalizeKey(team.getName()), team -> team, (left, right) -> left, LinkedHashMap::new));
-        Map<String, StaffEntity> staffByCode = staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery())
-            .stream()
-            .collect(Collectors.toMap(staff -> normalizeKey(staff.getStaffCode()), staff -> staff, (left, right) -> left, LinkedHashMap::new));
-
         List<Long> readableTeamIds = authContextService.readableTeamIds();
+        Set<Long> readableTeamIdSet = new LinkedHashSet<>(readableTeamIds);
+        List<TeamEntity> allTeams = lookupService.listTeams();
+        List<StaffEntity> allStaff = staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery());
+        Map<String, TeamEntity> teamsByName = allTeams.stream()
+            .filter(team -> readableTeamIdSet.contains(team.getId()))
+            .collect(Collectors.toMap(team -> normalizeKey(team.getName()), team -> team, (left, right) -> left, LinkedHashMap::new));
+        Set<String> blockedTeamNames = allTeams.stream()
+            .filter(team -> !readableTeamIdSet.contains(team.getId()))
+            .map(TeamEntity::getName)
+            .filter(Objects::nonNull)
+            .map(this::normalizeKey)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, StaffEntity> staffByCode = allStaff.stream()
+            .filter(staff -> staff.getTeamId() != null && readableTeamIdSet.contains(staff.getTeamId()))
+            .collect(Collectors.toMap(staff -> normalizeKey(staff.getStaffCode()), staff -> staff, (left, right) -> left, LinkedHashMap::new));
+        Set<String> blockedStaffCodes = allStaff.stream()
+            .filter(staff -> staff.getStaffCode() != null && (staff.getTeamId() == null || !readableTeamIdSet.contains(staff.getTeamId())))
+            .map(StaffEntity::getStaffCode)
+            .map(this::normalizeKey)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
         List<ShiftDefinitionTeamRelEntity> visibleShiftRelations = readableTeamIds.isEmpty()
             ? List.of()
             : shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
@@ -477,7 +511,7 @@ public class WorkspaceImportService {
             .distinct()
             .toList();
 
-        return new ImportContext(targetMonth, teamsByName, staffByCode, shiftCodeOptions, shiftCodeOptionsByTeam, shiftCodeColorMap, shiftDetailsByTeam);
+        return new ImportContext(targetMonth, teamsByName, staffByCode, blockedTeamNames, blockedStaffCodes, shiftCodeOptions, shiftCodeOptionsByTeam, shiftCodeColorMap, shiftDetailsByTeam);
     }
 
     private List<ImportedRosterRow> readImportRows(MultipartFile file, YearMonth targetMonth) {
@@ -643,6 +677,8 @@ public class WorkspaceImportService {
         YearMonth targetMonth,
         Map<String, TeamEntity> teamsByName,
         Map<String, StaffEntity> staffByCode,
+        Set<String> blockedTeamNames,
+        Set<String> blockedStaffCodes,
         List<String> shiftCodeOptions,
         Map<Long, List<String>> shiftCodeOptionsByTeam,
         Map<String, String> shiftCodeColorMap,

@@ -30,6 +30,7 @@ import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMa
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 import com.support.server.supportrosterserver.service.EmployeeDirectoryClient;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
+import com.support.server.supportrosterserver.service.auth.AuthTokenVersionService;
 
 class WorkspaceStaffServiceTest {
 
@@ -38,6 +39,7 @@ class WorkspaceStaffServiceTest {
     private WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private EmployeeDirectoryClient employeeDirectoryClient;
     private WorkspaceOperationLogService workspaceOperationLogService;
+    private AuthTokenVersionService authTokenVersionService;
     private WorkspaceStaffService workspaceStaffService;
 
     @BeforeEach
@@ -47,6 +49,7 @@ class WorkspaceStaffServiceTest {
         workspaceAccountTeamScopeMapper = mock(WorkspaceAccountTeamScopeMapper.class);
         employeeDirectoryClient = mock(EmployeeDirectoryClient.class);
         workspaceOperationLogService = mock(WorkspaceOperationLogService.class);
+        authTokenVersionService = mock(AuthTokenVersionService.class);
         WorkspaceLookupService lookupService = mock(WorkspaceLookupService.class);
         RosterAssignmentMapper rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
         AuthContextService authContextService = mock(AuthContextService.class);
@@ -65,6 +68,7 @@ class WorkspaceStaffServiceTest {
             workspaceAccountMapper,
             workspaceAccountTeamScopeMapper,
             authContextService,
+            authTokenVersionService,
             workspaceOperationLogService
         );
     }
@@ -259,6 +263,7 @@ class WorkspaceStaffServiceTest {
 
         workspaceStaffService.deleteStaff(1L);
 
+        verify(authTokenVersionService).bumpTokenVersion(account);
         verify(workspaceAccountTeamScopeMapper).delete(any());
         verify(workspaceAccountMapper).deleteById(2L);
         verify(staffMapper).deleteById(1L);

@@ -181,6 +181,7 @@ public class WorkspaceAccountService {
             throw new BadRequestException("Current signed-in account cannot delete itself.");
         }
         WorkspaceAccountEntity account = requireAccount(id);
+        authTokenVersionService.bumpTokenVersion(account);
         workspaceAccountTeamScopeMapper.delete(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
             .eq(WorkspaceAccountTeamScopeEntity::getAccountId, id));
         workspaceAccountMapper.deleteById(id);

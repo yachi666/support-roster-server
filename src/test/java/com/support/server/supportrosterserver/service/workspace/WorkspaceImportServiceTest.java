@@ -111,6 +111,71 @@ class WorkspaceImportServiceTest {
     }
 
     @Test
+    void shouldRejectDuplicateStaffRowsDuringPreview() throws IOException {
+        TeamEntity team = buildTeam(101L, "China Support");
+        ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
+
+        when(lookupService.listTeams()).thenReturn(List.of(team));
+        when(lookupService.normalizeWorkspaceTimezone(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(101L));
+        when(staffMapper.selectList(any())).thenReturn(List.of());
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(buildRelation(1001L, 101L)));
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shift));
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "duplicate.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            buildWorkbook(List.of(
+                Map.of("staff_id", "1001", "team", "China Support", "1", "A"),
+                Map.of("staff_id", "1001", "team", "China Support", "2", "A")
+            ))
+        );
+
+        WorkspaceImportPreviewResponse response = workspaceImportService.previewImport(file, 2026, 3, "tester");
+
+        assertTrue(response.getIssues().stream().anyMatch(issue -> "Duplicate Staff ID".equals(issue.getType())));
+        assertEquals(1, response.getValidRecords());
+        assertEquals(1, response.getInvalidRecords());
+    }
+
+    @Test
+    void shouldRedactOutOfScopeStaffAndTeamsDuringPreview() throws IOException {
+        TeamEntity readableTeam = buildTeam(101L, "China Support");
+        TeamEntity hiddenTeam = buildTeam(102L, "Secret Team");
+        StaffEntity hiddenStaff = new StaffEntity();
+        hiddenStaff.setId(301L);
+        hiddenStaff.setStaffCode("9001");
+        hiddenStaff.setName("Hidden User");
+        hiddenStaff.setRoleName("Secret");
+        hiddenStaff.setTeamId(102L);
+        ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
+
+        when(lookupService.listTeams()).thenReturn(List.of(readableTeam, hiddenTeam));
+        when(lookupService.normalizeWorkspaceTimezone(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(authContextService.readableTeamIds()).thenReturn(List.of(101L));
+        when(staffMapper.selectList(any())).thenReturn(List.of(hiddenStaff));
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(buildRelation(1001L, 101L)));
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shift));
+
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "scope.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            buildWorkbook(List.of(
+                Map.of("staff_id", "9001", "team", "China Support", "1", "A"),
+                Map.of("staff_id", "1002", "team", "Secret Team", "1", "A")
+            ))
+        );
+
+        WorkspaceImportPreviewResponse response = workspaceImportService.previewImport(file, 2026, 3, "tester");
+
+        assertTrue(response.getIssues().stream().anyMatch(issue -> "Staff Out Of Scope".equals(issue.getType())));
+        assertTrue(response.getIssues().stream().anyMatch(issue -> "Team Out Of Scope".equals(issue.getType())));
+        assertTrue(response.getGroups().isEmpty());
+    }
+
+    @Test
     void shouldSavePreviewAndCreateMissingTeamAndStaff() {
         ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
         ShiftDefinitionTeamRelEntity relation = buildRelation(1001L, 301L);

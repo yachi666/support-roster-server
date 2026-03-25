@@ -29,6 +29,7 @@ class WorkspaceAccountServiceTest {
     private WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private AuthContextService authContextService;
     private WorkspaceOperationLogService workspaceOperationLogService;
+    private AuthTokenVersionService authTokenVersionService;
     private WorkspaceAccountService workspaceAccountService;
 
     @BeforeEach
@@ -37,13 +38,14 @@ class WorkspaceAccountServiceTest {
         workspaceAccountTeamScopeMapper = mock(WorkspaceAccountTeamScopeMapper.class);
         authContextService = mock(AuthContextService.class);
         workspaceOperationLogService = mock(WorkspaceOperationLogService.class);
+        authTokenVersionService = mock(AuthTokenVersionService.class);
         workspaceAccountService = new WorkspaceAccountService(
             workspaceAccountMapper,
             workspaceAccountTeamScopeMapper,
             mock(StaffMapper.class),
             mock(WorkspaceLookupService.class),
             authContextService,
-            mock(AuthTokenVersionService.class),
+            authTokenVersionService,
             workspaceOperationLogService
         );
     }
@@ -69,6 +71,7 @@ class WorkspaceAccountServiceTest {
 
         workspaceAccountService.deleteAccount(8L);
 
+        verify(authTokenVersionService).bumpTokenVersion(account);
         verify(workspaceAccountTeamScopeMapper).delete(any());
         verify(workspaceAccountMapper).deleteById(8L);
         verify(workspaceOperationLogService).log("Admin User", "Delete workspace account", "workspace_account", 8L, "Staff ID=A088");

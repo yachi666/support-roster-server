@@ -23,6 +23,7 @@ import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
 import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceLookupService;
 
+import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.stp.StpUtil;
 import lombok.RequiredArgsConstructor;
 
@@ -49,7 +50,7 @@ public class AuthContextService {
         Long accountId = StpUtil.getLoginIdAsLong();
         WorkspaceAccountEntity account = workspaceAccountMapper.selectById(accountId);
         if (account == null) {
-            throw new ResourceNotFoundException("WorkspaceAccount", "id", accountId);
+            throw expiredLogin();
         }
         if (AccountStatus.DISABLED.getCode().equalsIgnoreCase(account.getAccountStatus())) {
             throw new ForbiddenException("Account is disabled.");
@@ -57,7 +58,7 @@ public class AuthContextService {
         authTokenVersionService.validateCurrentTokenVersion(account);
         StaffEntity staff = staffMapper.selectById(account.getStaffId());
         if (staff == null) {
-            throw new ResourceNotFoundException("Staff", "id", account.getStaffId());
+            throw expiredLogin();
         }
         List<WorkspaceAccountTeamScopeEntity> scopes = workspaceAccountTeamScopeMapper.selectList(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
             .eq(WorkspaceAccountTeamScopeEntity::getAccountId, accountId)
@@ -77,6 +78,17 @@ public class AuthContextService {
             account.getAuthSource(),
             teamScopeIds,
             teams
+        );
+    }
+
+    private NotLoginException expiredLogin() {
+        String tokenValue = StpUtil.getTokenValue();
+        StpUtil.logout();
+        return NotLoginException.newInstance(
+            StpUtil.getLoginType(),
+            NotLoginException.TOKEN_TIMEOUT,
+            "Login state has expired.",
+            tokenValue
         );
     }
 

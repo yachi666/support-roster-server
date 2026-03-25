@@ -34,6 +34,7 @@ import com.support.server.supportrosterserver.exception.ResourceNotFoundExceptio
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 import com.support.server.supportrosterserver.service.EmployeeDirectoryClient;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
+import com.support.server.supportrosterserver.service.auth.AuthTokenVersionService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -51,6 +52,7 @@ public class WorkspaceStaffService {
     private final WorkspaceAccountMapper workspaceAccountMapper;
     private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private final AuthContextService authContextService;
+    private final AuthTokenVersionService authTokenVersionService;
     private final WorkspaceOperationLogService workspaceOperationLogService;
 
     public List<WorkspaceStaffDto> listStaff(String keyword) {
@@ -161,6 +163,7 @@ public class WorkspaceStaffService {
             .eq(WorkspaceAccountEntity::getStaffId, id)
             .last("limit 1"));
         if (linkedAccount != null) {
+            authTokenVersionService.bumpTokenVersion(linkedAccount);
             workspaceAccountTeamScopeMapper.delete(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
                 .eq(WorkspaceAccountTeamScopeEntity::getAccountId, linkedAccount.getId()));
             workspaceAccountMapper.deleteById(linkedAccount.getId());

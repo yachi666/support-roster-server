@@ -13,9 +13,17 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceTeamDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceTeamUpsertRequest;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
+import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
+import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
+import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.exception.BadRequestException;
+import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
+import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
+import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.TeamMapper;
+import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
@@ -28,6 +36,10 @@ public class WorkspaceTeamService {
     private final WorkspaceLookupService lookupService;
     private final AuthContextService authContextService;
     private final WorkspaceOperationLogService workspaceOperationLogService;
+    private final StaffMapper staffMapper;
+    private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
+    private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
+    private final RosterAssignmentMapper rosterAssignmentMapper;
 
     public List<WorkspaceTeamDto> listTeams() {
         return lookupService.listTeams().stream()
@@ -121,6 +133,7 @@ public class WorkspaceTeamService {
     public void deleteTeam(Long id) {
         authContextService.requireAdmin();
         TeamEntity team = lookupService.requireTeam(id);
+        validateDeleteTeamDependencies(id, team.getName());
         teamMapper.deleteById(id);
         workspaceOperationLogService.log(
             authContextService.currentActor("system"),
@@ -181,6 +194,28 @@ public class WorkspaceTeamService {
             throw new BadRequestException("Team name is required.");
         }
         return name.trim().replaceAll("\\s+", " ");
+    }
+
+    private void validateDeleteTeamDependencies(Long teamId, String teamName) {
+        List<String> blockers = new java.util.ArrayList<>();
+        if (staffMapper.selectCount(Wrappers.<StaffEntity>lambdaQuery().eq(StaffEntity::getTeamId, teamId)) > 0) {
+            blockers.add("staff");
+        }
+        if (workspaceAccountTeamScopeMapper.selectCount(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
+                .eq(WorkspaceAccountTeamScopeEntity::getTeamId, teamId)) > 0) {
+            blockers.add("account scopes");
+        }
+        if (shiftDefinitionTeamRelMapper.selectCount(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                .eq(ShiftDefinitionTeamRelEntity::getTeamId, teamId)) > 0) {
+            blockers.add("shift definitions");
+        }
+        if (rosterAssignmentMapper.selectCount(Wrappers.<RosterAssignmentEntity>lambdaQuery()
+                .eq(RosterAssignmentEntity::getTeamId, teamId)) > 0) {
+            blockers.add("roster assignments");
+        }
+        if (!blockers.isEmpty()) {
+            throw new BadRequestException("Team '" + teamName + "' cannot be deleted while linked " + String.join(", ", blockers) + " still exist.");
+        }
     }
 
 }
