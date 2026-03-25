@@ -4,8 +4,8 @@ import javax.net.ssl.SSLContext;
 
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactoryBuilder;
 import org.apache.hc.client5.http.ssl.TrustAllStrategy;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.springframework.http.HttpStatusCode;
@@ -37,13 +37,16 @@ import com.support.server.supportrosterserver.exception.BadRequestException;
         this.restClient = RestClient.builder()
             .requestFactory(new HttpComponentsClientHttpRequestFactory(
                 HttpClients.custom()
-                    .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()
-                        .setSSLSocketFactory(SSLConnectionSocketFactoryBuilder.create()
-                            .setSslContext(sslContext)
-                            .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-                            .build())
-                        .build())
-                    .build()
+                        .useSystemProperties()
+                        .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()
+                                .setTlsSocketStrategy(ClientTlsStrategyBuilder.create()
+                                        .useSystemProperties()
+                                        .setSslContext(sslContext)
+                                        .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                                        .useSystemProperties()
+                                        .buildClassic())
+                                .build())
+                        .build()
             ))
             .baseUrl(properties.getBaseUrl())
             .build();
