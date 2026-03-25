@@ -285,7 +285,6 @@ class WorkspaceStaffServiceTest {
         verify(workspaceAccountMapper, never()).deleteById(anyLong());
         verify(staffMapper).deleteById(1L);
     }
-
     private TeamEntity buildTeam(Long id, String name) {
         TeamEntity team = new TeamEntity();
         team.setId(id);
