@@ -1,5 +1,7 @@
 package com.support.server.supportrosterserver.dto.workspace;
 
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,11 +11,12 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class WorkspaceImportApplyResponse {
+public class WorkspaceImportPreviewGroupDto {
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long batchId;
-    private Integer year;
-    private Integer month;
-    private String status;
-    private Integer appliedRecords;
+    private Long teamId;
+
+    private String teamName;
+    private String color;
+    private Boolean newTeam;
+    private List<WorkspaceImportPreviewPersonDto> staff;
 }

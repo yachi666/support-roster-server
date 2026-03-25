@@ -21,6 +21,7 @@ import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffBatchC
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffUpsertRequest;
 import com.support.server.supportrosterserver.dto.employee.EmployeeDirectoryLookupResponse;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
@@ -28,6 +29,7 @@ import com.support.server.supportrosterserver.exception.BadRequestException;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
+import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 import com.support.server.supportrosterserver.service.EmployeeDirectoryClient;
@@ -47,7 +49,9 @@ public class WorkspaceStaffService {
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
     private final WorkspaceAccountMapper workspaceAccountMapper;
+    private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private final AuthContextService authContextService;
+    private final WorkspaceOperationLogService workspaceOperationLogService;
 
     public List<WorkspaceStaffDto> listStaff(String keyword) {
         LambdaQueryWrapper<StaffEntity> query = Wrappers.<StaffEntity>lambdaQuery()
@@ -84,11 +88,21 @@ public class WorkspaceStaffService {
     @Transactional
     public WorkspaceStaffDto createStaff(WorkspaceStaffUpsertRequest request) {
         authContextService.requireWritableTeam(request.getTeamId());
-        ensureStaffCodesAvailable(List.of(normalizeRequiredText(request.getStaffCode(), "Staff ID is required.")), null);
+        String staffCode = normalizeRequiredText(request.getStaffCode(), "Staff ID is required.");
+        ensureStaffCodesAvailable(List.of(staffCode), null);
+        EmployeeDirectoryLookupResponse employee = lookupEmployeeSafely(staffCode);
         StaffEntity entity = new StaffEntity();
-        apply(entity, request);
+        applyCreate(entity, staffCode, employee, request);
         staffMapper.insert(entity);
-        return getStaff(entity.getId());
+        WorkspaceStaffDto created = getStaff(entity.getId());
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            "Create workspace staff",
+            "workspace_staff",
+            entity.getId(),
+            "Staff ID=" + created.getStaffCode()
+        );
+        return created;
     }
 
     @Transactional
@@ -124,7 +138,15 @@ public class WorkspaceStaffService {
         apply(entity, request);
         staffMapper.updateById(entity);
         syncLinkedAccountStaffCode(entity.getId(), previousStaffCode, entity.getStaffCode());
-        return getStaff(id);
+        WorkspaceStaffDto updated = getStaff(id);
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            "Update workspace staff",
+            "workspace_staff",
+            updated.getId(),
+            "Staff ID=" + updated.getStaffCode()
+        );
+        return updated;
     }
 
     @Transactional
@@ -134,7 +156,25 @@ public class WorkspaceStaffService {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
         authContextService.requireWritableTeam(entity.getTeamId());
+        String actor = authContextService.currentActor("system");
+        WorkspaceAccountEntity linkedAccount = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
+            .eq(WorkspaceAccountEntity::getStaffId, id)
+            .last("limit 1"));
+        if (linkedAccount != null) {
+            workspaceAccountTeamScopeMapper.delete(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
+                .eq(WorkspaceAccountTeamScopeEntity::getAccountId, linkedAccount.getId()));
+            workspaceAccountMapper.deleteById(linkedAccount.getId());
+        }
         staffMapper.deleteById(id);
+        workspaceOperationLogService.log(
+            actor,
+            "Delete workspace staff",
+            "workspace_staff",
+            id,
+            linkedAccount == null
+                ? "Staff ID=" + entity.getStaffCode()
+                : "Staff ID=" + entity.getStaffCode() + "; removed linked workspace account"
+        );
     }
 
     public List<com.support.server.supportrosterserver.dto.StaffDto> listViewerStaff() {
@@ -221,6 +261,27 @@ public class WorkspaceStaffService {
         entity.setNotes(normalizeOptionalText(request.getNotes()));
     }
 
+    private void applyCreate(
+            StaffEntity entity,
+            String staffCode,
+            EmployeeDirectoryLookupResponse employee,
+            WorkspaceStaffUpsertRequest request) {
+        lookupService.requireTeam(request.getTeamId());
+        entity.setStaffCode(staffCode);
+        entity.setName(resolveCreateName(staffCode, request.getName(), employee));
+        entity.setEmail(resolvePreferredText(request.getEmail(), employee == null ? null : employee.emailAddress()));
+        entity.setPhone(normalizeOptionalText(request.getPhone()));
+        entity.setSlack(normalizeOptionalText(request.getSlack()));
+        entity.setRegion(resolvePreferredText(request.getRegion(), employee == null ? null : buildRegion(employee.city(), employee.country())));
+        entity.setTimezone(lookupService.normalizeWorkspaceTimezone(normalizeOptionalText(request.getTimezone())));
+        entity.setRoleName(resolvePreferredText(request.getRoleName(), employee == null ? null : employee.roleFromLDAP()));
+        entity.setTeamId(request.getTeamId());
+        entity.setRoleGroupId(null);
+        entity.setStatus(resolveStatus(request.getStatus()));
+        entity.setAvatar(request.getAvatar());
+        entity.setNotes(normalizeOptionalText(request.getNotes()));
+    }
+
     private void applyEmployeeLookup(
             StaffEntity entity,
             String staffCode,
@@ -256,6 +317,22 @@ public class WorkspaceStaffService {
         }
         String displayName = normalizeOptionalText(employee.displayName());
         return displayName == null ? staffCode : displayName;
+    }
+
+    private String resolveCreateName(String staffCode, String requestedName, EmployeeDirectoryLookupResponse employee) {
+        String normalizedRequestedName = normalizeOptionalText(requestedName);
+        if (normalizedRequestedName != null) {
+            return normalizedRequestedName;
+        }
+        return resolveEmployeeName(staffCode, employee);
+    }
+
+    private String resolvePreferredText(String preferredValue, String fallbackValue) {
+        String normalizedPreferredValue = normalizeOptionalText(preferredValue);
+        if (normalizedPreferredValue != null) {
+            return normalizedPreferredValue;
+        }
+        return normalizeOptionalText(fallbackValue);
     }
 
     private void ensureBatchDoesNotContainDuplicates(List<String> staffCodes) {

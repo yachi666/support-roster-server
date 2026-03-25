@@ -3,6 +3,7 @@ package com.support.server.supportrosterserver.controller.workspace;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -61,6 +62,12 @@ public class WorkspaceAccountController {
     @PostMapping("/{id}/disable")
     public ResponseEntity<Void> disableAccount(@PathVariable Long id) {
         workspaceAccountService.disableAccount(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteAccount(@PathVariable Long id) {
+        workspaceAccountService.deleteAccount(id);
         return ResponseEntity.noContent().build();
     }
 }

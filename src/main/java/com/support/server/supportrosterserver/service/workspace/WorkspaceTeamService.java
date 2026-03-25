@@ -27,6 +27,7 @@ public class WorkspaceTeamService {
     private final TeamMapper teamMapper;
     private final WorkspaceLookupService lookupService;
     private final AuthContextService authContextService;
+    private final WorkspaceOperationLogService workspaceOperationLogService;
 
     public List<WorkspaceTeamDto> listTeams() {
         return lookupService.listTeams().stream()
@@ -40,16 +41,39 @@ public class WorkspaceTeamService {
         TeamEntity entity = new TeamEntity();
         apply(entity, request);
         teamMapper.insert(entity);
-        return getTeam(entity.getId());
+        WorkspaceTeamDto created = getTeam(entity.getId());
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            "Create workspace team",
+            "workspace_team",
+            created.getId(),
+            "Team=" + created.getName()
+        );
+        return created;
     }
 
     @Transactional
     public WorkspaceTeamDto updateTeam(Long id, WorkspaceTeamUpsertRequest request) {
         authContextService.requireAdmin();
         TeamEntity entity = lookupService.requireTeam(id);
+        String previousName = entity.getName();
         apply(entity, request);
         teamMapper.updateById(entity);
-        return getTeam(id);
+        WorkspaceTeamDto updated = getTeam(id);
+        String action = previousName != null && !previousName.equals(updated.getName())
+            ? "Rename workspace team"
+            : "Update workspace team";
+        String details = previousName != null && !previousName.equals(updated.getName())
+            ? "From=" + previousName + "; To=" + updated.getName()
+            : "Team=" + updated.getName();
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            action,
+            "workspace_team",
+            updated.getId(),
+            details
+        );
+        return updated;
     }
 
     @Transactional
@@ -79,6 +103,13 @@ public class WorkspaceTeamService {
             teamMapper.updateById(team);
         }
 
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            "Reorder workspace teams",
+            "workspace_team",
+            null,
+            "Updated display order for " + teamIds.size() + " teams"
+        );
         return listTeams();
     }
 
@@ -89,8 +120,15 @@ public class WorkspaceTeamService {
     @Transactional
     public void deleteTeam(Long id) {
         authContextService.requireAdmin();
-        lookupService.requireTeam(id);
+        TeamEntity team = lookupService.requireTeam(id);
         teamMapper.deleteById(id);
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            "Delete workspace team",
+            "workspace_team",
+            id,
+            "Team=" + team.getName()
+        );
     }
 
     public List<com.support.server.supportrosterserver.dto.TeamDto> listViewerTeams() {
