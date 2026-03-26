@@ -329,7 +329,6 @@ public class WorkspaceStaffService {
         String fallbackEmail = employee == null ? entity.getEmail() : employee.emailAddress();
         return staffProfileSupport.resolvePreferredText(requestedEmail, fallbackEmail);
     }
-
     private boolean shouldLookupMissingProfileFields(String requestedName, String requestedEmail) {
         return requestedName == null || requestedEmail == null;
     }
