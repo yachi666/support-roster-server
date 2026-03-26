@@ -38,6 +38,7 @@ class WorkspaceStaffServiceTest {
     private WorkspaceAccountMapper workspaceAccountMapper;
     private WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private EmployeeDirectoryClient employeeDirectoryClient;
+    private WorkspaceStaffProfileSupport staffProfileSupport;
     private WorkspaceOperationLogService workspaceOperationLogService;
     private AuthTokenVersionService authTokenVersionService;
     private WorkspaceStaffService workspaceStaffService;
@@ -48,6 +49,7 @@ class WorkspaceStaffServiceTest {
         workspaceAccountMapper = mock(WorkspaceAccountMapper.class);
         workspaceAccountTeamScopeMapper = mock(WorkspaceAccountTeamScopeMapper.class);
         employeeDirectoryClient = mock(EmployeeDirectoryClient.class);
+        staffProfileSupport = new WorkspaceStaffProfileSupport(employeeDirectoryClient);
         workspaceOperationLogService = mock(WorkspaceOperationLogService.class);
         authTokenVersionService = mock(AuthTokenVersionService.class);
         WorkspaceLookupService lookupService = mock(WorkspaceLookupService.class);
@@ -61,7 +63,7 @@ class WorkspaceStaffServiceTest {
         when(authContextService.currentActor(any())).thenReturn("Admin");
         workspaceStaffService = new WorkspaceStaffService(
             mock(AvatarUrlResolver.class),
-            employeeDirectoryClient,
+            staffProfileSupport,
             staffMapper,
             rosterAssignmentMapper,
             lookupService,
@@ -143,6 +145,58 @@ class WorkspaceStaffServiceTest {
         workspaceStaffService.updateStaff(1L, request);
 
         verify(workspaceAccountMapper).updateById(account);
+    }
+
+    @Test
+    void shouldFillMissingProfileFieldsDuringUpdate() {
+        StaffEntity staff = new StaffEntity();
+        staff.setId(1L);
+        staff.setStaffCode("A001");
+        staff.setName("Existing");
+        staff.setEmail("existing@example.com");
+        staff.setTeamId(10L);
+        when(staffMapper.selectById(1L)).thenReturn(staff);
+        when(employeeDirectoryClient.getEmployee("A001")).thenReturn(
+            new EmployeeDirectoryLookupResponse("xian", "China", "Alice Zhang", "alice.zhang@example.com", "lead")
+        );
+
+        WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
+        request.setStaffCode("A001");
+        request.setName("   ");
+        request.setEmail("   ");
+        request.setTeamId(10L);
+        request.setTimezone("UTC");
+        request.setStatus("ACTIVE");
+
+        workspaceStaffService.updateStaff(1L, request);
+
+        Assertions.assertEquals("Alice Zhang", staff.getName());
+        Assertions.assertEquals("alice.zhang@example.com", staff.getEmail());
+    }
+
+    @Test
+    void shouldAllowEmptyNameWhenLookupFailsDuringUpdate() {
+        StaffEntity staff = new StaffEntity();
+        staff.setId(1L);
+        staff.setStaffCode("A404");
+        staff.setName("Existing");
+        staff.setEmail("existing@example.com");
+        staff.setTeamId(10L);
+        when(staffMapper.selectById(1L)).thenReturn(staff);
+        when(employeeDirectoryClient.getEmployee("A404")).thenThrow(new IllegalStateException("lookup failed"));
+
+        WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
+        request.setStaffCode("A404");
+        request.setName("   ");
+        request.setEmail("   ");
+        request.setTeamId(10L);
+        request.setTimezone("UTC");
+        request.setStatus("ACTIVE");
+
+        workspaceStaffService.updateStaff(1L, request);
+
+        Assertions.assertNull(staff.getName());
+        Assertions.assertNull(staff.getEmail());
     }
 
     @Test

@@ -29,6 +29,7 @@ import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPrevi
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPreviewSaveRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportPreviewSaveRowRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceImportSaveResponse;
+import com.support.server.supportrosterserver.dto.employee.EmployeeDirectoryLookupResponse;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
@@ -39,6 +40,7 @@ import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.TeamMapper;
+import com.support.server.supportrosterserver.service.EmployeeDirectoryClient;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 class WorkspaceImportServiceTest {
@@ -49,6 +51,8 @@ class WorkspaceImportServiceTest {
     private RosterAssignmentMapper rosterAssignmentMapper;
     private TeamMapper teamMapper;
     private WorkspaceLookupService lookupService;
+    private EmployeeDirectoryClient employeeDirectoryClient;
+    private WorkspaceStaffProfileSupport staffProfileSupport;
     private AuthContextService authContextService;
     private WorkspaceImportService workspaceImportService;
 
@@ -60,6 +64,8 @@ class WorkspaceImportServiceTest {
         rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
         teamMapper = mock(TeamMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
+        employeeDirectoryClient = mock(EmployeeDirectoryClient.class);
+        staffProfileSupport = new WorkspaceStaffProfileSupport(employeeDirectoryClient);
         authContextService = mock(AuthContextService.class);
 
         workspaceImportService = new WorkspaceImportService(
@@ -69,6 +75,7 @@ class WorkspaceImportServiceTest {
             rosterAssignmentMapper,
             teamMapper,
             lookupService,
+            staffProfileSupport,
             authContextService,
             new WorkspaceShiftTimeSupport()
         );
@@ -179,9 +186,13 @@ class WorkspaceImportServiceTest {
     void shouldSavePreviewAndCreateMissingTeamAndStaff() {
         ShiftDefinitionEntity shift = buildShiftDefinition(1001L, "A");
         ShiftDefinitionTeamRelEntity relation = buildRelation(1001L, 301L);
+        StaffEntity[] insertedStaff = new StaffEntity[1];
 
         when(teamMapper.selectList(any())).thenReturn(List.of());
         when(staffMapper.selectList(any())).thenReturn(List.of());
+        when(employeeDirectoryClient.getEmployee("1002")).thenReturn(
+            new EmployeeDirectoryLookupResponse("xian", "China", "Alice Zhang", "alice.zhang@example.com", "scheduler")
+        );
         when(lookupService.inferTimezone(null, "New Team")).thenReturn("UTC");
         when(lookupService.normalizeWorkspaceTimezone("UTC")).thenReturn("UTC");
         when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(shift));
@@ -195,6 +206,7 @@ class WorkspaceImportServiceTest {
         doAnswer(invocation -> {
             StaffEntity entity = invocation.getArgument(0);
             entity.setId(401L);
+            insertedStaff[0] = entity;
             return 1;
         }).when(staffMapper).insert(any(StaffEntity.class));
 
@@ -213,6 +225,11 @@ class WorkspaceImportServiceTest {
         assertEquals(1, response.getAppliedStaffCount());
         assertEquals(1, response.getCreatedStaffCount());
         assertEquals(1, response.getCreatedTeamCount());
+        assertEquals("1002", insertedStaff[0].getStaffCode());
+        assertEquals("Alice Zhang", insertedStaff[0].getName());
+        assertEquals("alice.zhang@example.com", insertedStaff[0].getEmail());
+        assertEquals("xian, China", insertedStaff[0].getRegion());
+        assertEquals("scheduler", insertedStaff[0].getRoleName());
     }
 
     @Test
