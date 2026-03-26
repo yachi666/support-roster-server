@@ -15,10 +15,14 @@ public class WorkspaceValidationIssueDto {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long teamId;
     private String severity;
+    private String ruleCode;
+    private String domain;
+    private Boolean blocking;
     private String type;
     private String description;
     private String team;
     private String date;
+    private String targetPage;
     private Boolean resolvable;
     private String resolutionKind;
 }

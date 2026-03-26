@@ -11,4 +11,6 @@ public class WorkspaceValidationSummaryDto {
     private long high;
     private long medium;
     private long low;
+    private long total;
+    private long blocking;
 }

@@ -647,10 +647,14 @@ public class WorkspaceImportService {
             id,
             teamId,
             severity,
+            "import.preview." + normalizeKey(type).replaceAll("[^a-z0-9]+", "-"),
+            "import",
+            false,
             type,
             description,
             teamName,
             issueDate == null ? "-" : issueDate.format(ISSUE_DATE_FORMATTER),
+            "/workspace/import-export",
             false,
             null
         );
