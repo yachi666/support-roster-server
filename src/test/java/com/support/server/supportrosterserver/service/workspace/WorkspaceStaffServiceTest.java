@@ -175,7 +175,7 @@ class WorkspaceStaffServiceTest {
     }
 
     @Test
-    void shouldAllowEmptyNameWhenLookupFailsDuringUpdate() {
+    void shouldPreserveExistingProfileFieldsWhenLookupFailsDuringUpdate() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
         staff.setStaffCode("A404");
@@ -195,8 +195,8 @@ class WorkspaceStaffServiceTest {
 
         workspaceStaffService.updateStaff(1L, request);
 
-        Assertions.assertNull(staff.getName());
-        Assertions.assertNull(staff.getEmail());
+        Assertions.assertEquals("Existing", staff.getName());
+        Assertions.assertEquals("existing@example.com", staff.getEmail());
     }
 
     @Test
