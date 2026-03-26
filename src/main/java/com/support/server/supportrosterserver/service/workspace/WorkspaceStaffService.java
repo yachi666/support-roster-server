@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +30,6 @@ import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
 import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.service.AvatarUrlResolver;
-import com.support.server.supportrosterserver.service.EmployeeDirectoryClient;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
 import com.support.server.supportrosterserver.service.auth.AuthTokenVersionService;
 
@@ -42,10 +39,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class WorkspaceStaffService {
 
-    private static final Logger log = LogManager.getLogger(WorkspaceStaffService.class);
-
     private final AvatarUrlResolver avatarUrlResolver;
-    private final EmployeeDirectoryClient employeeDirectoryClient;
+    private final WorkspaceStaffProfileSupport staffProfileSupport;
     private final StaffMapper staffMapper;
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final WorkspaceLookupService lookupService;
@@ -92,7 +87,7 @@ public class WorkspaceStaffService {
         authContextService.requireWritableTeam(request.getTeamId());
         String staffCode = normalizeRequiredText(request.getStaffCode(), "Staff ID is required.");
         ensureStaffCodesAvailable(List.of(staffCode), null);
-        EmployeeDirectoryLookupResponse employee = lookupEmployeeSafely(staffCode);
+        EmployeeDirectoryLookupResponse employee = staffProfileSupport.lookupEmployeeSafely(staffCode);
         StaffEntity entity = new StaffEntity();
         applyCreate(entity, staffCode, employee, request);
         staffMapper.insert(entity);
@@ -118,7 +113,7 @@ public class WorkspaceStaffService {
 
         List<WorkspaceStaffDto> createdStaff = new ArrayList<>();
         for (String staffCode : staffCodes) {
-            EmployeeDirectoryLookupResponse employee = lookupEmployeeSafely(staffCode);
+            EmployeeDirectoryLookupResponse employee = staffProfileSupport.lookupEmployeeSafely(staffCode);
             StaffEntity entity = new StaffEntity();
             applyEmployeeLookup(entity, staffCode, employee, request);
             staffMapper.insert(entity);
@@ -249,9 +244,16 @@ public class WorkspaceStaffService {
 
     private void apply(StaffEntity entity, WorkspaceStaffUpsertRequest request) {
         lookupService.requireTeam(request.getTeamId());
-        entity.setStaffCode(normalizeRequiredText(request.getStaffCode(), "Staff ID is required."));
-        entity.setName(normalizeRequiredText(request.getName(), "Full name is required."));
-        entity.setEmail(normalizeOptionalText(request.getEmail()));
+        String staffCode = normalizeRequiredText(request.getStaffCode(), "Staff ID is required.");
+        String requestedName = normalizeOptionalText(request.getName());
+        String requestedEmail = normalizeOptionalText(request.getEmail());
+        EmployeeDirectoryLookupResponse employee = shouldLookupMissingProfileFields(requestedName, requestedEmail)
+            ? staffProfileSupport.lookupEmployeeSafely(staffCode)
+            : null;
+
+        entity.setStaffCode(staffCode);
+        entity.setName(resolveUpdateName(staffCode, requestedName, employee));
+        entity.setEmail(staffProfileSupport.resolvePreferredText(requestedEmail, employee == null ? null : employee.emailAddress()));
         entity.setPhone(normalizeOptionalText(request.getPhone()));
         entity.setSlack(normalizeOptionalText(request.getSlack()));
         entity.setRegion(normalizeOptionalText(request.getRegion()));
@@ -272,12 +274,12 @@ public class WorkspaceStaffService {
         lookupService.requireTeam(request.getTeamId());
         entity.setStaffCode(staffCode);
         entity.setName(resolveCreateName(staffCode, request.getName(), employee));
-        entity.setEmail(resolvePreferredText(request.getEmail(), employee == null ? null : employee.emailAddress()));
+        entity.setEmail(staffProfileSupport.resolvePreferredText(request.getEmail(), employee == null ? null : employee.emailAddress()));
         entity.setPhone(normalizeOptionalText(request.getPhone()));
         entity.setSlack(normalizeOptionalText(request.getSlack()));
-        entity.setRegion(resolvePreferredText(request.getRegion(), employee == null ? null : buildRegion(employee.city(), employee.country())));
+        entity.setRegion(staffProfileSupport.resolvePreferredText(request.getRegion(), staffProfileSupport.buildRegion(employee)));
         entity.setTimezone(lookupService.normalizeWorkspaceTimezone(normalizeOptionalText(request.getTimezone())));
-        entity.setRoleName(resolvePreferredText(request.getRoleName(), employee == null ? null : employee.roleFromLDAP()));
+        entity.setRoleName(staffProfileSupport.resolvePreferredText(request.getRoleName(), employee == null ? null : employee.roleFromLDAP()));
         entity.setTeamId(request.getTeamId());
         entity.setRoleGroupId(null);
         entity.setStatus(resolveStatus(request.getStatus()));
@@ -291,11 +293,11 @@ public class WorkspaceStaffService {
             EmployeeDirectoryLookupResponse employee,
             WorkspaceStaffBatchCreateRequest request) {
         entity.setStaffCode(staffCode);
-        entity.setName(resolveEmployeeName(staffCode, employee));
+        entity.setName(staffProfileSupport.resolveEmployeeName(staffCode, employee));
         entity.setEmail(employee == null ? null : normalizeOptionalText(employee.emailAddress()));
         entity.setPhone(null);
         entity.setSlack(null);
-        entity.setRegion(employee == null ? null : buildRegion(employee.city(), employee.country()));
+        entity.setRegion(staffProfileSupport.buildRegion(employee));
         entity.setTimezone(lookupService.normalizeWorkspaceTimezone(normalizeOptionalText(request.getTimezone())));
         entity.setRoleName(employee == null ? null : normalizeOptionalText(employee.roleFromLDAP()));
         entity.setTeamId(request.getTeamId());
@@ -305,37 +307,26 @@ public class WorkspaceStaffService {
         entity.setNotes(normalizeOptionalText(request.getNotes()));
     }
 
-    private EmployeeDirectoryLookupResponse lookupEmployeeSafely(String staffCode) {
-        try {
-            return employeeDirectoryClient.getEmployee(staffCode);
-        } catch (RuntimeException ex) {
-            log.warn("Employee lookup failed for staff ID {}. Falling back to minimal staff profile.", staffCode, ex);
-            return null;
-        }
-    }
-
-    private String resolveEmployeeName(String staffCode, EmployeeDirectoryLookupResponse employee) {
-        if (employee == null) {
-            return staffCode;
-        }
-        String displayName = normalizeOptionalText(employee.displayName());
-        return displayName == null ? staffCode : displayName;
-    }
-
     private String resolveCreateName(String staffCode, String requestedName, EmployeeDirectoryLookupResponse employee) {
         String normalizedRequestedName = normalizeOptionalText(requestedName);
         if (normalizedRequestedName != null) {
             return normalizedRequestedName;
         }
-        return resolveEmployeeName(staffCode, employee);
+        return staffProfileSupport.resolveEmployeeName(staffCode, employee);
     }
 
-    private String resolvePreferredText(String preferredValue, String fallbackValue) {
-        String normalizedPreferredValue = normalizeOptionalText(preferredValue);
-        if (normalizedPreferredValue != null) {
-            return normalizedPreferredValue;
+    private String resolveUpdateName(String staffCode, String requestedName, EmployeeDirectoryLookupResponse employee) {
+        if (requestedName != null) {
+            return requestedName;
         }
-        return normalizeOptionalText(fallbackValue);
+        if (employee == null) {
+            return null;
+        }
+        return staffProfileSupport.resolveEmployeeName(staffCode, employee);
+    }
+
+    private boolean shouldLookupMissingProfileFields(String requestedName, String requestedEmail) {
+        return requestedName == null || requestedEmail == null;
     }
 
     private void ensureBatchDoesNotContainDuplicates(List<String> staffCodes) {
@@ -379,18 +370,6 @@ public class WorkspaceStaffService {
             throw new BadRequestException("At least one staff ID is required.");
         }
         return normalized;
-    }
-
-    private String buildRegion(String city, String country) {
-        String normalizedCity = normalizeOptionalText(city);
-        String normalizedCountry = normalizeOptionalText(country);
-        if (normalizedCity == null) {
-            return normalizedCountry;
-        }
-        if (normalizedCountry == null) {
-            return normalizedCity;
-        }
-        return normalizedCity + ", " + normalizedCountry;
     }
 
     private String normalizeRequiredText(String value, String message) {

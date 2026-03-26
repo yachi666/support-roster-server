@@ -70,6 +70,7 @@ public class WorkspaceImportService {
     private final RosterAssignmentMapper rosterAssignmentMapper;
     private final TeamMapper teamMapper;
     private final WorkspaceLookupService lookupService;
+    private final WorkspaceStaffProfileSupport staffProfileSupport;
     private final AuthContextService authContextService;
     private final WorkspaceShiftTimeSupport shiftTimeSupport;
 
@@ -304,16 +305,18 @@ public class WorkspaceImportService {
             if (staff == null) {
                 staff = staffByCode.get(normalizedStaffCode);
                 if (staff == null) {
+                    String staffCode = row.getStaffCode().trim();
+                    var employee = staffProfileSupport.lookupEmployeeSafely(staffCode);
                     staff = new StaffEntity();
-                    staff.setStaffCode(row.getStaffCode().trim());
-                    staff.setName(row.getStaffCode().trim());
-                    staff.setEmail(null);
+                    staff.setStaffCode(staffCode);
+                    staff.setName(staffProfileSupport.resolveEmployeeName(staffCode, employee));
+                    staff.setEmail(employee == null ? null : staffProfileSupport.normalizeOptionalText(employee.emailAddress()));
                     staff.setPhone(null);
                     staff.setSlack(null);
-                    staff.setRegion(null);
+                    staff.setRegion(staffProfileSupport.buildRegion(employee));
                     String inferredTimezone = lookupService.inferTimezone(null, team.getName());
                     staff.setTimezone(lookupService.normalizeWorkspaceTimezone(inferredTimezone));
-                    staff.setRoleName("Imported staff");
+                    staff.setRoleName(employee == null ? "Imported staff" : staffProfileSupport.normalizeOptionalText(employee.roleFromLDAP()));
                     staff.setTeamId(team.getId());
                     staff.setRoleGroupId(null);
                     staff.setStatus("Active");
