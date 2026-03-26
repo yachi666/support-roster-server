@@ -252,8 +252,8 @@ public class WorkspaceStaffService {
             : null;
 
         entity.setStaffCode(staffCode);
-        entity.setName(resolveUpdateName(staffCode, requestedName, employee));
-        entity.setEmail(staffProfileSupport.resolvePreferredText(requestedEmail, employee == null ? null : employee.emailAddress()));
+        entity.setName(resolveUpdateName(entity, staffCode, requestedName, employee));
+        entity.setEmail(resolveUpdateEmail(entity, requestedEmail, employee));
         entity.setPhone(normalizeOptionalText(request.getPhone()));
         entity.setSlack(normalizeOptionalText(request.getSlack()));
         entity.setRegion(normalizeOptionalText(request.getRegion()));
@@ -315,16 +315,20 @@ public class WorkspaceStaffService {
         return staffProfileSupport.resolveEmployeeName(staffCode, employee);
     }
 
-    private String resolveUpdateName(String staffCode, String requestedName, EmployeeDirectoryLookupResponse employee) {
+    private String resolveUpdateName(StaffEntity entity, String staffCode, String requestedName, EmployeeDirectoryLookupResponse employee) {
         if (requestedName != null) {
             return requestedName;
         }
         if (employee == null) {
-            return null;
+            return normalizeOptionalText(entity.getName());
         }
         return staffProfileSupport.resolveEmployeeName(staffCode, employee);
     }
 
+    private String resolveUpdateEmail(StaffEntity entity, String requestedEmail, EmployeeDirectoryLookupResponse employee) {
+        String fallbackEmail = employee == null ? entity.getEmail() : employee.emailAddress();
+        return staffProfileSupport.resolvePreferredText(requestedEmail, fallbackEmail);
+    }
     private boolean shouldLookupMissingProfileFields(String requestedName, String requestedEmail) {
         return requestedName == null || requestedEmail == null;
     }

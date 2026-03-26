@@ -33,7 +33,8 @@ public class WorkspaceOverviewService {
     public WorkspaceOverviewResponse getOverview(Integer year, Integer month) {
         YearMonth targetMonth = resolveMonth(year, month);
         var validation = validationService.getValidation(targetMonth.getYear(), targetMonth.getMonthValue());
-        long totalIssues = validation.getIssues().size();
+        long totalIssues = validation.getSummary().getTotal();
+        long blockingIssues = validation.getSummary().getBlocking();
         var assignmentQuery = com.baomidou.mybatisplus.core.toolkit.Wrappers.<com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity>lambdaQuery()
             .between(com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity::getAssignmentDate, targetMonth.atDay(1), targetMonth.atEndOfMonth());
         List<Long> readableTeamIds = authContextService.readableTeamIds();
@@ -41,11 +42,31 @@ public class WorkspaceOverviewService {
             assignmentQuery.in(com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity::getTeamId, readableTeamIds);
         }
         long totalAssignments = rosterAssignmentMapper.selectCount(assignmentQuery);
-        int completion = totalAssignments == 0 ? 0 : (int) Math.max(0, 100 - Math.min(100, totalIssues));
+        int completion = totalAssignments == 0
+            ? 0
+            : calculateReadinessScore(validation.getSummary().getHigh(), validation.getSummary().getMedium(), validation.getSummary().getLow(), blockingIssues);
 
         List<WorkspaceSummaryStatDto> stats = List.of(
-            new WorkspaceSummaryStatDto("Roster Completion", completion + "%", totalIssues == 0 ? "No blocking issues detected for this month" : totalIssues + " validation signals are reducing readiness", completion > 80 ? "good" : "warning", completion),
-            new WorkspaceSummaryStatDto("Validation Watch", String.valueOf(totalIssues), validation.getSummary().getHigh() + " high severity items remain open", totalIssues == 0 ? "good" : "warning", Math.max(0, 100 - (int) totalIssues * 5)),
+            new WorkspaceSummaryStatDto(
+                "Roster Completion",
+                completion + "%",
+                blockingIssues > 0
+                    ? blockingIssues + " blocking roster risk(s) are reducing readiness"
+                    : totalIssues == 0
+                        ? "No blocking issues detected for this month"
+                        : "No blocking roster risks; follow-up issues remain for admins",
+                blockingIssues == 0 ? "good" : "warning",
+                completion
+            ),
+            new WorkspaceSummaryStatDto(
+                "Validation Watch",
+                String.valueOf(blockingIssues),
+                blockingIssues > 0
+                    ? blockingIssues + " blocking roster issue(s) remain open"
+                    : totalIssues + " non-blocking issue(s) remain open",
+                blockingIssues == 0 ? "good" : "warning",
+                Math.max(0, 100 - (int) Math.min(100, blockingIssues * 20))
+            ),
             new WorkspaceSummaryStatDto("Scheduled Assignments", String.valueOf(totalAssignments), "Imported and manual roster entries captured for the selected month", "neutral", Math.min(100, (int) totalAssignments))
         );
 
@@ -65,6 +86,17 @@ public class WorkspaceOverviewService {
             new WorkspaceQuickActionDto("Review Open Issues", "Escalate only the items that need validation follow-up", "rose", "validation")
         );
         return new WorkspaceOverviewResponse(stats, activity, quickActions);
+    }
+
+    private int calculateReadinessScore(long high, long medium, long low, long blocking) {
+        int score = 100;
+        score -= Math.min(80, (int) blocking * 25);
+        score -= Math.min(15, (int) medium * 3);
+        score -= Math.min(5, (int) low);
+        if (high > blocking) {
+            score -= Math.min(10, (int) (high - blocking) * 5);
+        }
+        return Math.max(0, score);
     }
 
     private YearMonth resolveMonth(Integer year, Integer month) {

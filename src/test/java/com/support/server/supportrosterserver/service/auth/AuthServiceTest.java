@@ -80,4 +80,23 @@ class AuthServiceTest {
         assertEquals("Password has already been initialized. Please sign in.", error.getMessage());
         verify(workspaceAccountMapper, never()).updateById(any(WorkspaceAccountEntity.class));
     }
+
+    @Test
+    void shouldRejectActivationWhenNewPasswordIsShorterThanFourCharacters() {
+        WorkspaceAccountEntity account = new WorkspaceAccountEntity();
+        account.setId(103L);
+        account.setStaffCode("A003");
+        account.setAccountStatus(AccountStatus.PENDING_ACTIVATION.getCode());
+        when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
+
+        AuthActivateRequest request = new AuthActivateRequest();
+        request.setStaffId("A003");
+        request.setNewPassword("123");
+
+        BadRequestException error = assertThrows(BadRequestException.class, () -> authService.activate(request));
+
+        assertEquals("Password must be at least 4 characters.", error.getMessage());
+        verify(passwordEncoder, never()).encode(any());
+        verify(workspaceAccountMapper, never()).updateById(any(WorkspaceAccountEntity.class));
+    }
 }

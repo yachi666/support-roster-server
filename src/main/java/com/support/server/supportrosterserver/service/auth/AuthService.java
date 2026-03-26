@@ -151,8 +151,8 @@ public class AuthService {
         if (password == null || password.isBlank()) {
             throw new BadRequestException("New password is required.");
         }
-        if (password.length() < 8) {
-            throw new BadRequestException("Password must be at least 8 characters.");
+        if (password.length() < 4) {
+            throw new BadRequestException("Password must be at least 4 characters.");
         }
         if (password.length() > 64) {
             throw new BadRequestException("Password must be 64 characters or fewer.");
