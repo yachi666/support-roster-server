@@ -550,7 +550,6 @@ class WorkspaceValidationServiceTest {
                 && issue.getId() < 0
         ));
     }
-
     private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {
         ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
         relation.setShiftDefinitionId(shiftDefinitionId);
