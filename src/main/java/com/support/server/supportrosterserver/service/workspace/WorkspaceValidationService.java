@@ -514,9 +514,9 @@ public class WorkspaceValidationService {
             missingReferences.add("shift-team mapping");
         }
         if (missingReferences.isEmpty()) {
-            return "Assignment contains an invalid historical reference and should be removed.";
+            return "Assignment #" + assignment.getId() + " contains an invalid historical reference and should be removed.";
         }
-        return "Assignment contains invalid " + String.join(", ", missingReferences) + " reference(s) and can be safely removed.";
+        return "Assignment #" + assignment.getId() + " contains invalid " + String.join(", ", missingReferences) + " reference(s) and can be safely removed.";
     }
 
     private void loadImportIssues(YearMonth targetMonth, ValidationAccumulator accumulator) {

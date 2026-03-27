@@ -172,10 +172,23 @@ public class WorkspaceTeamService {
         ensureUniqueTeamName(entity.getId(), normalizedName);
 
         entity.setName(normalizedName);
-        entity.setColor(request.getColor() == null ? null : request.getColor().trim());
+        entity.setColor(normalizeRequiredHexColor(request.getColor(), "Team color is required."));
         entity.setDisplayOrder(request.getDisplayOrder());
         entity.setVisible(request.getVisible());
         entity.setDescription(request.getDescription() == null || request.getDescription().isBlank() ? null : request.getDescription().trim());
+    }
+
+    private String normalizeRequiredHexColor(String color, String requiredMessage) {
+        if (color == null || color.isBlank()) {
+            throw new BadRequestException(requiredMessage);
+        }
+
+        String normalized = color.trim();
+        if (!normalized.matches("^#([0-9a-fA-F]{6})$")) {
+            throw new BadRequestException("Use a 6-digit hex color.");
+        }
+
+        return normalized.toLowerCase();
     }
 
     private void ensureUniqueTeamName(Long currentTeamId, String normalizedName) {
