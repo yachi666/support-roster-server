@@ -656,6 +656,7 @@ public class WorkspaceImportService {
             issueDate == null ? "-" : issueDate.format(ISSUE_DATE_FORMATTER),
             "/workspace/import-export",
             false,
+            null,
             null
         );
     }

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,13 +16,20 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationApplyResponse;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationDto;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationPreviewResponse;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationIssueDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationResolveRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationResolveResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationSummaryDto;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
 import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity;
 import com.support.server.supportrosterserver.entity.workspace.ImportBatchEntity;
 import com.support.server.supportrosterserver.entity.workspace.RosterAssignmentEntity;
@@ -29,12 +37,15 @@ import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEn
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
+import com.support.server.supportrosterserver.exception.BadRequestException;
 import com.support.server.supportrosterserver.mapper.ImportBatchMapper;
 import com.support.server.supportrosterserver.mapper.ImportIssueMapper;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
+import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
@@ -45,6 +56,7 @@ public class WorkspaceValidationService {
 
     private static final String RESOLUTION_KIND_IMPORT_ISSUE = "import-issue";
     private static final String RESOLUTION_KIND_MANUAL = "manual";
+    private static final String RESOLUTION_KIND_SYSTEM_CLEANUP = "system-cleanup";
     private static final String DOMAIN_IMPORT = "import";
     private static final String DOMAIN_CONFIGURATION = "configuration";
     private static final String DOMAIN_ROSTER = "roster";
@@ -53,6 +65,11 @@ public class WorkspaceValidationService {
     private static final String TARGET_PAGE_STAFF = "/workspace/staff";
     private static final String TARGET_PAGE_SHIFTS = "/workspace/shifts";
     private static final String TARGET_PAGE_TEAMS = "/workspace/teams";
+    private static final String TARGET_PAGE_ACCOUNTS = "/workspace/accounts";
+    private static final String REMEDIATION_TYPE_DELETE_RECORDS = "delete-records";
+    private static final String REMEDIATION_ROLE_ADMIN = "admin";
+    private static final String ACTION_DELETE_INVALID_TEAM_SCOPE = "delete_invalid_team_scope";
+    private static final String ACTION_DELETE_ORPHAN_ASSIGNMENT = "delete_orphan_assignment";
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM dd", Locale.ENGLISH);
 
@@ -63,8 +80,11 @@ public class WorkspaceValidationService {
     private final ImportIssueMapper importIssueMapper;
     private final WorkspaceLookupService lookupService;
     private final ShiftDefinitionTeamRelMapper shiftDefinitionTeamRelMapper;
+    private final WorkspaceAccountMapper workspaceAccountMapper;
+    private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private final AuthContextService authContextService;
     private final WorkspaceShiftTimeSupport shiftTimeSupport;
+    private final WorkspaceOperationLogService workspaceOperationLogService;
 
     public WorkspaceValidationResponse getValidation(Integer year, Integer month) {
         return getValidation(year, month, false);
@@ -91,6 +111,43 @@ public class WorkspaceValidationService {
     }
 
     private void validateLiveData(YearMonth targetMonth, ValidationAccumulator accumulator, Map<Long, TeamEntity> teamMap) {
+        List<WorkspaceAccountTeamScopeEntity> accountTeamScopes = workspaceAccountTeamScopeMapper.selectList(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
+            .orderByAsc(WorkspaceAccountTeamScopeEntity::getAccountId)
+            .orderByAsc(WorkspaceAccountTeamScopeEntity::getTeamId));
+        List<Long> accountIds = accountTeamScopes.stream()
+            .map(WorkspaceAccountTeamScopeEntity::getAccountId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        Map<Long, WorkspaceAccountEntity> accountsById = accountIds.isEmpty()
+            ? Map.of()
+            : workspaceAccountMapper.selectBatchIds(accountIds).stream()
+                .collect(Collectors.toMap(WorkspaceAccountEntity::getId, account -> account));
+        for (WorkspaceAccountTeamScopeEntity scope : accountTeamScopes) {
+            if (scope.getTeamId() != null && teamMap.containsKey(scope.getTeamId())) {
+                continue;
+            }
+            WorkspaceAccountEntity account = accountsById.get(scope.getAccountId());
+            String accountLabel = account == null || account.getStaffCode() == null || account.getStaffCode().isBlank()
+                ? "unknown account"
+                : account.getStaffCode();
+            accumulator.record(
+                scope.getId(),
+                "medium",
+                "config.account.team-scope-invalid",
+                DOMAIN_CONFIGURATION,
+                false,
+                "Invalid Team Scope",
+                "Workspace account " + accountLabel + " references a team scope that no longer exists.",
+                "-",
+                "-",
+                TARGET_PAGE_ACCOUNTS,
+                true,
+                RESOLUTION_KIND_SYSTEM_CLEANUP,
+                ACTION_DELETE_INVALID_TEAM_SCOPE
+            );
+        }
+
         List<ShiftDefinitionEntity> definitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery());
         Map<Long, Set<Long>> teamIdsByDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery())
             .stream()
@@ -207,22 +264,33 @@ public class WorkspaceValidationService {
                 : resolveDefinitionTeamIds(shiftDefinition, teamIdsByDefinitionId);
             StaffEntity staff = staffById.get(assignment.getStaffId());
             TeamEntity team = assignment.getTeamId() == null ? null : teamMap.get(assignment.getTeamId());
-            if (staff == null) {
+            boolean invalidShiftTeamMapping = shiftDefinition != null
+                && assignment.getTeamId() != null
+                && !shiftDefinitionTeamIds.contains(assignment.getTeamId());
+            boolean orphanAssignment = staff == null
+                || team == null
+                || shiftDefinition == null
+                || assignment.getTeamId() == null
+                || invalidShiftTeamMapping;
+            if (orphanAssignment) {
                 accumulator.record(
-                    accumulator.nextSyntheticId(),
+                    assignment.getId(),
                     "high",
-                    "roster.assignment.staff-missing",
+                    "roster.assignment.orphaned",
                     DOMAIN_ROSTER,
                     true,
-                    "Missing Staff Profile",
-                    "Assignment references a staff record that no longer exists.",
+                    "Orphan Assignment",
+                    buildOrphanAssignmentDescription(assignment, team, staff, shiftDefinition, invalidShiftTeamMapping),
                     team == null ? "-" : team.getName(),
                     assignment.getAssignmentDate().format(DATE_FORMATTER),
-                    TARGET_PAGE_STAFF,
-                    false,
-                    RESOLUTION_KIND_MANUAL
+                    TARGET_PAGE_ROSTER,
+                    true,
+                    RESOLUTION_KIND_SYSTEM_CLEANUP,
+                    ACTION_DELETE_ORPHAN_ASSIGNMENT
                 );
-            } else if (!isActiveStaff(staff)) {
+                continue;
+            }
+            if (!isActiveStaff(staff)) {
                 accumulator.record(
                     accumulator.nextSyntheticId(),
                     "medium",
@@ -239,22 +307,6 @@ public class WorkspaceValidationService {
                 );
             }
 
-            if (shiftDefinition == null || !shiftDefinitionTeamIds.contains(assignment.getTeamId())) {
-                accumulator.record(
-                    accumulator.nextSyntheticId(),
-                    "high",
-                    "roster.assignment.shift-definition-invalid",
-                    DOMAIN_ROSTER,
-                    true,
-                    "Invalid Shift Definition",
-                    "Assignment references a shift definition that is missing or no longer available for the team.",
-                    team == null ? "-" : team.getName(),
-                    assignment.getAssignmentDate().format(DATE_FORMATTER),
-                    TARGET_PAGE_SHIFTS,
-                    false,
-                    RESOLUTION_KIND_MANUAL
-                );
-            }
         }
 
         for (String teamDayKey : teamDaysWithAssignments) {
@@ -345,6 +397,126 @@ public class WorkspaceValidationService {
         );
     }
 
+    public WorkspaceValidationRemediationPreviewResponse previewRemediation(Long issueId, WorkspaceValidationRemediationRequest request) {
+        authContextService.requireAdmin();
+        WorkspaceValidationIssueDto issue = requireRemediableIssue(issueId, request);
+        return buildRemediationPreview(issue);
+    }
+
+    @Transactional
+    public WorkspaceValidationRemediationApplyResponse applyRemediation(Long issueId, WorkspaceValidationRemediationRequest request) {
+        authContextService.requireAdmin();
+        WorkspaceValidationIssueDto issue = requireRemediableIssue(issueId, request);
+        List<Long> affectedRecordIds = switch (request.getActionKey()) {
+            case ACTION_DELETE_INVALID_TEAM_SCOPE -> applyDeleteInvalidTeamScope(issue);
+            case ACTION_DELETE_ORPHAN_ASSIGNMENT -> applyDeleteOrphanAssignment(issue);
+            default -> throw new BadRequestException("Unsupported remediation action.");
+        };
+        return new WorkspaceValidationRemediationApplyResponse(
+            issueId,
+            request.getActionKey(),
+            affectedRecordIds.size(),
+            affectedRecordIds,
+            getValidation(request.getYear(), request.getMonth())
+        );
+    }
+
+    private WorkspaceValidationIssueDto requireRemediableIssue(Long issueId, WorkspaceValidationRemediationRequest request) {
+        if (issueId == null) {
+            throw new BadRequestException("Issue ID is required.");
+        }
+        WorkspaceValidationIssueDto issue = getValidation(request.getYear(), request.getMonth()).getIssues().stream()
+            .filter(candidate -> Objects.equals(candidate.getId(), issueId))
+            .filter(candidate -> candidate.getRemediation() != null)
+            .filter(candidate -> request.getActionKey().equals(candidate.getRemediation().getActionKey()))
+            .findFirst()
+            .orElseThrow(() -> new BadRequestException("Validation issue is no longer available for remediation."));
+        if (!Boolean.TRUE.equals(issue.getRemediation().getPreviewable())) {
+            throw new BadRequestException("Preview is not supported for the selected remediation.");
+        }
+        return issue;
+    }
+
+    private WorkspaceValidationRemediationPreviewResponse buildRemediationPreview(WorkspaceValidationIssueDto issue) {
+        return switch (issue.getRemediation().getActionKey()) {
+            case ACTION_DELETE_INVALID_TEAM_SCOPE -> new WorkspaceValidationRemediationPreviewResponse(
+                issue.getId(),
+                ACTION_DELETE_INVALID_TEAM_SCOPE,
+                "Delete invalid team scope",
+                "This removes the orphaned team scope record and keeps the linked workspace account intact.",
+                "The account itself will not be deleted. This cleanup is permanent.",
+                1,
+                List.of(issue.getId())
+            );
+            case ACTION_DELETE_ORPHAN_ASSIGNMENT -> new WorkspaceValidationRemediationPreviewResponse(
+                issue.getId(),
+                ACTION_DELETE_ORPHAN_ASSIGNMENT,
+                "Delete orphan assignment",
+                "This removes the roster assignment record whose staff, team, or shift definition reference is no longer valid.",
+                "The roster entry will be permanently deleted from the selected month.",
+                1,
+                List.of(issue.getId())
+            );
+            default -> throw new BadRequestException("Unsupported remediation action.");
+        };
+    }
+
+    private List<Long> applyDeleteInvalidTeamScope(WorkspaceValidationIssueDto issue) {
+        WorkspaceAccountTeamScopeEntity scope = workspaceAccountTeamScopeMapper.selectById(issue.getId());
+        if (scope == null) {
+            throw new BadRequestException("The invalid team scope has already been removed.");
+        }
+        workspaceAccountTeamScopeMapper.deleteById(scope.getId());
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            "Cleanup validation issue",
+            "workspace_account_team_scope",
+            scope.getId(),
+            "Action=" + ACTION_DELETE_INVALID_TEAM_SCOPE + ", rule=" + issue.getRuleCode()
+        );
+        return List.of(scope.getId());
+    }
+
+    private List<Long> applyDeleteOrphanAssignment(WorkspaceValidationIssueDto issue) {
+        RosterAssignmentEntity assignment = rosterAssignmentMapper.selectById(issue.getId());
+        if (assignment == null) {
+            throw new BadRequestException("The orphan assignment has already been removed.");
+        }
+        rosterAssignmentMapper.deleteById(assignment.getId());
+        workspaceOperationLogService.log(
+            authContextService.currentActor("system"),
+            "Cleanup validation issue",
+            "workspace_roster_assignment",
+            assignment.getId(),
+            "Action=" + ACTION_DELETE_ORPHAN_ASSIGNMENT + ", rule=" + issue.getRuleCode()
+        );
+        return List.of(assignment.getId());
+    }
+
+    private String buildOrphanAssignmentDescription(
+            RosterAssignmentEntity assignment,
+            TeamEntity team,
+            StaffEntity staff,
+            ShiftDefinitionEntity shiftDefinition,
+            boolean invalidShiftTeamMapping) {
+        List<String> missingReferences = new ArrayList<>();
+        if (staff == null) {
+            missingReferences.add("staff");
+        }
+        if (team == null || assignment.getTeamId() == null) {
+            missingReferences.add("team");
+        }
+        if (shiftDefinition == null) {
+            missingReferences.add("shift definition");
+        } else if (invalidShiftTeamMapping) {
+            missingReferences.add("shift-team mapping");
+        }
+        if (missingReferences.isEmpty()) {
+            return "Assignment contains an invalid historical reference and should be removed.";
+        }
+        return "Assignment contains invalid " + String.join(", ", missingReferences) + " reference(s) and can be safely removed.";
+    }
+
     private void loadImportIssues(YearMonth targetMonth, ValidationAccumulator accumulator) {
         List<Long> batchIds = importBatchMapper.selectList(Wrappers.<ImportBatchEntity>lambdaQuery()
                 .eq(ImportBatchEntity::getRosterYear, targetMonth.getYear())
@@ -376,7 +548,8 @@ public class WorkspaceValidationService {
                 issue.getIssueDate() == null ? "-" : issue.getIssueDate().format(DATE_FORMATTER),
                 TARGET_PAGE_IMPORT,
                 true,
-                RESOLUTION_KIND_IMPORT_ISSUE
+                RESOLUTION_KIND_IMPORT_ISSUE,
+                null
             ));
     }
 
@@ -466,6 +639,22 @@ public class WorkspaceValidationService {
                 String targetPage,
                 boolean resolvable,
                 String resolutionKind) {
+            record(id, severity, ruleCode, domain, blocking, type, description, team, date, targetPage, resolvable, resolutionKind, null);
+        }
+
+        private void record(Long id,
+                String severity,
+                String ruleCode,
+                String domain,
+                boolean blocking,
+                String type,
+                String description,
+                String team,
+                String date,
+                String targetPage,
+                boolean resolvable,
+                String resolutionKind,
+                String remediationActionKey) {
             if (!isReadableTeam(team)) {
                 return;
             }
@@ -492,7 +681,8 @@ public class WorkspaceValidationService {
                 date,
                 targetPage,
                 resolvable,
-                resolutionKind
+                resolutionKind,
+                buildRemediation(remediationActionKey)
             );
 
             if (collectIssues) {
@@ -556,6 +746,31 @@ public class WorkspaceValidationService {
                 issues,
                 topIssue
             );
+        }
+
+        private WorkspaceValidationRemediationDto buildRemediation(String remediationActionKey) {
+            if (remediationActionKey == null || remediationActionKey.isBlank()) {
+                return null;
+            }
+            return switch (remediationActionKey) {
+                case ACTION_DELETE_INVALID_TEAM_SCOPE -> new WorkspaceValidationRemediationDto(
+                    REMEDIATION_TYPE_DELETE_RECORDS,
+                    ACTION_DELETE_INVALID_TEAM_SCOPE,
+                    "Delete invalid scope",
+                    REMEDIATION_ROLE_ADMIN,
+                    true,
+                    true
+                );
+                case ACTION_DELETE_ORPHAN_ASSIGNMENT -> new WorkspaceValidationRemediationDto(
+                    REMEDIATION_TYPE_DELETE_RECORDS,
+                    ACTION_DELETE_ORPHAN_ASSIGNMENT,
+                    "Delete orphan assignment",
+                    REMEDIATION_ROLE_ADMIN,
+                    true,
+                    true
+                );
+                default -> null;
+            };
         }
     }
 }

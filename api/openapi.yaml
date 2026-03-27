@@ -64,9 +64,11 @@ paths:
     $ref: ./paths/workspace/validation.yaml#/validation
   /workspace/validation/resolve:
     $ref: ./paths/workspace/validation.yaml#/resolve
+  /workspace/validation/{id}/preview-remediation:
+    $ref: ./paths/workspace/validation.yaml#/preview-remediation
+  /workspace/validation/{id}/apply-remediation:
+    $ref: ./paths/workspace/validation.yaml#/apply-remediation
   /workspace/import-export/preview:
     $ref: ./paths/workspace/import-export.yaml#/preview
-  /workspace/import-export/{batchId}/apply:
-    $ref: ./paths/workspace/import-export.yaml#/apply
   /workspace/import-export/export:
     $ref: ./paths/workspace/import-export.yaml#/export

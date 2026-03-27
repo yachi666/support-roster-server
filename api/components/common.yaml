@@ -586,6 +586,24 @@ schemas:
         type: boolean
       resolutionKind:
         type: string
+      remediation:
+        $ref: '#/schemas/WorkspaceValidationRemediation'
+
+  WorkspaceValidationRemediation:
+    type: object
+    properties:
+      type:
+        type: string
+      actionKey:
+        type: string
+      label:
+        type: string
+      requiresRole:
+        type: string
+      previewable:
+        type: boolean
+      destructive:
+        type: boolean
 
   WorkspaceValidationSummary:
     type: object
@@ -645,6 +663,53 @@ schemas:
       validation:
         $ref: '#/schemas/WorkspaceValidationResponse'
 
+  WorkspaceValidationRemediationRequest:
+    type: object
+    required: [actionKey]
+    properties:
+      year:
+        type: integer
+      month:
+        type: integer
+      actionKey:
+        type: string
+
+  WorkspaceValidationRemediationPreviewResponse:
+    type: object
+    properties:
+      issueId:
+        type: string
+      actionKey:
+        type: string
+      title:
+        type: string
+      summary:
+        type: string
+      warning:
+        type: string
+      recordCount:
+        type: integer
+      recordIds:
+        type: array
+        items:
+          type: string
+
+  WorkspaceValidationRemediationApplyResponse:
+    type: object
+    properties:
+      issueId:
+        type: string
+      actionKey:
+        type: string
+      appliedCount:
+        type: integer
+      affectedRecordIds:
+        type: array
+        items:
+          type: string
+      validation:
+        $ref: '#/schemas/WorkspaceValidationResponse'
+
   WorkspaceImportPreviewResponse:
     type: object
     properties:
@@ -666,20 +731,6 @@ schemas:
         type: array
         items:
           $ref: '#/schemas/WorkspaceValidationIssue'
-
-  WorkspaceImportApplyResponse:
-    type: object
-    properties:
-      batchId:
-        type: string
-      year:
-        type: integer
-      month:
-        type: integer
-      status:
-        type: string
-      appliedRecords:
-        type: integer
 
   ErrorResponse:
     type: object
