@@ -429,10 +429,13 @@ public class WorkspaceValidationService {
         if (issueId == null) {
             throw new BadRequestException("Issue ID is required.");
         }
+        Long requestedRecordId = request.getRecordId();
         WorkspaceValidationIssueDto issue = getValidation(request.getYear(), request.getMonth()).getIssues().stream()
-            .filter(candidate -> Objects.equals(candidate.getId(), issueId))
             .filter(candidate -> candidate.getRemediation() != null)
             .filter(candidate -> request.getActionKey().equals(candidate.getRemediation().getActionKey()))
+            .filter(candidate -> requestedRecordId == null
+                ? Objects.equals(candidate.getId(), issueId)
+                : Objects.equals(candidate.getRemediation().getRecordId(), requestedRecordId))
             .findFirst()
             .orElseThrow(() -> new BadRequestException("Validation issue is no longer available for remediation."));
         if (!Boolean.TRUE.equals(issue.getRemediation().getPreviewable())) {
