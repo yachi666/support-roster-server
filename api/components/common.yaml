@@ -732,6 +732,20 @@ schemas:
         items:
           $ref: '#/schemas/WorkspaceValidationIssue'
 
+  WorkspaceImportSaveResponse:
+    type: object
+    properties:
+      year:
+        type: integer
+      month:
+        type: integer
+      appliedStaffCount:
+        type: integer
+      createdStaffCount:
+        type: integer
+      createdTeamCount:
+        type: integer
+
   ErrorResponse:
     type: object
     properties:

@@ -14,10 +14,13 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.support.server.supportrosterserver.auth.AccountRole;
+import com.support.server.supportrosterserver.auth.AuthenticatedAccount;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
 import com.support.server.supportrosterserver.entity.workspace.ImportIssueEntity;
@@ -373,6 +376,8 @@ class WorkspaceValidationServiceTest {
         when(lookupService.listTeams()).thenReturn(List.of());
         when(workspaceAccountTeamScopeMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(scope));
         when(workspaceAccountMapper.selectBatchIds(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(account));
+        when(authContextService.isLoggedIn()).thenReturn(true);
+        when(authContextService.requireLogin()).thenReturn(adminAccount());
 
         var response = validationService.getValidation(2026, 3);
 
@@ -405,6 +410,8 @@ class WorkspaceValidationServiceTest {
         when(workspaceAccountTeamScopeMapper.selectList(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> List.copyOf(scopes));
         when(workspaceAccountTeamScopeMapper.selectById(901L)).thenAnswer(invocation -> scopes.stream().filter(item -> item.getId().equals(901L)).findFirst().orElse(null));
         when(workspaceAccountTeamScopeMapper.deleteById(901L)).thenAnswer(invocation -> scopes.removeIf(item -> item.getId().equals(901L)) ? 1 : 0);
+        when(authContextService.isLoggedIn()).thenReturn(true);
+        when(authContextService.requireLogin()).thenReturn(adminAccount());
 
         var preview = validationService.previewRemediation(901L, new com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest(2026, 3, "delete_invalid_team_scope"));
         assertEquals(1, preview.getRecordCount());
@@ -414,6 +421,34 @@ class WorkspaceValidationServiceTest {
         assertEquals(1, apply.getAppliedCount());
         assertTrue(apply.getValidation().getIssues().isEmpty());
         verify(workspaceOperationLogService).log("Admin", "Cleanup validation issue", "workspace_account_team_scope", 901L, "Action=delete_invalid_team_scope, rule=config.account.team-scope-invalid");
+    }
+
+    @Test
+    void shouldHideInvalidTeamScopeIssueFromNonAdminValidationView() {
+        WorkspaceAccountEntity account = new WorkspaceAccountEntity();
+        account.setId(10L);
+        account.setStaffCode("LOCAL-ADMIN");
+
+        WorkspaceAccountTeamScopeEntity scope = new WorkspaceAccountTeamScopeEntity();
+        scope.setId(901L);
+        scope.setAccountId(10L);
+        scope.setTeamId(999L);
+
+        when(importBatchMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(importIssueMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(staffMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(shiftDefinitionMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(shiftDefinitionTeamRelMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(rosterAssignmentMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(lookupService.teamMap()).thenReturn(java.util.Map.of());
+        when(lookupService.listTeams()).thenReturn(List.of());
+        when(workspaceAccountTeamScopeMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(scope));
+        when(workspaceAccountMapper.selectBatchIds(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(account));
+        when(authContextService.isLoggedIn()).thenReturn(false);
+
+        var response = validationService.getValidation(2026, 3);
+
+        assertTrue(response.getIssues().isEmpty());
     }
 
     @Test
@@ -462,5 +497,19 @@ class WorkspaceValidationServiceTest {
         relation.setShiftDefinitionId(shiftDefinitionId);
         relation.setTeamId(teamId);
         return relation;
+    }
+
+    private AuthenticatedAccount adminAccount() {
+        return new AuthenticatedAccount(
+            1L,
+            1L,
+            "ADMIN",
+            "Admin",
+            AccountRole.ADMIN.getCode(),
+            "ACTIVE",
+            "LOCAL_PASSWORD",
+            Set.of(),
+            List.of()
+        );
     }
 }

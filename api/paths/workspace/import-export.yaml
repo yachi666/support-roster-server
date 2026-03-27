@@ -27,6 +27,26 @@ preview:
             schema:
               $ref: ../../components/common.yaml#/schemas/WorkspaceImportPreviewResponse
 
+save:
+  post:
+    tags: [Workspace ImportExport]
+    summary: Save an import preview into workspace roster data
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceImportPreviewSaveRequest
+    responses:
+      '200':
+        description: Import save result
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceImportSaveResponse
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+
 export:
   get:
     tags: [Workspace ImportExport]

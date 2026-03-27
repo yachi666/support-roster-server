@@ -111,41 +111,43 @@ public class WorkspaceValidationService {
     }
 
     private void validateLiveData(YearMonth targetMonth, ValidationAccumulator accumulator, Map<Long, TeamEntity> teamMap) {
-        List<WorkspaceAccountTeamScopeEntity> accountTeamScopes = workspaceAccountTeamScopeMapper.selectList(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
-            .orderByAsc(WorkspaceAccountTeamScopeEntity::getAccountId)
-            .orderByAsc(WorkspaceAccountTeamScopeEntity::getTeamId));
-        List<Long> accountIds = accountTeamScopes.stream()
-            .map(WorkspaceAccountTeamScopeEntity::getAccountId)
-            .filter(Objects::nonNull)
-            .distinct()
-            .toList();
-        Map<Long, WorkspaceAccountEntity> accountsById = accountIds.isEmpty()
-            ? Map.of()
-            : workspaceAccountMapper.selectBatchIds(accountIds).stream()
-                .collect(Collectors.toMap(WorkspaceAccountEntity::getId, account -> account));
-        for (WorkspaceAccountTeamScopeEntity scope : accountTeamScopes) {
-            if (scope.getTeamId() != null && teamMap.containsKey(scope.getTeamId())) {
-                continue;
+        if (shouldExposeAdminCleanupIssues()) {
+            List<WorkspaceAccountTeamScopeEntity> accountTeamScopes = workspaceAccountTeamScopeMapper.selectList(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
+                .orderByAsc(WorkspaceAccountTeamScopeEntity::getAccountId)
+                .orderByAsc(WorkspaceAccountTeamScopeEntity::getTeamId));
+            List<Long> accountIds = accountTeamScopes.stream()
+                .map(WorkspaceAccountTeamScopeEntity::getAccountId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+            Map<Long, WorkspaceAccountEntity> accountsById = accountIds.isEmpty()
+                ? Map.of()
+                : workspaceAccountMapper.selectBatchIds(accountIds).stream()
+                    .collect(Collectors.toMap(WorkspaceAccountEntity::getId, account -> account));
+            for (WorkspaceAccountTeamScopeEntity scope : accountTeamScopes) {
+                if (scope.getTeamId() != null && teamMap.containsKey(scope.getTeamId())) {
+                    continue;
+                }
+                WorkspaceAccountEntity account = accountsById.get(scope.getAccountId());
+                String accountLabel = account == null || account.getStaffCode() == null || account.getStaffCode().isBlank()
+                    ? "unknown account"
+                    : account.getStaffCode();
+                accumulator.record(
+                    scope.getId(),
+                    "medium",
+                    "config.account.team-scope-invalid",
+                    DOMAIN_CONFIGURATION,
+                    false,
+                    "Invalid Team Scope",
+                    "Workspace account " + accountLabel + " references a team scope that no longer exists.",
+                    "-",
+                    "-",
+                    TARGET_PAGE_ACCOUNTS,
+                    true,
+                    RESOLUTION_KIND_SYSTEM_CLEANUP,
+                    ACTION_DELETE_INVALID_TEAM_SCOPE
+                );
             }
-            WorkspaceAccountEntity account = accountsById.get(scope.getAccountId());
-            String accountLabel = account == null || account.getStaffCode() == null || account.getStaffCode().isBlank()
-                ? "unknown account"
-                : account.getStaffCode();
-            accumulator.record(
-                scope.getId(),
-                "medium",
-                "config.account.team-scope-invalid",
-                DOMAIN_CONFIGURATION,
-                false,
-                "Invalid Team Scope",
-                "Workspace account " + accountLabel + " references a team scope that no longer exists.",
-                "-",
-                "-",
-                TARGET_PAGE_ACCOUNTS,
-                true,
-                RESOLUTION_KIND_SYSTEM_CLEANUP,
-                ACTION_DELETE_INVALID_TEAM_SCOPE
-            );
         }
 
         List<ShiftDefinitionEntity> definitions = shiftDefinitionMapper.selectList(Wrappers.<ShiftDefinitionEntity>lambdaQuery());
@@ -563,6 +565,10 @@ public class WorkspaceValidationService {
 
     private boolean isActiveStaff(StaffEntity staff) {
         return staff != null && (staff.getStatus() == null || staff.getStatus().isBlank() || "active".equalsIgnoreCase(staff.getStatus()));
+    }
+
+    private boolean shouldExposeAdminCleanupIssues() {
+        return authContextService.isLoggedIn() && authContextService.requireLogin().isAdmin();
     }
 
     private String safeStatus(String status) {

@@ -70,5 +70,7 @@ paths:
     $ref: ./paths/workspace/validation.yaml#/apply-remediation
   /workspace/import-export/preview:
     $ref: ./paths/workspace/import-export.yaml#/preview
+  /workspace/import-export/save:
+    $ref: ./paths/workspace/import-export.yaml#/save
   /workspace/import-export/export:
     $ref: ./paths/workspace/import-export.yaml#/export
