@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.support.server.supportrosterserver.auth.AccountRole;
+import com.support.server.supportrosterserver.auth.AuthenticatedAccount;
 import com.support.server.supportrosterserver.dto.employee.EmployeeDirectoryLookupResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffBatchCreateRequest;
@@ -41,6 +43,8 @@ class WorkspaceStaffServiceTest {
     private WorkspaceStaffProfileSupport staffProfileSupport;
     private WorkspaceOperationLogService workspaceOperationLogService;
     private AuthTokenVersionService authTokenVersionService;
+    private WorkspaceLookupService lookupService;
+    private AuthContextService authContextService;
     private WorkspaceStaffService workspaceStaffService;
 
     @BeforeEach
@@ -52,15 +56,17 @@ class WorkspaceStaffServiceTest {
         staffProfileSupport = new WorkspaceStaffProfileSupport(employeeDirectoryClient);
         workspaceOperationLogService = mock(WorkspaceOperationLogService.class);
         authTokenVersionService = mock(AuthTokenVersionService.class);
-        WorkspaceLookupService lookupService = mock(WorkspaceLookupService.class);
+        lookupService = mock(WorkspaceLookupService.class);
         RosterAssignmentMapper rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
-        AuthContextService authContextService = mock(AuthContextService.class);
+        authContextService = mock(AuthContextService.class);
         when(staffMapper.selectList(any())).thenReturn(List.of());
         when(lookupService.teamMap()).thenReturn(Map.of(10L, buildTeam(10L, "Ops")));
         when(lookupService.requireTeam(10L)).thenReturn(buildTeam(10L, "Ops"));
         when(lookupService.normalizeWorkspaceTimezone(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(rosterAssignmentMapper.selectList(any())).thenReturn(List.of());
         when(authContextService.currentActor(any())).thenReturn("Admin");
+        when(authContextService.isLoggedIn()).thenReturn(false);
+        when(authContextService.readableTeamIds()).thenReturn(List.of(10L));
         workspaceStaffService = new WorkspaceStaffService(
             mock(AvatarUrlResolver.class),
             staffProfileSupport,
@@ -339,10 +345,73 @@ class WorkspaceStaffServiceTest {
         verify(workspaceAccountMapper, never()).deleteById(anyLong());
         verify(staffMapper).deleteById(1L);
     }
+
+    @Test
+    void shouldListOrphanStaffForAdminUsers() {
+        StaffEntity orphanStaff = new StaffEntity();
+        orphanStaff.setId(99L);
+        orphanStaff.setStaffCode("A099");
+        orphanStaff.setName("Orphan User");
+        orphanStaff.setTeamId(null);
+        orphanStaff.setStatus("ACTIVE");
+
+        when(authContextService.isLoggedIn()).thenReturn(true);
+        when(authContextService.requireLogin()).thenReturn(adminAccount());
+        when(staffMapper.selectList(any())).thenReturn(List.of(orphanStaff));
+
+        List<WorkspaceStaffDto> result = workspaceStaffService.listStaff("");
+
+        Assertions.assertEquals(1, result.size());
+        Assertions.assertEquals("A099", result.get(0).getStaffCode());
+        Assertions.assertNull(result.get(0).getTeamId());
+        Assertions.assertNull(result.get(0).getTeamName());
+    }
+
+    @Test
+    void shouldAllowAdminToRepairStaffWithoutCurrentTeam() {
+        StaffEntity staff = new StaffEntity();
+        staff.setId(1L);
+        staff.setStaffCode("A001");
+        staff.setName("Alice");
+        staff.setEmail("alice@example.com");
+        staff.setTeamId(null);
+
+        when(authContextService.requireLogin()).thenReturn(adminAccount());
+        when(staffMapper.selectById(1L)).thenReturn(staff);
+
+        WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
+        request.setStaffCode("A001");
+        request.setName("Alice");
+        request.setEmail("alice@example.com");
+        request.setTeamId(10L);
+        request.setTimezone("UTC");
+        request.setStatus("ACTIVE");
+
+        WorkspaceStaffDto updated = workspaceStaffService.updateStaff(1L, request);
+
+        Assertions.assertEquals(10L, updated.getTeamId());
+        verify(authContextService).requireAdmin();
+        verify(authContextService).requireWritableTeam(10L);
+    }
+
     private TeamEntity buildTeam(Long id, String name) {
         TeamEntity team = new TeamEntity();
         team.setId(id);
         team.setName(name);
         return team;
+    }
+
+    private AuthenticatedAccount adminAccount() {
+        return new AuthenticatedAccount(
+            1L,
+            1L,
+            "ADMIN",
+            "Admin",
+            AccountRole.ADMIN.getCode(),
+            "ACTIVE",
+            "LOCAL_PASSWORD",
+            java.util.Set.of(),
+            List.of()
+        );
     }
 }

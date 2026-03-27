@@ -17,6 +17,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffBatchCreateRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceStaffUpsertRequest;
+import com.support.server.supportrosterserver.auth.AuthenticatedAccount;
 import com.support.server.supportrosterserver.dto.employee.EmployeeDirectoryLookupResponse;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
@@ -54,9 +55,11 @@ public class WorkspaceStaffService {
         LambdaQueryWrapper<StaffEntity> query = Wrappers.<StaffEntity>lambdaQuery()
             .orderByAsc(StaffEntity::getStaffCode)
             .orderByAsc(StaffEntity::getName);
-        List<Long> readableTeamIds = authContextService.readableTeamIds();
-        if (!readableTeamIds.isEmpty()) {
-            query.in(StaffEntity::getTeamId, readableTeamIds);
+        if (!shouldBypassTeamScopeFilter()) {
+            List<Long> readableTeamIds = authContextService.readableTeamIds();
+            if (!readableTeamIds.isEmpty()) {
+                query.in(StaffEntity::getTeamId, readableTeamIds);
+            }
         }
         if (keyword != null && !keyword.isBlank()) {
             query.and(wrapper -> wrapper
@@ -69,7 +72,7 @@ public class WorkspaceStaffService {
 
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
         return staffMapper.selectList(query).stream()
-            .map(staff -> toDto(staff, teamMap.get(staff.getTeamId())))
+            .map(staff -> toDto(staff, resolveTeam(teamMap, staff.getTeamId())))
             .toList();
     }
 
@@ -78,8 +81,8 @@ public class WorkspaceStaffService {
         if (entity == null) {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
-        authContextService.requireReadableTeam(entity.getTeamId());
-        return toDto(entity, lookupService.teamMap().get(entity.getTeamId()));
+        requireReadableExistingStaff(entity);
+        return toDto(entity, resolveTeam(lookupService.teamMap(), entity.getTeamId()));
     }
 
     @Transactional
@@ -128,7 +131,7 @@ public class WorkspaceStaffService {
         if (entity == null) {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
-        authContextService.requireWritableTeam(entity.getTeamId());
+        requireWritableExistingStaff(entity);
         authContextService.requireWritableTeam(request.getTeamId());
         ensureStaffCodesAvailable(List.of(normalizeRequiredText(request.getStaffCode(), "Staff ID is required.")), id);
         String previousStaffCode = entity.getStaffCode();
@@ -152,7 +155,7 @@ public class WorkspaceStaffService {
         if (entity == null) {
             throw new ResourceNotFoundException("Staff", "id", id);
         }
-        authContextService.requireWritableTeam(entity.getTeamId());
+        requireWritableExistingStaff(entity);
         String actor = authContextService.currentActor("system");
         WorkspaceAccountEntity linkedAccount = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
             .eq(WorkspaceAccountEntity::getStaffId, id)
@@ -199,7 +202,7 @@ public class WorkspaceStaffService {
         if (entity == null) {
             return null;
         }
-        TeamEntity team = entity.getTeamId() == null ? null : lookupService.teamMap().get(entity.getTeamId());
+        TeamEntity team = resolveTeam(lookupService.teamMap(), entity.getTeamId());
         return new com.support.server.supportrosterserver.dto.StaffDto(
             entity.getId(),
             entity.getName(),
@@ -392,6 +395,37 @@ public class WorkspaceStaffService {
 
     private String resolveStatus(String value) {
         return value == null || value.isBlank() ? "Active" : value.trim();
+    }
+
+    private TeamEntity resolveTeam(Map<Long, TeamEntity> teamMap, Long teamId) {
+        if (teamId == null) {
+            return null;
+        }
+        return teamMap.get(teamId);
+    }
+
+    private boolean shouldBypassTeamScopeFilter() {
+        if (!authContextService.isLoggedIn()) {
+            return false;
+        }
+        AuthenticatedAccount current = authContextService.requireLogin();
+        return current.isAdmin() || current.isReadonly();
+    }
+
+    private void requireReadableExistingStaff(StaffEntity entity) {
+        if (entity.getTeamId() != null) {
+            authContextService.requireReadableTeam(entity.getTeamId());
+            return;
+        }
+        authContextService.requireAdmin();
+    }
+
+    private void requireWritableExistingStaff(StaffEntity entity) {
+        if (entity.getTeamId() != null) {
+            authContextService.requireWritableTeam(entity.getTeamId());
+            return;
+        }
+        authContextService.requireAdmin();
     }
 
     private void syncLinkedAccountStaffCode(Long staffId, String previousStaffCode, String currentStaffCode) {

@@ -193,8 +193,21 @@ public class WorkspaceShiftDefinitionService {
         entity.setTimezone(lookupService.normalizeWorkspaceTimezone(request.getTimezone()));
         entity.setPrimaryShift(request.getPrimaryShift());
         entity.setVisible(request.getVisible());
-        entity.setColorHex(request.getColorHex());
+        entity.setColorHex(normalizeOptionalHexColor(request.getColorHex()));
         entity.setRemark(request.getRemark());
+    }
+
+    private String normalizeOptionalHexColor(String colorHex) {
+        if (colorHex == null || colorHex.isBlank()) {
+            return null;
+        }
+
+        String normalized = colorHex.trim();
+        if (!normalized.matches("^#([0-9a-fA-F]{6})$")) {
+            throw new BadRequestException("Use a 6-digit hex color.");
+        }
+
+        return normalized.toLowerCase();
     }
 
     private Map<Long, List<TeamEntity>> loadTeamsByShiftDefinitionId(List<Long> shiftDefinitionIds, Map<Long, TeamEntity> teamMap) {

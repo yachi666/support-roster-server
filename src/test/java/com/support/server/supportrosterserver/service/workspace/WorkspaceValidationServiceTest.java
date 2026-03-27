@@ -2,6 +2,7 @@ package com.support.server.supportrosterserver.service.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -413,11 +414,16 @@ class WorkspaceValidationServiceTest {
         when(authContextService.isLoggedIn()).thenReturn(true);
         when(authContextService.requireLogin()).thenReturn(adminAccount());
 
-        var preview = validationService.previewRemediation(901L, new com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest(2026, 3, "delete_invalid_team_scope"));
+        var validation = validationService.getValidation(2026, 3);
+        var issueId = validation.getIssues().get(0).getId();
+        assertNotEquals(901L, issueId);
+        assertEquals(901L, validation.getIssues().get(0).getRemediation().getRecordId());
+
+        var preview = validationService.previewRemediation(issueId, remediationRequest(2026, 3, "delete_invalid_team_scope", 901L));
         assertEquals(1, preview.getRecordCount());
         assertEquals(List.of(901L), preview.getRecordIds());
 
-        var apply = validationService.applyRemediation(901L, new com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest(2026, 3, "delete_invalid_team_scope"));
+        var apply = validationService.applyRemediation(issueId, remediationRequest(2026, 3, "delete_invalid_team_scope", 901L));
         assertEquals(1, apply.getAppliedCount());
         assertTrue(apply.getValidation().getIssues().isEmpty());
         verify(workspaceOperationLogService).log("Admin", "Cleanup validation issue", "workspace_account_team_scope", 901L, "Action=delete_invalid_team_scope, rule=config.account.team-scope-invalid");
@@ -481,22 +487,135 @@ class WorkspaceValidationServiceTest {
         var response = validationService.getValidation(2026, 3);
         assertEquals("Orphan Assignment", response.getIssues().get(0).getType());
         assertEquals("delete_orphan_assignment", response.getIssues().get(0).getRemediation().getActionKey());
+        assertNotEquals(701L, response.getIssues().get(0).getId());
+        assertEquals(701L, response.getIssues().get(0).getRemediation().getRecordId());
+        var issueId = response.getIssues().get(0).getId();
 
-        var preview = validationService.previewRemediation(701L, new com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest(2026, 3, "delete_orphan_assignment"));
+        var preview = validationService.previewRemediation(issueId, remediationRequest(2026, 3, "delete_orphan_assignment", 701L));
         assertEquals("Delete orphan assignment", preview.getTitle());
         assertEquals(List.of(701L), preview.getRecordIds());
 
-        var apply = validationService.applyRemediation(701L, new com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest(2026, 3, "delete_orphan_assignment"));
+        var apply = validationService.applyRemediation(issueId, remediationRequest(2026, 3, "delete_orphan_assignment", 701L));
         assertEquals(1, apply.getAppliedCount());
         assertTrue(apply.getValidation().getIssues().isEmpty());
         verify(workspaceOperationLogService).log("Admin", "Cleanup validation issue", "workspace_roster_assignment", 701L, "Action=delete_orphan_assignment, rule=roster.assignment.orphaned");
     }
 
+    @Test
+    void shouldPreviewRemediationByRecordIdWhenCleanupIssueOrderingChanges() {
+        TeamEntity team = new TeamEntity();
+        team.setId(100L);
+        team.setName("AP L2");
+        team.setVisible(true);
+
+        RosterAssignmentEntity targetAssignment = new RosterAssignmentEntity();
+        targetAssignment.setId(701L);
+        targetAssignment.setStaffId(88L);
+        targetAssignment.setTeamId(100L);
+        targetAssignment.setShiftDefinitionId(999L);
+        targetAssignment.setShiftCode("DS");
+        targetAssignment.setAssignmentDate(LocalDate.of(2026, 3, 2));
+
+        RosterAssignmentEntity earlierAssignment = new RosterAssignmentEntity();
+        earlierAssignment.setId(702L);
+        earlierAssignment.setStaffId(89L);
+        earlierAssignment.setTeamId(100L);
+        earlierAssignment.setShiftDefinitionId(999L);
+        earlierAssignment.setShiftCode("DS");
+        earlierAssignment.setAssignmentDate(LocalDate.of(2026, 3, 1));
+
+        List<RosterAssignmentEntity> assignments = new ArrayList<>(List.of(targetAssignment));
+        when(importBatchMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(importIssueMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(staffMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(shiftDefinitionMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(shiftDefinitionTeamRelMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(rosterAssignmentMapper.selectList(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> List.copyOf(assignments));
+        when(lookupService.teamMap()).thenReturn(java.util.Map.of(100L, team));
+        when(lookupService.listTeams()).thenReturn(List.of(team));
+
+        var initialValidation = validationService.getValidation(2026, 3);
+        var staleIssueId = initialValidation.getIssues().get(0).getId();
+
+        assignments.add(0, earlierAssignment);
+
+        var preview = validationService.previewRemediation(
+            staleIssueId,
+            remediationRequest(2026, 3, "delete_orphan_assignment", 701L)
+        );
+
+        assertEquals("Delete orphan assignment", preview.getTitle());
+        assertEquals(List.of(701L), preview.getRecordIds());
+    }
+
+    @Test
+    void shouldKeepValidationIssueIdsUniqueWhenCleanupAndImportRecordsShareDatabaseId() {
+        TeamEntity team = new TeamEntity();
+        team.setId(100L);
+        team.setName("AP L2");
+        team.setVisible(true);
+
+        ImportBatchEntity batch = new ImportBatchEntity();
+        batch.setId(900L);
+        batch.setRosterYear(2026);
+        batch.setRosterMonth(3);
+        batch.setStatus("PREVIEWED");
+
+        ImportIssueEntity importIssue = new ImportIssueEntity();
+        importIssue.setId(701L);
+        importIssue.setSeverity("high");
+        importIssue.setIssueType("Duplicate Staff ID");
+        importIssue.setDescription("Staff ID 'A001' appears more than once.");
+        importIssue.setTeamName("AP L2");
+        importIssue.setResolved(false);
+
+        RosterAssignmentEntity orphanAssignment = new RosterAssignmentEntity();
+        orphanAssignment.setId(701L);
+        orphanAssignment.setStaffId(88L);
+        orphanAssignment.setTeamId(100L);
+        orphanAssignment.setShiftDefinitionId(999L);
+        orphanAssignment.setShiftCode("DS");
+        orphanAssignment.setAssignmentDate(LocalDate.of(2026, 3, 1));
+
+        when(importBatchMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(batch));
+        when(importIssueMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(importIssue));
+        when(staffMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(shiftDefinitionMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(shiftDefinitionTeamRelMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(rosterAssignmentMapper.selectList(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(orphanAssignment));
+        when(lookupService.teamMap()).thenReturn(java.util.Map.of(100L, team));
+        when(lookupService.listTeams()).thenReturn(List.of(team));
+
+        var response = validationService.getValidation(2026, 3);
+
+        assertEquals(2, response.getIssues().size());
+        assertEquals(2, response.getIssues().stream().map(issue -> issue.getId()).distinct().count());
+        assertTrue(response.getIssues().stream().anyMatch(issue -> issue.getId().equals(701L)));
+        assertTrue(response.getIssues().stream().anyMatch(issue ->
+            "delete_orphan_assignment".equals(issue.getRemediation() == null ? null : issue.getRemediation().getActionKey())
+                && Long.valueOf(701L).equals(issue.getRemediation().getRecordId())
+                && issue.getId() < 0
+        ));
+    }
     private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {
         ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
         relation.setShiftDefinitionId(shiftDefinitionId);
         relation.setTeamId(teamId);
         return relation;
+    }
+
+    private com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest remediationRequest(
+        Integer year,
+        Integer month,
+        String actionKey,
+        Long recordId
+    ) {
+        return new com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest(
+            year,
+            month,
+            actionKey,
+            recordId
+        );
     }
 
     private AuthenticatedAccount adminAccount() {

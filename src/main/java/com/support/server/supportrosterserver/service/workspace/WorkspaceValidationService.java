@@ -133,7 +133,7 @@ public class WorkspaceValidationService {
                     ? "unknown account"
                     : account.getStaffCode();
                 accumulator.record(
-                    scope.getId(),
+                    accumulator.nextSyntheticId(),
                     "medium",
                     "config.account.team-scope-invalid",
                     DOMAIN_CONFIGURATION,
@@ -145,7 +145,8 @@ public class WorkspaceValidationService {
                     TARGET_PAGE_ACCOUNTS,
                     true,
                     RESOLUTION_KIND_SYSTEM_CLEANUP,
-                    ACTION_DELETE_INVALID_TEAM_SCOPE
+                    ACTION_DELETE_INVALID_TEAM_SCOPE,
+                    scope.getId()
                 );
             }
         }
@@ -276,7 +277,7 @@ public class WorkspaceValidationService {
                 || invalidShiftTeamMapping;
             if (orphanAssignment) {
                 accumulator.record(
-                    assignment.getId(),
+                    accumulator.nextSyntheticId(),
                     "high",
                     "roster.assignment.orphaned",
                     DOMAIN_ROSTER,
@@ -288,7 +289,8 @@ public class WorkspaceValidationService {
                     TARGET_PAGE_ROSTER,
                     true,
                     RESOLUTION_KIND_SYSTEM_CLEANUP,
-                    ACTION_DELETE_ORPHAN_ASSIGNMENT
+                    ACTION_DELETE_ORPHAN_ASSIGNMENT,
+                    assignment.getId()
                 );
                 continue;
             }
@@ -427,10 +429,13 @@ public class WorkspaceValidationService {
         if (issueId == null) {
             throw new BadRequestException("Issue ID is required.");
         }
+        Long requestedRecordId = request.getRecordId();
         WorkspaceValidationIssueDto issue = getValidation(request.getYear(), request.getMonth()).getIssues().stream()
-            .filter(candidate -> Objects.equals(candidate.getId(), issueId))
             .filter(candidate -> candidate.getRemediation() != null)
             .filter(candidate -> request.getActionKey().equals(candidate.getRemediation().getActionKey()))
+            .filter(candidate -> requestedRecordId == null
+                ? Objects.equals(candidate.getId(), issueId)
+                : Objects.equals(candidate.getRemediation().getRecordId(), requestedRecordId))
             .findFirst()
             .orElseThrow(() -> new BadRequestException("Validation issue is no longer available for remediation."));
         if (!Boolean.TRUE.equals(issue.getRemediation().getPreviewable())) {
@@ -448,7 +453,7 @@ public class WorkspaceValidationService {
                 "This removes the orphaned team scope record and keeps the linked workspace account intact.",
                 "The account itself will not be deleted. This cleanup is permanent.",
                 1,
-                List.of(issue.getId())
+                List.of(requireRemediationRecordId(issue))
             );
             case ACTION_DELETE_ORPHAN_ASSIGNMENT -> new WorkspaceValidationRemediationPreviewResponse(
                 issue.getId(),
@@ -457,14 +462,15 @@ public class WorkspaceValidationService {
                 "This removes the roster assignment record whose staff, team, or shift definition reference is no longer valid.",
                 "The roster entry will be permanently deleted from the selected month.",
                 1,
-                List.of(issue.getId())
+                List.of(requireRemediationRecordId(issue))
             );
             default -> throw new BadRequestException("Unsupported remediation action.");
         };
     }
 
     private List<Long> applyDeleteInvalidTeamScope(WorkspaceValidationIssueDto issue) {
-        WorkspaceAccountTeamScopeEntity scope = workspaceAccountTeamScopeMapper.selectById(issue.getId());
+        Long scopeId = requireRemediationRecordId(issue);
+        WorkspaceAccountTeamScopeEntity scope = workspaceAccountTeamScopeMapper.selectById(scopeId);
         if (scope == null) {
             throw new BadRequestException("The invalid team scope has already been removed.");
         }
@@ -480,7 +486,8 @@ public class WorkspaceValidationService {
     }
 
     private List<Long> applyDeleteOrphanAssignment(WorkspaceValidationIssueDto issue) {
-        RosterAssignmentEntity assignment = rosterAssignmentMapper.selectById(issue.getId());
+        Long assignmentId = requireRemediationRecordId(issue);
+        RosterAssignmentEntity assignment = rosterAssignmentMapper.selectById(assignmentId);
         if (assignment == null) {
             throw new BadRequestException("The orphan assignment has already been removed.");
         }
@@ -493,6 +500,14 @@ public class WorkspaceValidationService {
             "Action=" + ACTION_DELETE_ORPHAN_ASSIGNMENT + ", rule=" + issue.getRuleCode()
         );
         return List.of(assignment.getId());
+    }
+
+    private Long requireRemediationRecordId(WorkspaceValidationIssueDto issue) {
+        Long recordId = issue.getRemediation() == null ? null : issue.getRemediation().getRecordId();
+        if (recordId == null) {
+            throw new BadRequestException("Validation remediation record is unavailable.");
+        }
+        return recordId;
     }
 
     private String buildOrphanAssignmentDescription(
@@ -613,7 +628,7 @@ public class WorkspaceValidationService {
         private final boolean collectIssues;
         private final Set<Long> readableTeamIds;
         private final Map<String, Long> teamIdByName;
-        private final AtomicLong syntheticIdGenerator = new AtomicLong(1_000_000L);
+        private final AtomicLong syntheticIdGenerator = new AtomicLong(-1L);
         private final List<WorkspaceValidationIssueDto> issues;
         private long high;
         private long medium;
@@ -630,7 +645,7 @@ public class WorkspaceValidationService {
         }
 
         private long nextSyntheticId() {
-            return syntheticIdGenerator.getAndIncrement();
+            return syntheticIdGenerator.getAndDecrement();
         }
 
         private void record(Long id,
@@ -661,6 +676,23 @@ public class WorkspaceValidationService {
                 boolean resolvable,
                 String resolutionKind,
                 String remediationActionKey) {
+            record(id, severity, ruleCode, domain, blocking, type, description, team, date, targetPage, resolvable, resolutionKind, remediationActionKey, null);
+        }
+
+        private void record(Long id,
+                String severity,
+                String ruleCode,
+                String domain,
+                boolean blocking,
+                String type,
+                String description,
+                String team,
+                String date,
+                String targetPage,
+                boolean resolvable,
+                String resolutionKind,
+                String remediationActionKey,
+                Long remediationRecordId) {
             if (!isReadableTeam(team)) {
                 return;
             }
@@ -688,7 +720,7 @@ public class WorkspaceValidationService {
                 targetPage,
                 resolvable,
                 resolutionKind,
-                buildRemediation(remediationActionKey)
+                buildRemediation(remediationActionKey, remediationRecordId)
             );
 
             if (collectIssues) {
@@ -754,7 +786,7 @@ public class WorkspaceValidationService {
             );
         }
 
-        private WorkspaceValidationRemediationDto buildRemediation(String remediationActionKey) {
+        private WorkspaceValidationRemediationDto buildRemediation(String remediationActionKey, Long remediationRecordId) {
             if (remediationActionKey == null || remediationActionKey.isBlank()) {
                 return null;
             }
@@ -765,7 +797,8 @@ public class WorkspaceValidationService {
                     "Delete invalid scope",
                     REMEDIATION_ROLE_ADMIN,
                     true,
-                    true
+                    true,
+                    remediationRecordId
                 );
                 case ACTION_DELETE_ORPHAN_ASSIGNMENT -> new WorkspaceValidationRemediationDto(
                     REMEDIATION_TYPE_DELETE_RECORDS,
@@ -773,7 +806,8 @@ public class WorkspaceValidationService {
                     "Delete orphan assignment",
                     REMEDIATION_ROLE_ADMIN,
                     true,
-                    true
+                    true,
+                    remediationRecordId
                 );
                 default -> null;
             };
