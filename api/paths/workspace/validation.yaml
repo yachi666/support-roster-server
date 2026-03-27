@@ -38,3 +38,45 @@ resolve:
               $ref: ../../components/common.yaml#/schemas/WorkspaceValidationResolveResponse
       '400':
         $ref: ../../components/common.yaml#/responses/BadRequest
+preview-remediation:
+  post:
+    tags: [Workspace Validation]
+    summary: Preview a validation remediation action
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceValidationRemediationRequest
+    responses:
+      '200':
+        description: Preview of the cleanup action
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceValidationRemediationPreviewResponse
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+apply-remediation:
+  post:
+    tags: [Workspace Validation]
+    summary: Apply a validation remediation action
+    parameters:
+      - $ref: ../../components/common.yaml#/parameters/EntityIdParam
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceValidationRemediationRequest
+    responses:
+      '200':
+        description: Cleanup result with refreshed validation payload
+        content:
+          application/json:
+            schema:
+              $ref: ../../components/common.yaml#/schemas/WorkspaceValidationRemediationApplyResponse
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest

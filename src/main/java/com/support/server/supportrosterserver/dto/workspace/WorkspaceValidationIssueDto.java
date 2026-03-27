@@ -25,4 +25,5 @@ public class WorkspaceValidationIssueDto {
     private String targetPage;
     private Boolean resolvable;
     private String resolutionKind;
+    private WorkspaceValidationRemediationDto remediation;
 }
