@@ -100,14 +100,14 @@ public class WorkspaceRosterService {
                 .in(!readableTeamIds.isEmpty(), StaffEntity::getTeamId, readableTeamIds)
                 .orderByAsc(StaffEntity::getName))) {
             TeamEntity team = staff.getTeamId() == null ? null : teamMap.get(staff.getTeamId());
-            if (team != null && Boolean.TRUE.equals(team.getVisible()) && readableTeamIds.contains(team.getId())) {
+            if (team != null && readableTeamIds.contains(team.getId())) {
                 staffByTeamId.computeIfAbsent(team.getId(), ignored -> new ArrayList<>()).add(staff);
             }
         }
 
         List<WorkspaceRosterGroupDto> groups = new ArrayList<>();
         for (TeamEntity team : lookupService.listTeams()) {
-            if (!Boolean.TRUE.equals(team.getVisible()) || !readableTeamIds.contains(team.getId())) {
+            if (!readableTeamIds.contains(team.getId())) {
                 continue;
             }
             List<WorkspaceRosterPersonDto> persons = new ArrayList<>();
