@@ -26,6 +26,7 @@
 | [workspace-admin/roster.md](./workspace-admin/roster.md) | 月度排班 |
 | [workspace-admin/validation.md](./workspace-admin/validation.md) | 校验中心 |
 | [workspace-admin/import-export.md](./workspace-admin/import-export.md) | 导入导出 |
+| [workspace-admin/linux-passwords.md](./workspace-admin/linux-passwords.md) | Linux 密码库凭据管理 |
 | [workspace-admin/role-groups.md](./workspace-admin/role-groups.md) | 已废弃的历史兼容说明 |
 | [viewer/overview.md](./viewer/overview.md) | viewer 总览 |
 | [viewer/teams.md](./viewer/teams.md) | 团队接口 |

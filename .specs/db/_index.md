@@ -23,6 +23,7 @@
 | `ddl/004_workspace_shift_definition_conflict_audit_cleanup.sql` | 增量脚本 | 冲突审计清理 |
 | `ddl/005_workspace_auth_tables.sql` | 增量脚本 | 账号、team 授权与 SSO 预留字段 |
 | `ddl/006_auth_bootstrap_admin_seed.sql` | 初始化模板 | 首个管理员 staff 数据准备与引导说明 |
+| `ddl/007_workspace_linux_passwords.sql` | 增量脚本 | Linux 密码库主表、目录表与业务单元关联表 |
 
 ## 维护提示
 
