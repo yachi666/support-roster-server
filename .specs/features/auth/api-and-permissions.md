@@ -22,6 +22,13 @@
 | `/api/workspace/accounts/{id}/enable` | `POST` | 启用账号 | `admin` |
 | `/api/workspace/accounts/{id}/disable` | `POST` | 禁用账号 | `admin` |
 
+## workspace 访问策略接口
+
+| 接口 | 方法 | 说明 | 角色要求 |
+|---|---|---|---|
+| `/api/workspace/access-policy` | `GET` | 返回全部可配置页面的匿名访问策略，包含 `linux-passwords` | 已登录 |
+| `/api/workspace/access-policy` | `PUT` | 更新可配置页面的匿名访问策略；当前要求 payload 覆盖全部 configurable pageCode | `admin` |
+
 ## workspace 资源权限矩阵
 
 | 资源 | `admin` | `editor` | `readonly` |
@@ -34,6 +41,7 @@
 | Validation | 全量处理 | 仅授权 team 处理 | 只读 |
 | Import / Export | 全量执行 | 仅授权 team 执行 | 只读导出 |
 | Accounts | 全量读写 | 拒绝 | 拒绝 |
+| Linux Passwords | 通过 access policy 控制独立前端路由是否需要登录；当前无专属后端数据接口 | 同左 | 同左 |
 
 ## Team 范围规则
 
