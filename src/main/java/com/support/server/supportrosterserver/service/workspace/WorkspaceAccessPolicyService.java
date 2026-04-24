@@ -209,6 +209,7 @@ public class WorkspaceAccessPolicyService {
         definitions.put("validation", new PageDefinition("validation", false, true));
         definitions.put("import-export", new PageDefinition("import-export", false, true));
         definitions.put("teams", new PageDefinition("teams", false, true));
+        definitions.put("linux-passwords", new PageDefinition("linux-passwords", true, true));
         definitions.put("accounts", new PageDefinition("accounts", true, false));
         return definitions;
     }

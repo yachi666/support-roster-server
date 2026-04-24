@@ -52,13 +52,27 @@ class WorkspaceAccessPolicyServiceTest {
             new WorkspacePageAccessPolicyDto("validation", false, true),
             new WorkspacePageAccessPolicyDto("import-export", false, true),
             new WorkspacePageAccessPolicyDto("teams", false, true),
+            new WorkspacePageAccessPolicyDto("linux-passwords", true, true),
             new WorkspacePageAccessPolicyDto("accounts", true, false)
         ));
 
         var response = workspaceAccessPolicyService.updateAccessPolicy(request);
 
-        assertEquals(8, response.getPages().size());
+        assertEquals(9, response.getPages().size());
         verify(workspaceAccessPolicyMapper, never()).insert(org.mockito.ArgumentMatchers.<WorkspaceAccessPolicyEntity>argThat(entity -> "accounts".equals(entity.getPageCode())));
+    }
+
+    @Test
+    void shouldExposeLinuxPasswordsPolicyInDefaultResponse() {
+        var response = workspaceAccessPolicyService.getAccessPolicy();
+
+        assertEquals(9, response.getPages().size());
+        var linuxPasswordsPolicy = response.getPages().stream()
+            .filter(policy -> "linux-passwords".equals(policy.getPageCode()))
+            .findFirst()
+            .orElseThrow();
+        assertEquals(true, linuxPasswordsPolicy.getAuthRequired());
+        assertEquals(true, linuxPasswordsPolicy.getConfigurable());
     }
 
     @Test
