@@ -1,7 +1,10 @@
 package com.support.server.supportrosterserver.exception;
 
+import java.util.Locale;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -98,6 +101,22 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex,
+            WebRequest request) {
+        String path = extractPath(request);
+        String message = resolveDataIntegrityMessage(ex);
+        log.warn("Data integrity violation on {}: {}", path, message, ex);
+        ErrorResponse error = new ErrorResponse(
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            message,
+            path
+        );
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(
             Exception ex,
@@ -115,5 +134,37 @@ public class GlobalExceptionHandler {
 
     private String extractPath(WebRequest request) {
         return request.getDescription(false).replace("uri=", "");
+    }
+
+    private String resolveDataIntegrityMessage(Throwable throwable) {
+        String normalizedMessage = buildExceptionMessage(throwable).toLowerCase(Locale.ROOT);
+        if (normalizedMessage.contains("uk_workspace_linux_password_server_hostname")) {
+            return "Hostname already exists.";
+        }
+        if (normalizedMessage.contains("uk_workspace_linux_password_server_ip")) {
+            return "IP address already exists.";
+        }
+        if (normalizedMessage.contains("uk_workspace_linux_password_server_business_unit")) {
+            return "Business unit already exists for this server.";
+        }
+        if (normalizedMessage.contains("uk_workspace_linux_password_directory_name")) {
+            return "Directory already exists.";
+        }
+        return "Request conflicts with existing data.";
+    }
+
+    private String buildExceptionMessage(Throwable throwable) {
+        StringBuilder builder = new StringBuilder();
+        Throwable current = throwable;
+        while (current != null) {
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                if (!builder.isEmpty()) {
+                    builder.append(' ');
+                }
+                builder.append(current.getMessage());
+            }
+            current = current.getCause();
+        }
+        return builder.toString();
     }
 }

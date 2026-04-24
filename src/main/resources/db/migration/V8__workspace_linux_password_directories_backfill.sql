@@ -6,9 +6,11 @@ SELECT
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 FROM (
-    SELECT DISTINCT BTRIM(business_unit) AS business_unit
+    SELECT DISTINCT ON (LOWER(BTRIM(business_unit)))
+        BTRIM(business_unit) AS business_unit
     FROM workspace_linux_password_server_business_unit
     WHERE deleted = 0 AND BTRIM(business_unit) <> ''
+    ORDER BY LOWER(BTRIM(business_unit)), BTRIM(business_unit)
 ) source
 CROSS JOIN (
     SELECT COALESCE(MAX(id), 0) AS max_id

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -185,6 +186,27 @@ class WorkspaceLinuxPasswordServiceTest {
     }
 
     @Test
+    void shouldBackfillDirectoryTableOnceForCaseInsensitiveDuplicateRelations() {
+        when(authContextService.requireLogin()).thenReturn(loggedInAccount("readonly", "Readonly User"));
+        when(linuxPasswordDirectoryMapper.selectList(any())).thenReturn(
+            List.of(),
+            List.of(),
+            List.of(buildDirectory(31L, "Finance"))
+        );
+        when(linuxPasswordServerBusinessUnitMapper.selectList(any())).thenReturn(List.of(
+            buildBusinessUnit(1L, "Finance"),
+            buildBusinessUnit(2L, " finance ")
+        ));
+
+        List<String> directories = workspaceLinuxPasswordService.listDirectories();
+
+        ArgumentCaptor<LinuxPasswordDirectoryEntity> directoryCaptor = ArgumentCaptor.forClass(LinuxPasswordDirectoryEntity.class);
+        verify(linuxPasswordDirectoryMapper, times(1)).insert(directoryCaptor.capture());
+        assertEquals("Finance", directoryCaptor.getValue().getName());
+        assertEquals(List.of("Finance"), directories);
+    }
+
+    @Test
     void shouldCreateMissingDirectoryRowsWhenCreatingServer() {
         when(authContextService.requireLogin()).thenReturn(loggedInAccount("editor", "Editor User"));
 
@@ -209,6 +231,34 @@ class WorkspaceLinuxPasswordServiceTest {
         ArgumentCaptor<LinuxPasswordDirectoryEntity> directoryCaptor = ArgumentCaptor.forClass(LinuxPasswordDirectoryEntity.class);
         verify(linuxPasswordDirectoryMapper).insert(directoryCaptor.capture());
         assertEquals("Web", directoryCaptor.getValue().getName());
+    }
+
+    @Test
+    void shouldDeduplicateBusinessUnitsCaseInsensitivelyOnCreate() {
+        when(authContextService.requireLogin()).thenReturn(loggedInAccount("editor", "Editor User"));
+
+        WorkspaceLinuxPasswordUpsertRequest request = new WorkspaceLinuxPasswordUpsertRequest();
+        request.setHostname("prod-web-02");
+        request.setIp("10.0.0.10");
+        request.setUsername("root");
+        request.setPassword("TopSecret!10");
+        request.setBusinessUnits(List.of("Web", " web ", "WEB"));
+
+        when(linuxPasswordDirectoryMapper.selectList(any())).thenReturn(List.of());
+        when(linuxPasswordServerMapper.selectById(anyLong())).thenReturn(buildServer(88L, "prod-web-02", "10.0.0.10", "root", "TopSecret!10", "online"));
+        when(linuxPasswordServerBusinessUnitMapper.selectList(any())).thenReturn(List.of(
+            buildBusinessUnit(88L, "Web")
+        ));
+
+        WorkspaceLinuxPasswordDto created = workspaceLinuxPasswordService.createServer(request);
+
+        ArgumentCaptor<LinuxPasswordServerBusinessUnitEntity> relationCaptor = ArgumentCaptor.forClass(LinuxPasswordServerBusinessUnitEntity.class);
+        ArgumentCaptor<LinuxPasswordDirectoryEntity> directoryCaptor = ArgumentCaptor.forClass(LinuxPasswordDirectoryEntity.class);
+        verify(linuxPasswordServerBusinessUnitMapper, times(1)).insert(relationCaptor.capture());
+        verify(linuxPasswordDirectoryMapper, times(1)).insert(directoryCaptor.capture());
+        assertEquals("Web", relationCaptor.getValue().getBusinessUnit());
+        assertEquals("Web", directoryCaptor.getValue().getName());
+        assertEquals(List.of("Web"), created.getBusinessUnits());
     }
 
     @Test

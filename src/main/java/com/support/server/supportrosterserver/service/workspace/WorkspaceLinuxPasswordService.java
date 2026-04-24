@@ -192,12 +192,7 @@ public class WorkspaceLinuxPasswordService {
     }
 
     private List<String> normalizeBusinessUnits(List<String> businessUnits) {
-        List<String> normalized = (businessUnits == null ? List.<String>of() : businessUnits).stream()
-            .filter(Objects::nonNull)
-            .map(String::trim)
-            .filter(value -> !value.isEmpty())
-            .distinct()
-            .toList();
+        List<String> normalized = normalizeDistinctNames(businessUnits);
         return normalized.isEmpty() ? List.of(DEFAULT_BUSINESS_UNIT) : normalized;
     }
 
@@ -222,12 +217,14 @@ public class WorkspaceLinuxPasswordService {
                 (left, right) -> left
             ));
         for (String directoryName : directoryNames) {
-            if (directoriesByNormalizedName.containsKey(normalizeDirectoryKey(directoryName))) {
+            String normalizedKey = normalizeDirectoryKey(directoryName);
+            if (directoriesByNormalizedName.containsKey(normalizedKey)) {
                 continue;
             }
             LinuxPasswordDirectoryEntity entity = new LinuxPasswordDirectoryEntity();
             entity.setName(directoryName);
             linuxPasswordDirectoryMapper.insert(entity);
+            directoriesByNormalizedName.put(normalizedKey, entity);
         }
     }
 
@@ -239,11 +236,8 @@ public class WorkspaceLinuxPasswordService {
                 Wrappers.<LinuxPasswordServerBusinessUnitEntity>lambdaQuery())
             .stream()
             .map(LinuxPasswordServerBusinessUnitEntity::getBusinessUnit)
-            .filter(Objects::nonNull)
-            .map(String::trim)
-            .filter(value -> !value.isEmpty())
-            .distinct()
             .toList();
+        relationDirectories = normalizeDistinctNames(relationDirectories);
         ensureDirectoriesExist(relationDirectories);
     }
 
@@ -306,6 +300,23 @@ public class WorkspaceLinuxPasswordService {
 
     private String normalizeDirectoryKey(String value) {
         return normalizeOptional(value).toLowerCase(Locale.ROOT);
+    }
+
+    private List<String> normalizeDistinctNames(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        Map<String, String> valuesByNormalizedKey = values.stream()
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(value -> !value.isEmpty())
+            .collect(Collectors.toMap(
+                value -> value.toLowerCase(Locale.ROOT),
+                Function.identity(),
+                (left, right) -> left,
+                java.util.LinkedHashMap::new
+            ));
+        return valuesByNormalizedKey.values().stream().toList();
     }
 
     private boolean matchesSearch(LinuxPasswordServerEntity entity, String normalizedSearch) {
