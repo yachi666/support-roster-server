@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -19,18 +18,19 @@ import com.support.server.supportrosterserver.dto.contactinformation.ContactInfo
 import com.support.server.supportrosterserver.dto.contactinformation.ContactInformationLinkDto;
 import com.support.server.supportrosterserver.dto.contactinformation.ContactInformationListResponse;
 import com.support.server.supportrosterserver.dto.contactinformation.ContactInformationStaffDto;
+import com.support.server.supportrosterserver.dto.employee.EmployeeDirectoryLookupResponse;
 import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactEntity;
 import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactLinkEntity;
 import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactStaffEntity;
 import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactTagEntity;
-import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
+import com.support.server.supportrosterserver.service.AvatarUrlResolver;
 import com.support.server.supportrosterserver.exception.BadRequestException;
-import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactLinkMapper;
 import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactMapper;
 import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactStaffMapper;
 import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactTagMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
+import com.support.server.supportrosterserver.service.workspace.WorkspaceStaffProfileSupport;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,7 +42,8 @@ public class ContactInformationService {
     private final SupportTeamContactTagMapper tagMapper;
     private final SupportTeamContactStaffMapper staffBindingMapper;
     private final SupportTeamContactLinkMapper linkMapper;
-    private final StaffMapper staffMapper;
+    private final WorkspaceStaffProfileSupport workspaceStaffProfileSupport;
+    private final AvatarUrlResolver avatarUrlResolver;
     private final AuthContextService authContextService;
 
     public ContactInformationListResponse listContacts(String keyword, long page, long pageSize) {
@@ -69,7 +70,7 @@ public class ContactInformationService {
             .toList();
 
         ensureEmailUnique(email);
-        Map<String, StaffEntity> staffByCode = ensureStaffIdsExist(staffIds);
+        Map<String, ContactInformationStaffDto> staffByCode = resolveStaffProfiles(staffIds);
 
         SupportTeamContactEntity entity = new SupportTeamContactEntity();
         entity.setTeamName(name);
@@ -100,16 +101,11 @@ public class ContactInformationService {
         return normalizeRequired(email, "Team email is required.").toLowerCase(Locale.ROOT);
     }
 
-    private Map<String, StaffEntity> ensureStaffIdsExist(List<String> staffIds) {
-        Map<String, StaffEntity> staffByCode = new LinkedHashMap<>();
+    private Map<String, ContactInformationStaffDto> resolveStaffProfiles(List<String> staffIds) {
+        Map<String, ContactInformationStaffDto> staffByCode = new LinkedHashMap<>();
         for (String staffId : staffIds) {
-            StaffEntity entity = staffMapper.selectOne(Wrappers.<StaffEntity>lambdaQuery()
-                .eq(StaffEntity::getStaffCode, staffId)
-                .last("limit 1"));
-            if (entity == null) {
-                throw new BadRequestException("Unknown staff ID: " + staffId);
-            }
-            staffByCode.put(staffId, entity);
+            EmployeeDirectoryLookupResponse employee = workspaceStaffProfileSupport.lookupEmployeeSafely(staffId);
+            staffByCode.put(staffId, toStaffDto(staffId, employee));
         }
         return staffByCode;
     }
@@ -141,17 +137,13 @@ public class ContactInformationService {
             .map(SupportTeamContactStaffEntity::getStaffCode)
             .filter(Objects::nonNull)
             .collect(Collectors.toCollection(LinkedHashSet::new));
-        Map<String, StaffEntity> staffByCode = staffCodes.isEmpty()
+        Map<String, ContactInformationStaffDto> staffByCode = staffCodes.isEmpty()
             ? Map.of()
-            : staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()
-                    .in(StaffEntity::getStaffCode, staffCodes))
-                .stream()
-                .collect(Collectors.toMap(StaffEntity::getStaffCode, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+            : resolveStaffProfiles(List.copyOf(staffCodes));
         Map<Long, List<ContactInformationStaffDto>> staffByContactId = new LinkedHashMap<>();
         for (SupportTeamContactStaffEntity binding : bindings) {
-            StaffEntity staff = staffByCode.get(binding.getStaffCode());
             staffByContactId.computeIfAbsent(binding.getContactId(), ignored -> new ArrayList<>())
-                .add(toStaffDto(binding.getStaffCode(), staff));
+                .add(staffByCode.getOrDefault(binding.getStaffCode(), toStaffDto(binding.getStaffCode(), (EmployeeDirectoryLookupResponse) null)));
         }
 
         Map<Long, List<ContactInformationLinkDto>> linksByContactId = linkMapper.selectList(Wrappers.<SupportTeamContactLinkEntity>lambdaQuery()
@@ -212,18 +204,18 @@ public class ContactInformationService {
         return persistedLinks;
     }
 
-    private List<ContactInformationStaffDto> toStaffDtos(List<String> staffIds, Map<String, StaffEntity> staffByCode) {
+    private List<ContactInformationStaffDto> toStaffDtos(List<String> staffIds, Map<String, ContactInformationStaffDto> staffByCode) {
         return staffIds.stream()
-            .map(staffId -> toStaffDto(staffId, staffByCode.get(staffId)))
+            .map(staffId -> staffByCode.getOrDefault(staffId, toStaffDto(staffId, (EmployeeDirectoryLookupResponse) null)))
             .toList();
     }
 
-    private ContactInformationStaffDto toStaffDto(String staffCode, StaffEntity staff) {
+    private ContactInformationStaffDto toStaffDto(String staffCode, EmployeeDirectoryLookupResponse employee) {
         return new ContactInformationStaffDto(
             staffCode,
-            staff == null ? null : staff.getName(),
-            staff == null ? null : staff.getEmail(),
-            staff == null ? null : staff.getAvatar()
+            workspaceStaffProfileSupport.resolveEmployeeName(staffCode, employee),
+            employee == null ? null : workspaceStaffProfileSupport.normalizeOptionalText(employee.emailAddress()),
+            avatarUrlResolver.resolve(staffCode)
         );
     }
 
