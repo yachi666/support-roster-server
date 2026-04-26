@@ -19,7 +19,7 @@
 | 第 3 章 数据架构 | [data/_index.md](./data/_index.md) | 追踪 Excel 来源、加载与兼容约束 | [data-architecture.md](./data-architecture.md) |
 | 第 4 章 实现约束 | [constraints/_index.md](./constraints/_index.md) | 查看代码结构、异常、日志与测试约定 | [constraints-and-conventions.md](./constraints-and-conventions.md) |
 | 第 5 章 数据库规范 | [db/_index.md](./db/_index.md) | 设计表结构、DDL 与初始化脚本 | [db/db-spec.md](./db/db-spec.md) |
-| 第 6 章 功能专题 | [features/_index.md](./features/_index.md) | 沿功能域阅读 workspace / viewer / auth 能力 | [features/workspace-admin/_index.md](./features/workspace-admin/_index.md)、[features/viewer/_index.md](./features/viewer/_index.md)、[features/auth/_index.md](./features/auth/_index.md) |
+| 第 6 章 功能专题 | [features/_index.md](./features/_index.md) | 沿功能域阅读 workspace / viewer / auth / contact-information 能力 | [features/workspace-admin/_index.md](./features/workspace-admin/_index.md)、[features/viewer/_index.md](./features/viewer/_index.md)、[features/auth/_index.md](./features/auth/_index.md)、[features/contact-information.md](./features/contact-information.md) |
 | 附录 变更记录 | [CHANGELOG.md](./CHANGELOG.md) | 回溯规范演进历史 | 按日期逆序阅读 |
 
 ## 文档拓扑

@@ -1,0 +1,252 @@
+package com.support.server.supportrosterserver.service.contactinformation;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import com.support.server.supportrosterserver.dto.contactinformation.ContactInformationCreateRequest;
+import com.support.server.supportrosterserver.dto.contactinformation.ContactInformationListResponse;
+import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactEntity;
+import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactLinkEntity;
+import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactStaffEntity;
+import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactTagEntity;
+import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
+import com.support.server.supportrosterserver.exception.BadRequestException;
+import com.support.server.supportrosterserver.exception.ForbiddenException;
+import com.support.server.supportrosterserver.mapper.StaffMapper;
+import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactLinkMapper;
+import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactMapper;
+import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactStaffMapper;
+import com.support.server.supportrosterserver.mapper.contactinformation.SupportTeamContactTagMapper;
+import com.support.server.supportrosterserver.service.auth.AuthContextService;
+
+class ContactInformationServiceTest {
+
+    @Test
+    void shouldReturnPagedAggregatedContactInformation() {
+        SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
+        SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);
+        SupportTeamContactStaffMapper staffBindingMapper = mock(SupportTeamContactStaffMapper.class);
+        SupportTeamContactLinkMapper linkMapper = mock(SupportTeamContactLinkMapper.class);
+        StaffMapper staffMapper = mock(StaffMapper.class);
+        AuthContextService authContextService = mock(AuthContextService.class);
+
+        SupportTeamContactEntity entity = new SupportTeamContactEntity();
+        entity.setId(1L);
+        entity.setTeamName("Payments Core");
+        entity.setTeamEmail("payments-core@company.com");
+        entity.setXmatterGroup("XM-PAY-01");
+        entity.setGsdGroup("GSD-PAY-882");
+        entity.setEimId("EIM-9331");
+        entity.setOtherInfo("https://example.com/wiki");
+
+        SupportTeamContactTagEntity tag = new SupportTeamContactTagEntity();
+        tag.setContactId(1L);
+        tag.setTag("Upstream");
+
+        SupportTeamContactStaffEntity binding = new SupportTeamContactStaffEntity();
+        binding.setContactId(1L);
+        binding.setStaffCode("S-10492");
+
+        StaffEntity staff = new StaffEntity();
+        staff.setId(88L);
+        staff.setStaffCode("S-10492");
+        staff.setName("Alex Chen");
+        staff.setEmail("alex.c@company.com");
+        staff.setAvatar("https://avatar.example/S-10492.jpg");
+
+        SupportTeamContactLinkEntity link = new SupportTeamContactLinkEntity();
+        link.setContactId(1L);
+        link.setLabel("Docs");
+        link.setUrl("https://example.com/docs");
+
+        when(contactMapper.searchContacts("payments", 20, 0)).thenReturn(List.of(entity));
+        when(contactMapper.countContacts("payments")).thenReturn(1L);
+        when(tagMapper.selectList(any())).thenReturn(List.of(tag));
+        when(staffBindingMapper.selectList(any())).thenReturn(List.of(binding));
+        when(staffMapper.selectList(any())).thenReturn(List.of(staff));
+        when(linkMapper.selectList(any())).thenReturn(List.of(link));
+
+        ContactInformationService service = new ContactInformationService(
+            contactMapper,
+            tagMapper,
+            staffBindingMapper,
+            linkMapper,
+            staffMapper,
+            authContextService
+        );
+
+        ContactInformationListResponse response = service.listContacts("payments", 1, 20);
+
+        assertEquals(1L, response.total());
+        assertEquals(1, response.items().size());
+        assertEquals("Payments Core", response.items().get(0).name());
+        assertEquals(List.of("Upstream"), response.items().get(0).roles());
+        assertEquals("Alex Chen", response.items().get(0).staff().get(0).name());
+        assertEquals(2, response.items().get(0).links().size());
+        assertEquals("Other", response.items().get(0).links().get(1).label());
+    }
+
+    @Test
+    void shouldRejectCreateWhenStaffCodeDoesNotExist() {
+        SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
+        SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);
+        SupportTeamContactStaffMapper staffBindingMapper = mock(SupportTeamContactStaffMapper.class);
+        SupportTeamContactLinkMapper linkMapper = mock(SupportTeamContactLinkMapper.class);
+        StaffMapper staffMapper = mock(StaffMapper.class);
+        AuthContextService authContextService = mock(AuthContextService.class);
+
+        when(staffMapper.selectOne(any())).thenReturn(null);
+
+        ContactInformationService service = new ContactInformationService(
+            contactMapper,
+            tagMapper,
+            staffBindingMapper,
+            linkMapper,
+            staffMapper,
+            authContextService
+        );
+
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            "payments-core@company.com",
+            "XM-PAY-01",
+            "GSD-PAY-882",
+            "EIM-9331",
+            List.of("Upstream"),
+            List.of("S-404"),
+            List.of()
+        );
+
+        assertThrows(BadRequestException.class, () -> service.createContact(request));
+    }
+
+    @Test
+    void shouldRequireAdminToCreateContactInformation() {
+        SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
+        SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);
+        SupportTeamContactStaffMapper staffBindingMapper = mock(SupportTeamContactStaffMapper.class);
+        SupportTeamContactLinkMapper linkMapper = mock(SupportTeamContactLinkMapper.class);
+        StaffMapper staffMapper = mock(StaffMapper.class);
+        AuthContextService authContextService = mock(AuthContextService.class);
+
+        ContactInformationService service = new ContactInformationService(
+            contactMapper,
+            tagMapper,
+            staffBindingMapper,
+            linkMapper,
+            staffMapper,
+            authContextService
+        );
+
+        doThrow(new ForbiddenException("Admin permission is required.")).when(authContextService).requireAdmin();
+
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            "payments-core@company.com",
+            null,
+            null,
+            null,
+            List.of("Upstream"),
+            List.of("S-10492"),
+            List.of()
+        );
+
+        assertThrows(ForbiddenException.class, () -> service.createContact(request));
+    }
+
+    @Test
+    void shouldRejectCreateWhenTeamEmailAlreadyExists() {
+        SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
+        SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);
+        SupportTeamContactStaffMapper staffBindingMapper = mock(SupportTeamContactStaffMapper.class);
+        SupportTeamContactLinkMapper linkMapper = mock(SupportTeamContactLinkMapper.class);
+        StaffMapper staffMapper = mock(StaffMapper.class);
+        AuthContextService authContextService = mock(AuthContextService.class);
+
+        SupportTeamContactEntity existing = new SupportTeamContactEntity();
+        existing.setId(8L);
+        existing.setTeamEmail("payments-core@company.com");
+        when(contactMapper.selectOne(any())).thenReturn(existing);
+
+        ContactInformationService service = new ContactInformationService(
+            contactMapper,
+            tagMapper,
+            staffBindingMapper,
+            linkMapper,
+            staffMapper,
+            authContextService
+        );
+
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            "payments-core@company.com",
+            "XM-PAY-01",
+            "GSD-PAY-882",
+            "EIM-9331",
+            List.of("Upstream"),
+            List.of("S-10492"),
+            List.of()
+        );
+
+        assertThrows(BadRequestException.class, () -> service.createContact(request));
+    }
+
+    @Test
+    void shouldCreateContactAndPersistChildRows() {
+        SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
+        SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);
+        SupportTeamContactStaffMapper staffBindingMapper = mock(SupportTeamContactStaffMapper.class);
+        SupportTeamContactLinkMapper linkMapper = mock(SupportTeamContactLinkMapper.class);
+        StaffMapper staffMapper = mock(StaffMapper.class);
+        AuthContextService authContextService = mock(AuthContextService.class);
+
+        StaffEntity staff = new StaffEntity();
+        staff.setId(88L);
+        staff.setStaffCode("S-10492");
+        staff.setName("Alex Chen");
+        staff.setEmail("alex.c@company.com");
+
+        when(contactMapper.selectOne(any())).thenReturn(null);
+        when(staffMapper.selectOne(any())).thenReturn(staff);
+
+        ContactInformationService service = new ContactInformationService(
+            contactMapper,
+            tagMapper,
+            staffBindingMapper,
+            linkMapper,
+            staffMapper,
+            authContextService
+        );
+
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            "payments-core@company.com",
+            "XM-PAY-01",
+            "GSD-PAY-882",
+            "EIM-9331",
+            List.of("Upstream"),
+            List.of("S-10492"),
+            List.of(new com.support.server.supportrosterserver.dto.contactinformation.ContactInformationLinkDto("Other", "https://example.com/wiki"))
+        );
+
+        var response = service.createContact(request);
+
+        verify(contactMapper).insert(any(SupportTeamContactEntity.class));
+        verify(tagMapper).insert(any(SupportTeamContactTagEntity.class));
+        verify(staffBindingMapper).insert(any(SupportTeamContactStaffEntity.class));
+        verify(linkMapper, never()).insert(any(SupportTeamContactLinkEntity.class));
+        assertEquals("Payments Core", response.name());
+        assertEquals("Other", response.links().get(0).label());
+        assertEquals("https://example.com/wiki", response.links().get(0).url());
+    }
+}
