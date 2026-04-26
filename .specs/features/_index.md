@@ -10,6 +10,7 @@
 |---|---|---|---|
 | Workspace Admin | [workspace-admin/_index.md](./workspace-admin/_index.md) | 后台写能力、聚合页面、导入导出、校验中心 | `/api/workspace/**` |
 | Viewer | [viewer/_index.md](./viewer/_index.md) | 公开查看页只读接口、只读 DTO 与兼容边界 | `/api/**` |
+| Contact Information | [contact-information.md](./contact-information.md) | 独立联系信息页的公开读 + 管理写能力 | `/api/contact-information` |
 | Auth & Access Control | [auth/_index.md](./auth/_index.md) | 登录、账号生命周期、角色与 team 级授权 | `/api/auth/**` + `/api/workspace/**` |
 | Workspace 总览旧入口 | [workspace-admin-backend.md](./workspace-admin-backend.md) | 快速建立后台专题上下文 | 作为总览页保留 |
 
@@ -34,6 +35,7 @@
 | [viewer/staff.md](./viewer/staff.md) | 人员接口 |
 | [viewer/shift-codes.md](./viewer/shift-codes.md) | 班次编码接口 |
 | [viewer/role-groups.md](./viewer/role-groups.md) | 已废弃的历史兼容说明 |
+| [contact-information.md](./contact-information.md) | 联系信息独立页 API |
 
 ## 维护提示
 
