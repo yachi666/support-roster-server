@@ -30,4 +30,20 @@ class GlobalExceptionHandlerTest {
         assertEquals("Hostname already exists.", response.getBody().getMessage());
         assertEquals("/api/workspace/linux-passwords", response.getBody().getPath());
     }
+
+    @Test
+    void shouldReturnBadRequestForDuplicateContactInformationEmailConstraintViolation() {
+        DataIntegrityViolationException exception = new DataIntegrityViolationException(
+            "duplicate key value violates unique constraint \"uk_support_team_contact_team_email\""
+        );
+
+        ResponseEntity<ErrorResponse> response = globalExceptionHandler.handleDataIntegrityViolation(
+            exception,
+            new ServletWebRequest(new MockHttpServletRequest("POST", "/api/contact-information"))
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Team email already exists.", response.getBody().getMessage());
+        assertEquals("/api/contact-information", response.getBody().getPath());
+    }
 }

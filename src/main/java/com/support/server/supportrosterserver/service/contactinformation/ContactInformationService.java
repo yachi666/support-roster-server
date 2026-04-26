@@ -88,12 +88,16 @@ public class ContactInformationService {
     }
 
     private void ensureEmailUnique(String email) {
-        SupportTeamContactEntity existing = contactMapper.selectOne(Wrappers.<SupportTeamContactEntity>lambdaQuery()
-            .eq(SupportTeamContactEntity::getTeamEmail, email)
+        SupportTeamContactEntity existing = contactMapper.selectOne(Wrappers.<SupportTeamContactEntity>query()
+            .apply("LOWER(BTRIM(team_email)) = {0}", normalizeEmailKey(email))
             .last("limit 1"));
         if (existing != null) {
             throw new BadRequestException("Team email already exists.");
         }
+    }
+
+    private String normalizeEmailKey(String email) {
+        return normalizeRequired(email, "Team email is required.").toLowerCase(Locale.ROOT);
     }
 
     private Map<String, StaffEntity> ensureStaffIdsExist(List<String> staffIds) {

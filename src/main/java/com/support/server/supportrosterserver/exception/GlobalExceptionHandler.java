@@ -150,6 +150,9 @@ public class GlobalExceptionHandler {
         if (normalizedMessage.contains("uk_workspace_linux_password_directory_name")) {
             return "Directory already exists.";
         }
+        if (normalizedMessage.contains("uk_support_team_contact_team_email")) {
+            return "Team email already exists.";
+        }
         return "Request conflicts with existing data.";
     }
 

@@ -2,6 +2,7 @@ package com.support.server.supportrosterserver.service.contactinformation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
@@ -12,7 +13,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
+import com.baomidou.mybatisplus.core.conditions.AbstractWrapper;
 import com.support.server.supportrosterserver.dto.contactinformation.ContactInformationCreateRequest;
 import com.support.server.supportrosterserver.dto.contactinformation.ContactInformationListResponse;
 import com.support.server.supportrosterserver.entity.contactinformation.SupportTeamContactEntity;
@@ -199,6 +202,51 @@ class ContactInformationServiceTest {
         );
 
         assertThrows(BadRequestException.class, () -> service.createContact(request));
+    }
+
+    @Test
+    void shouldCheckTeamEmailUniquenessUsingNormalizedEmailRule() {
+        SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
+        SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);
+        SupportTeamContactStaffMapper staffBindingMapper = mock(SupportTeamContactStaffMapper.class);
+        SupportTeamContactLinkMapper linkMapper = mock(SupportTeamContactLinkMapper.class);
+        StaffMapper staffMapper = mock(StaffMapper.class);
+        AuthContextService authContextService = mock(AuthContextService.class);
+
+        StaffEntity staff = new StaffEntity();
+        staff.setId(88L);
+        staff.setStaffCode("S-10492");
+        staff.setName("Alex Chen");
+        when(contactMapper.selectOne(any())).thenReturn(null);
+        when(staffMapper.selectOne(any())).thenReturn(staff);
+
+        ContactInformationService service = new ContactInformationService(
+            contactMapper,
+            tagMapper,
+            staffBindingMapper,
+            linkMapper,
+            staffMapper,
+            authContextService
+        );
+
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            "  PAYMENTS-CORE@COMPANY.COM  ",
+            "XM-PAY-01",
+            "GSD-PAY-882",
+            "EIM-9331",
+            List.of("Upstream"),
+            List.of("S-10492"),
+            List.of()
+        );
+
+        service.createContact(request);
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.Wrapper> queryCaptor =
+            ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.Wrapper.class);
+        verify(contactMapper).selectOne(queryCaptor.capture());
+        AbstractWrapper<?, ?, ?> query = (AbstractWrapper<?, ?, ?>) queryCaptor.getValue();
+        assertTrue(query.getSqlSegment().contains("LOWER(BTRIM(team_email))"));
     }
 
     @Test
