@@ -51,9 +51,9 @@
 ### 数据规则
 
 - `team_name` 必填
-- `team_email` 必填且唯一
-- 至少一个 tag
-- 至少一个 `staff_code`
+- `team_email`（请求体中的 `email`）可选；仅在非空时参与唯一性约束，空白值会被归一化为空
+- tags（请求体中的 `roles`）可选
+- `staff_code` / `staffIds` 可选
 - 所有 `staff_code` 必须能命中 `workspace_staff`
 - `other_info` 以主表字段存储，响应时映射回 `label=Other` 的链接项
 
@@ -142,5 +142,6 @@
 
 - 后端先做 admin 权限校验
 - 写入主表与子表必须在一个事务内完成
+- 允许仅创建主表的 sparse 记录；当 `roles`、`staffIds`、`links` 为空或缺省时，不要求补齐子集合
 - `label=Other` 的链接不落子表，写入 `other_info`
 - 返回值与列表项结构保持一致
