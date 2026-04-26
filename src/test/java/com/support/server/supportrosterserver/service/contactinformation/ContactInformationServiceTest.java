@@ -138,6 +138,48 @@ class ContactInformationServiceTest {
     }
 
     @Test
+    void shouldCreateContactWhenOnlyTeamNameProvided() {
+        SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
+        SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);
+        SupportTeamContactStaffMapper staffBindingMapper = mock(SupportTeamContactStaffMapper.class);
+        SupportTeamContactLinkMapper linkMapper = mock(SupportTeamContactLinkMapper.class);
+        EmployeeDirectoryClient employeeDirectoryClient = mock(EmployeeDirectoryClient.class);
+        AuthContextService authContextService = mock(AuthContextService.class);
+
+        ContactInformationService service = new ContactInformationService(
+            contactMapper,
+            tagMapper,
+            staffBindingMapper,
+            linkMapper,
+            new WorkspaceStaffProfileSupport(employeeDirectoryClient),
+            new AvatarUrlResolver("https://avatar.example"),
+            authContextService
+        );
+
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            null,
+            null,
+            null,
+            null,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+
+        var response = assertDoesNotThrow(() -> service.createContact(request));
+
+        verify(contactMapper).insert(any(SupportTeamContactEntity.class));
+        verify(contactMapper, never()).selectOne(any());
+        verify(tagMapper, never()).insert(any(SupportTeamContactTagEntity.class));
+        verify(staffBindingMapper, never()).insert(any(SupportTeamContactStaffEntity.class));
+        verify(linkMapper, never()).insert(any(SupportTeamContactLinkEntity.class));
+        assertEquals(List.of(), response.roles());
+        assertEquals(List.of(), response.staff());
+        assertEquals(List.of(), response.links());
+    }
+
+    @Test
     void shouldRequireAdminToCreateContactInformation() {
         SupportTeamContactMapper contactMapper = mock(SupportTeamContactMapper.class);
         SupportTeamContactTagMapper tagMapper = mock(SupportTeamContactTagMapper.class);

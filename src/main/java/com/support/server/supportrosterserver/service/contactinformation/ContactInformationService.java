@@ -60,17 +60,21 @@ public class ContactInformationService {
     public ContactInformationDto createContact(ContactInformationCreateRequest request) {
         authContextService.requireAdmin();
         String name = normalizeRequired(request.name(), "Team name is required.");
-        String email = normalizeRequired(request.email(), "Team email is required.");
-        List<String> roles = normalizeDistinctValues(request.roles(), "At least one tag is required.");
-        List<String> staffIds = normalizeDistinctValues(request.staffIds(), "At least one staff ID is required.");
+        String email = normalizeOptional(request.email());
+        List<String> roles = normalizeDistinctOptionalValues(request.roles());
+        List<String> staffIds = normalizeDistinctOptionalValues(request.staffIds());
         List<ContactInformationLinkDto> links = request.links() == null ? List.of() : request.links().stream()
             .filter(Objects::nonNull)
             .map(link -> new ContactInformationLinkDto(normalizeOptional(link.label()), normalizeOptional(link.url())))
             .filter(link -> link.label() != null && link.url() != null)
             .toList();
 
-        ensureEmailUnique(email);
-        Map<String, ContactInformationStaffDto> staffByCode = resolveStaffProfiles(staffIds);
+        if (email != null) {
+            ensureEmailUnique(email);
+        }
+        Map<String, ContactInformationStaffDto> staffByCode = staffIds.isEmpty()
+            ? Map.of()
+            : resolveStaffProfiles(staffIds);
 
         SupportTeamContactEntity entity = new SupportTeamContactEntity();
         entity.setTeamName(name);
@@ -241,20 +245,16 @@ public class ContactInformationService {
         return link.label() != null && "other".equalsIgnoreCase(link.label().trim());
     }
 
-    private List<String> normalizeDistinctValues(List<String> values, String emptyMessage) {
+    private List<String> normalizeDistinctOptionalValues(List<String> values) {
         if (values == null) {
-            throw new BadRequestException(emptyMessage);
+            return List.of();
         }
-        List<String> normalized = values.stream()
+        return values.stream()
             .filter(Objects::nonNull)
             .map(this::normalizeOptional)
             .filter(Objects::nonNull)
             .distinct()
             .toList();
-        if (normalized.isEmpty()) {
-            throw new BadRequestException(emptyMessage);
-        }
-        return normalized;
     }
 
     private String normalizeRequired(String value, String message) {
