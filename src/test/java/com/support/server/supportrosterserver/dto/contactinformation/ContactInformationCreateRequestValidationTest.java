@@ -34,4 +34,44 @@ class ContactInformationCreateRequestValidationTest {
 
         assertEquals(Set.of(), propertyPaths);
     }
+
+    @Test
+    void shouldAllowBlankEmail() {
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            "   ",
+            null,
+            null,
+            null,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+
+        Set<String> propertyPaths = validator.validate(request).stream()
+            .map(violation -> violation.getPropertyPath().toString())
+            .collect(Collectors.toSet());
+
+        assertEquals(Set.of(), propertyPaths);
+    }
+
+    @Test
+    void shouldRejectInvalidNonEmptyEmail() {
+        ContactInformationCreateRequest request = new ContactInformationCreateRequest(
+            "Payments Core",
+            "not-an-email",
+            null,
+            null,
+            null,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+
+        Set<String> propertyPaths = validator.validate(request).stream()
+            .map(violation -> violation.getPropertyPath().toString())
+            .collect(Collectors.toSet());
+
+        assertEquals(Set.of("email"), propertyPaths);
+    }
 }

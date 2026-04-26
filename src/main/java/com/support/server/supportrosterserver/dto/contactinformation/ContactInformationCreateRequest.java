@@ -15,4 +15,15 @@ public record ContactInformationCreateRequest(
     List<String> staffIds,
     List<ContactInformationLinkDto> links
 ) {
+    public ContactInformationCreateRequest {
+        email = normalizeOptional(email);
+    }
+
+    private static String normalizeOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
 }
