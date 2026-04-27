@@ -25,7 +25,7 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceAdminBootstrapService.class);
     private static final String AUTH_SOURCE_LOCAL_PASSWORD = "LOCAL_PASSWORD";
 
-    private final String bootstrapAdminStaffCode;
+    private final String bootstrapAdminStaffId;
     private final StaffMapper staffMapper;
     private final WorkspaceAccountMapper workspaceAccountMapper;
     private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
@@ -33,14 +33,14 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
     private final AuthTokenVersionService authTokenVersionService;
 
     public WorkspaceAdminBootstrapService(
-        @Value("${support.auth.bootstrap-admin-staff-code:}") String bootstrapAdminStaffCode,
+        @Value("${support.auth.bootstrap-admin-staff-id:}") String bootstrapAdminStaffId,
         StaffMapper staffMapper,
         WorkspaceAccountMapper workspaceAccountMapper,
         WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper,
         WorkspaceOperationLogService workspaceOperationLogService,
         AuthTokenVersionService authTokenVersionService
     ) {
-        this.bootstrapAdminStaffCode = bootstrapAdminStaffCode == null ? "" : bootstrapAdminStaffCode.trim();
+        this.bootstrapAdminStaffId = bootstrapAdminStaffId == null ? "" : bootstrapAdminStaffId.trim();
         this.staffMapper = staffMapper;
         this.workspaceAccountMapper = workspaceAccountMapper;
         this.workspaceAccountTeamScopeMapper = workspaceAccountTeamScopeMapper;
@@ -51,22 +51,22 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (bootstrapAdminStaffCode.isBlank()) {
+        if (bootstrapAdminStaffId.isBlank()) {
             return;
         }
 
         StaffEntity staff = staffMapper.selectOne(Wrappers.<StaffEntity>lambdaQuery()
-            .eq(StaffEntity::getStaffCode, bootstrapAdminStaffCode)
+            .eq(StaffEntity::getStaffId, bootstrapAdminStaffId)
             .last("limit 1"));
         if (staff == null) {
             throw new IllegalStateException(
-                "Configured support.auth.bootstrap-admin-staff-code does not match any workspace staff record: "
-                    + bootstrapAdminStaffCode
+                "Configured support.auth.bootstrap-admin-staff-id does not match any workspace staff record: "
+                    + bootstrapAdminStaffId
             );
         }
 
         WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-            .eq(WorkspaceAccountEntity::getStaffId, staff.getId())
+            .eq(WorkspaceAccountEntity::getStaffRecordId, staff.getId())
             .last("limit 1"));
         if (account == null) {
             createBootstrapAdmin(staff);
@@ -78,15 +78,15 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
 
     private void createBootstrapAdmin(StaffEntity staff) {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
-        account.setStaffId(staff.getId());
-        account.setStaffCode(staff.getStaffCode());
+        account.setStaffRecordId(staff.getId());
+        account.setStaffId(staff.getStaffId());
         account.setRoleCode(AccountRole.ADMIN.getCode());
         account.setAccountStatus(AccountStatus.PENDING_ACTIVATION.getCode());
         account.setPasswordHash(null);
         account.setPasswordSetAt(null);
         account.setAuthSource(AUTH_SOURCE_LOCAL_PASSWORD);
         account.setExternalSubject(null);
-        account.setNotes("Bootstrap admin account from support.auth.bootstrap-admin-staff-code");
+        account.setNotes("Bootstrap admin account from support.auth.bootstrap-admin-staff-id");
         account.setLastLoginAt(null);
         account.setTokenVersion(AuthTokenVersionService.INITIAL_TOKEN_VERSION);
         workspaceAccountMapper.insert(account);
@@ -95,9 +95,9 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
             "Bootstrap workspace admin",
             "workspace_account",
             account.getId(),
-            "Created bootstrap admin for staff_code=" + staff.getStaffCode()
+            "Created bootstrap admin for staff_id=" + staff.getStaffId()
         );
-        log.info("Created bootstrap workspace admin account for staff_code={}", staff.getStaffCode());
+        log.info("Created bootstrap workspace admin account for staff_id={}", staff.getStaffId());
     }
 
     private void promoteBootstrapAdminIfNeeded(StaffEntity staff, WorkspaceAccountEntity account) {
@@ -128,9 +128,9 @@ public class WorkspaceAdminBootstrapService implements ApplicationRunner {
                 "Bootstrap workspace admin",
                 "workspace_account",
                 account.getId(),
-                "Elevated bootstrap admin for staff_code=" + staff.getStaffCode()
+                "Elevated bootstrap admin for staff_id=" + staff.getStaffId()
             );
-            log.info("Updated workspace account to bootstrap admin for staff_code={}", staff.getStaffCode());
+            log.info("Updated workspace account to bootstrap admin for staff_id={}", staff.getStaffId());
         }
 
         workspaceAccountTeamScopeMapper.delete(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()

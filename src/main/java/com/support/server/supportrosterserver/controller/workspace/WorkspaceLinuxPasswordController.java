@@ -12,11 +12,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordDto;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordAccessAuditListResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordListResponse;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordSecretRequest;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordSecretResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordUpsertRequest;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceLinuxPasswordService;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -38,6 +42,49 @@ public class WorkspaceLinuxPasswordController {
         return ResponseEntity.ok(workspaceLinuxPasswordService.getServer(id));
     }
 
+    @GetMapping("/access-audits")
+    public ResponseEntity<WorkspaceLinuxPasswordAccessAuditListResponse> listAccessAudits(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String staffId,
+            @RequestParam(required = false) String staffName,
+            @RequestParam(required = false) String hostname,
+            @RequestParam(required = false) String ip,
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String result,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(defaultValue = "1") long page,
+            @RequestParam(defaultValue = "20") long pageSize) {
+        return ResponseEntity.ok(workspaceLinuxPasswordService.listAccessAudits(
+            keyword,
+            staffId,
+            staffName,
+            hostname,
+            ip,
+            username,
+            action,
+            result,
+            from,
+            to,
+            page,
+            pageSize
+        ));
+    }
+
+    @PostMapping("/credentials/{credentialId}/secret")
+    public ResponseEntity<WorkspaceLinuxPasswordSecretResponse> revealCredentialSecret(
+            @PathVariable Long credentialId,
+            @Valid @RequestBody WorkspaceLinuxPasswordSecretRequest request,
+            HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(workspaceLinuxPasswordService.revealCredentialSecret(
+            credentialId,
+            request.getAction(),
+            resolveClientIp(httpRequest),
+            httpRequest.getHeader("User-Agent")
+        ));
+    }
+
     @PostMapping
     public ResponseEntity<WorkspaceLinuxPasswordDto> createServer(@Valid @RequestBody WorkspaceLinuxPasswordUpsertRequest request) {
         return ResponseEntity.ok(workspaceLinuxPasswordService.createServer(request));
@@ -52,5 +99,13 @@ public class WorkspaceLinuxPasswordController {
     public ResponseEntity<Void> deleteServer(@PathVariable Long id) {
         workspaceLinuxPasswordService.deleteServer(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

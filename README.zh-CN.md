@@ -64,7 +64,7 @@
 | `DB_USERNAME` | 数据库用户名 | 应用配置为 `lzn`，开发脚本使用当前系统用户 |
 | `DB_PASSWORD` | 数据库密码 | `123456` |
 | `SA_TOKEN_JWT_SECRET_KEY` | JWT 签名密钥 | 非 local profile 需显式提供 |
-| `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE` | 可选的初始管理员员工号 | 空 |
+| `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID` | 可选的初始管理员员工 ID | 空 |
 | `SUPPORT_EMPLOYEE_BASE_URL` | 员工目录服务地址 | `https://api.heet.uk` |
 | `LOG_PATH` | 日志输出目录 | `logs` |
 

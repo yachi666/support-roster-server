@@ -137,17 +137,17 @@ public class ContactInformationService {
         List<SupportTeamContactStaffEntity> bindings = staffBindingMapper.selectList(Wrappers.<SupportTeamContactStaffEntity>lambdaQuery()
             .in(SupportTeamContactStaffEntity::getContactId, contactIds)
             .orderByAsc(SupportTeamContactStaffEntity::getId));
-        LinkedHashSet<String> staffCodes = bindings.stream()
-            .map(SupportTeamContactStaffEntity::getStaffCode)
+        LinkedHashSet<String> staffIds = bindings.stream()
+            .map(SupportTeamContactStaffEntity::getStaffId)
             .filter(Objects::nonNull)
             .collect(Collectors.toCollection(LinkedHashSet::new));
-        Map<String, ContactInformationStaffDto> staffByCode = staffCodes.isEmpty()
+        Map<String, ContactInformationStaffDto> staffByCode = staffIds.isEmpty()
             ? Map.of()
-            : resolveStaffProfiles(List.copyOf(staffCodes));
+            : resolveStaffProfiles(List.copyOf(staffIds));
         Map<Long, List<ContactInformationStaffDto>> staffByContactId = new LinkedHashMap<>();
         for (SupportTeamContactStaffEntity binding : bindings) {
             staffByContactId.computeIfAbsent(binding.getContactId(), ignored -> new ArrayList<>())
-                .add(staffByCode.getOrDefault(binding.getStaffCode(), toStaffDto(binding.getStaffCode(), (EmployeeDirectoryLookupResponse) null)));
+                .add(staffByCode.getOrDefault(binding.getStaffId(), toStaffDto(binding.getStaffId(), (EmployeeDirectoryLookupResponse) null)));
         }
 
         Map<Long, List<ContactInformationLinkDto>> linksByContactId = linkMapper.selectList(Wrappers.<SupportTeamContactLinkEntity>lambdaQuery()
@@ -185,7 +185,7 @@ public class ContactInformationService {
         for (String staffId : staffIds) {
             SupportTeamContactStaffEntity binding = new SupportTeamContactStaffEntity();
             binding.setContactId(contactId);
-            binding.setStaffCode(staffId);
+            binding.setStaffId(staffId);
             staffBindingMapper.insert(binding);
         }
     }
@@ -214,12 +214,12 @@ public class ContactInformationService {
             .toList();
     }
 
-    private ContactInformationStaffDto toStaffDto(String staffCode, EmployeeDirectoryLookupResponse employee) {
+    private ContactInformationStaffDto toStaffDto(String staffId, EmployeeDirectoryLookupResponse employee) {
         return new ContactInformationStaffDto(
-            staffCode,
-            workspaceStaffProfileSupport.resolveEmployeeName(staffCode, employee),
+            staffId,
+            workspaceStaffProfileSupport.resolveEmployeeName(staffId, employee),
             employee == null ? null : workspaceStaffProfileSupport.normalizeOptionalText(employee.emailAddress()),
-            avatarUrlResolver.resolve(staffCode)
+            avatarUrlResolver.resolve(staffId)
         );
     }
 

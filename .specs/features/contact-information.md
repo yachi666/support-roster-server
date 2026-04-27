@@ -53,8 +53,8 @@
 - `team_name` 必填
 - `team_email`（请求体中的 `email`）可选；仅在非空时参与唯一性约束，空白值会被归一化为空
 - tags（请求体中的 `roles`）可选
-- `staff_code` / `staffIds` 可选
-- 所有 `staff_code` 必须能命中 `workspace_staff`
+- `staff_id` / `staffIds` 可选
+- 所有 `staff_id` 必须能命中 `workspace_staff`
 - `other_info` 以主表字段存储，响应时映射回 `label=Other` 的链接项
 
 ## 接口契约

@@ -14,11 +14,11 @@
 
 1. 备份数据库并确认当前 `workspace_staff` 主数据可用。
 2. 执行初始化 SQL，补齐或校验首个管理员对应的 `workspace_staff` 记录。
-3. 在后端配置 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE`，发布服务端。
+3. 在后端配置 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID`，发布服务端。
 4. 发布前端静态资源，并确认 `/login` 可访问。
 5. 使用首个管理员 staffid 完成首次设密并登录。
 6. 由该管理员创建其他 `admin / editor / readonly` 账号。
-7. 删除 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE`，重新部署或重启后端。
+7. 删除 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID`，重新部署或重启后端。
 8. 按首次验收清单完成回归。
 
 ## 数据库准备
@@ -31,7 +31,7 @@
 ### 2. 首个管理员 staff 准备
 
 - 推荐使用 `db/ddl/006_auth_bootstrap_admin_seed.sql`。
-- 该 SQL 的职责是确保 `workspace_staff.staff_code` 已存在，并为首个管理员提供稳定的 staff 主数据。
+- 该 SQL 的职责是确保 `workspace_staff.staff_id` 已存在，并为首个管理员提供稳定的 staff 主数据。
 - **不要**在 SQL 中直接写入密码哈希；首登设密仍由应用完成。
 
 ## 后端部署配置
@@ -41,17 +41,17 @@
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
-- `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE`
+- `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID`
 
 ### 首次上线示例
 
 ```bash
-export SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE=BOOTSTRAP_ADMIN_001
+export SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID=BOOTSTRAP_ADMIN_001
 ```
 
 ### 启动行为
 
-当 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE` 存在时，后端启动会执行幂等引导：
+当 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID` 存在时，后端启动会执行幂等引导：
 
 - 若 staff 存在但还没有账号，则创建一个 `admin + PENDING_ACTIVATION` 账号。
 - 若 staff 已有账号，则提升为 `admin`，并清理 editor 的 team 授权残留。
@@ -70,7 +70,7 @@ export SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE=BOOTSTRAP_ADMIN_001
 ## 首个管理员交接步骤
 
 1. 打开 `/login`。
-2. 输入 `staffid`，即 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE` 对应值。
+2. 输入 `staffid`，即 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID` 对应值。
 3. 按首登流程设置密码。
 4. 进入 `/workspace/accounts`。
 5. 创建至少一个备用管理员账号，避免单点人员风险。
@@ -81,7 +81,7 @@ export SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE=BOOTSTRAP_ADMIN_001
 
 完成首个管理员接管后，必须移除：
 
-- 环境变量 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE`
+- 环境变量 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID`
 
 原因：
 
@@ -94,7 +94,7 @@ export SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE=BOOTSTRAP_ADMIN_001
 
 1. 先保留数据库中新增的账号表结构，不建议回删。
 2. 回滚应用版本前，确认旧版本不会误读新增表。
-3. 若仅需停止首个管理员引导，移除 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE` 后重启即可。
+3. 若仅需停止首个管理员引导，移除 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID` 后重启即可。
 
 ## 风险提示
 

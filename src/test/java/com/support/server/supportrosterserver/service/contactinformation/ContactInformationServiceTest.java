@@ -61,7 +61,7 @@ class ContactInformationServiceTest {
 
         SupportTeamContactStaffEntity binding = new SupportTeamContactStaffEntity();
         binding.setContactId(1L);
-        binding.setStaffCode("S-10492");
+        binding.setStaffId("S-10492");
 
         SupportTeamContactLinkEntity link = new SupportTeamContactLinkEntity();
         link.setContactId(1L);

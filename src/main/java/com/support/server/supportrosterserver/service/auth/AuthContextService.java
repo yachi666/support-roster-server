@@ -56,7 +56,7 @@ public class AuthContextService {
             throw new ForbiddenException("Account is disabled.");
         }
         authTokenVersionService.validateCurrentTokenVersion(account);
-        StaffEntity staff = staffMapper.selectById(account.getStaffId());
+        StaffEntity staff = staffMapper.selectById(account.getStaffRecordId());
         if (staff == null) {
             throw expiredLogin();
         }
@@ -71,7 +71,7 @@ public class AuthContextService {
         return new AuthenticatedAccount(
             account.getId(),
             staff.getId(),
-            account.getStaffCode(),
+            account.getStaffId(),
             staff.getName(),
             account.getRoleCode(),
             account.getAccountStatus(),
@@ -202,8 +202,8 @@ public class AuthContextService {
             if (current.staffName() != null && !current.staffName().isBlank()) {
                 return current.staffName();
             }
-            if (current.staffCode() != null && !current.staffCode().isBlank()) {
-                return current.staffCode();
+            if (current.staffId() != null && !current.staffId().isBlank()) {
+                return current.staffId();
             }
         }
         return fallback == null || fallback.isBlank() ? "system" : fallback;

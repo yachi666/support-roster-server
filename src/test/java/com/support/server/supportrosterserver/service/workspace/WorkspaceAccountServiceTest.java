@@ -54,8 +54,8 @@ class WorkspaceAccountServiceTest {
     void shouldDeleteAccountAndScopesWithoutDeletingStaffProfile() {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(8L);
-        account.setStaffId(88L);
-        account.setStaffCode("A088");
+        account.setStaffRecordId(88L);
+        account.setStaffId("A088");
         when(workspaceAccountMapper.selectById(8L)).thenReturn(account);
         when(authContextService.requireLogin()).thenReturn(new AuthenticatedAccount(
             1L,

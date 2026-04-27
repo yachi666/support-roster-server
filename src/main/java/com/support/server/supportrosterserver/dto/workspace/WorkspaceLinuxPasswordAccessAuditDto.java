@@ -1,6 +1,6 @@
 package com.support.server.supportrosterserver.dto.workspace;
 
-import java.util.Map;
+import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,22 +11,25 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class WorkspaceImportPreviewPersonDto {
+public class WorkspaceLinuxPasswordAccessAuditDto {
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long previewStaffId;
-
+    private Long id;
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long accountId;
     @JsonSerialize(using = ToStringSerializer.class)
     private Long staffRecordId;
-
     private String staffId;
     private String staffName;
-    private String avatar;
-    private String roleName;
-
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long teamId;
-
-    private String teamName;
-    private Map<Integer, String> schedule;
-    private Boolean newStaff;
+    private Long serverId;
+    private String hostname;
+    private String ip;
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long credentialId;
+    private String username;
+    private String action;
+    private String result;
+    private String clientIp;
+    private String userAgent;
+    private LocalDateTime createTime;
 }

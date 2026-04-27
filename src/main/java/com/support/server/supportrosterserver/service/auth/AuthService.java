@@ -132,7 +132,7 @@ public class AuthService {
         return new AuthCurrentUserDto(
             current.accountId(),
             current.staffRecordId(),
-            current.staffCode(),
+            current.staffId(),
             current.staffName(),
             current.roleCode(),
             current.accountStatus(),
@@ -168,7 +168,7 @@ public class AuthService {
 
     private WorkspaceAccountEntity requireAccountByStaffId(String normalizedStaffId) {
         WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-            .eq(WorkspaceAccountEntity::getStaffCode, normalizedStaffId)
+            .eq(WorkspaceAccountEntity::getStaffId, normalizedStaffId)
             .last("limit 1"));
         if (account == null) {
             throw new BadRequestException("Account does not exist for the provided staff ID.");

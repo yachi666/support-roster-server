@@ -20,6 +20,10 @@ public class LinuxPasswordServerEntity extends BaseEntity {
 
     private String ip;
 
+    /**
+     * Legacy columns retained for migration from the original one-account model.
+     * New writes store credentials in workspace_linux_password_credential.
+     */
     private String username;
 
     private String password;

@@ -22,7 +22,7 @@ public class WorkspaceImportPreviewResponse {
     private Map<String, String> shiftCodeColorMap;
     private Map<Long, Map<String, WorkspaceRosterShiftDetailDto>> shiftDetailsByTeam;
     private List<WorkspaceValidationIssueDto> issues;
-    private List<String> newStaffCodes;
+    private List<String> newStaffIds;
     private List<String> newTeamNames;
     private String validationWarning;
 }

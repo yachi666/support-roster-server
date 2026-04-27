@@ -17,21 +17,21 @@ public class WorkspaceStaffProfileSupport {
 
     private final EmployeeDirectoryClient employeeDirectoryClient;
 
-    public EmployeeDirectoryLookupResponse lookupEmployeeSafely(String staffCode) {
+    public EmployeeDirectoryLookupResponse lookupEmployeeSafely(String staffId) {
         try {
-            return employeeDirectoryClient.getEmployee(staffCode);
+            return employeeDirectoryClient.getEmployee(staffId);
         } catch (RuntimeException ex) {
-            log.warn("Employee lookup failed for staff ID {}. Falling back to minimal staff profile.", staffCode, ex);
+            log.warn("Employee lookup failed for staff ID {}. Falling back to minimal staff profile.", staffId, ex);
             return null;
         }
     }
 
-    public String resolveEmployeeName(String staffCode, EmployeeDirectoryLookupResponse employee) {
+    public String resolveEmployeeName(String staffId, EmployeeDirectoryLookupResponse employee) {
         if (employee == null) {
-            return staffCode;
+            return staffId;
         }
         String displayName = normalizeOptionalText(employee.displayName());
-        return displayName == null ? staffCode : displayName;
+        return displayName == null ? staffId : displayName;
     }
 
     public String resolvePreferredText(String preferredValue, String fallbackValue) {

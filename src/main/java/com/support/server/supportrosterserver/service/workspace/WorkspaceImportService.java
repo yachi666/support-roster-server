@@ -93,16 +93,16 @@ public class WorkspaceImportService {
         Map<String, PreviewStaffState> previewStaffByCode = new LinkedHashMap<>();
         List<WorkspaceValidationIssueDto> issues = new ArrayList<>();
         Set<String> issueRowKeys = new LinkedHashSet<>();
-        Set<String> seenImportedStaffCodes = new LinkedHashSet<>();
-        Set<String> newStaffCodes = new LinkedHashSet<>();
+        Set<String> seenImportedStaffIds = new LinkedHashSet<>();
+        Set<String> newStaffIds = new LinkedHashSet<>();
         Set<String> newTeamNames = new LinkedHashSet<>();
 
         for (ImportedRosterRow row : rows) {
-            String normalizedStaffCode = normalizeKey(row.staffCode());
+            String normalizedStaffId = normalizeKey(row.staffId());
             String normalizedTeamName = normalizeKey(row.teamName());
-            String rowKey = normalizedStaffCode + "|" + normalizedTeamName;
+            String rowKey = normalizedStaffId + "|" + normalizedTeamName;
 
-            if (normalizedStaffCode.isBlank()) {
+            if (normalizedStaffId.isBlank()) {
                 issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Missing Staff ID", "staff_id is required for every imported row.", null, null));
                 issueRowKeys.add(rowKey);
                 continue;
@@ -117,13 +117,13 @@ public class WorkspaceImportService {
                 issueRowKeys.add(rowKey);
                 continue;
             }
-            if (importContext.blockedStaffCodes().contains(normalizedStaffCode)) {
-                issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Staff Out Of Scope", "Staff ID '" + row.staffCode() + "' is outside your accessible scope.", row.teamName(), null));
+            if (importContext.blockedStaffIds().contains(normalizedStaffId)) {
+                issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Staff Out Of Scope", "Staff ID '" + row.staffId() + "' is outside your accessible scope.", row.teamName(), null));
                 issueRowKeys.add(rowKey);
                 continue;
             }
-            if (!seenImportedStaffCodes.add(normalizedStaffCode)) {
-                issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Duplicate Staff ID", "Staff ID '" + row.staffCode() + "' appears more than once in the import file.", row.teamName(), null));
+            if (!seenImportedStaffIds.add(normalizedStaffId)) {
+                issues.add(buildIssue(nextIssueId.getAndDecrement(), null, "high", "Duplicate Staff ID", "Staff ID '" + row.staffId() + "' appears more than once in the import file.", row.teamName(), null));
                 issueRowKeys.add(rowKey);
                 continue;
             }
@@ -141,18 +141,18 @@ public class WorkspaceImportService {
                 issues.add(buildIssue(nextIssueId.getAndDecrement(), teamState.teamId(), "low", "New Team", "Team '" + teamState.teamName() + "' will be created when you save this import.", teamState.teamName(), null));
             }
 
-            PreviewStaffState staffState = previewStaffByCode.computeIfAbsent(normalizedStaffCode, ignored -> {
-                StaffEntity existingStaff = importContext.staffByCode().get(normalizedStaffCode);
+            PreviewStaffState staffState = previewStaffByCode.computeIfAbsent(normalizedStaffId, ignored -> {
+                StaffEntity existingStaff = importContext.staffByCode().get(normalizedStaffId);
                 if (existingStaff != null) {
-                    return new PreviewStaffState(existingStaff.getId(), existingStaff.getId(), existingStaff.getStaffCode(),
-                        coalesce(existingStaff.getName(), existingStaff.getStaffCode()), existingStaff.getRoleName(), false);
+                    return new PreviewStaffState(existingStaff.getId(), existingStaff.getId(), existingStaff.getStaffId(),
+                        coalesce(existingStaff.getName(), existingStaff.getStaffId()), existingStaff.getRoleName(), false);
                 }
-                newStaffCodes.add(row.staffCode());
-                return new PreviewStaffState(nextPreviewStaffId.getAndDecrement(), null, row.staffCode(), row.staffCode(), "New staff", true);
+                newStaffIds.add(row.staffId());
+                return new PreviewStaffState(nextPreviewStaffId.getAndDecrement(), null, row.staffId(), row.staffId(), "New staff", true);
             });
 
             if (staffState.newStaff()) {
-                issues.add(buildIssue(nextIssueId.getAndDecrement(), teamState.teamId(), "low", "New Staff", "Staff '" + staffState.staffCode() + "' will be created the first time this import is saved.", teamState.teamName(), null));
+                issues.add(buildIssue(nextIssueId.getAndDecrement(), teamState.teamId(), "low", "New Staff", "Staff '" + staffState.staffId() + "' will be created the first time this import is saved.", teamState.teamName(), null));
             }
 
             Map<Integer, String> schedule = new LinkedHashMap<>();
@@ -194,11 +194,11 @@ public class WorkspaceImportService {
                 teamState.newTeam(),
                 previewStaffByCode.values().stream()
                     .filter(staff -> Objects.equals(staff.teamId, teamState.teamId()))
-                    .sorted(Comparator.comparing(PreviewStaffState::staffCode, String.CASE_INSENSITIVE_ORDER))
+                    .sorted(Comparator.comparing(PreviewStaffState::staffId, String.CASE_INSENSITIVE_ORDER))
                     .map(staff -> new WorkspaceImportPreviewPersonDto(
                         staff.previewStaffId(),
                         staff.existingStaffId(),
-                        staff.staffCode(),
+                        staff.staffId(),
                         staff.staffName(),
                         null,
                         staff.roleName(),
@@ -237,7 +237,7 @@ public class WorkspaceImportService {
             importContext.shiftCodeColorMap(),
             importContext.shiftDetailsByTeam(),
             issues,
-            new ArrayList<>(newStaffCodes),
+            new ArrayList<>(newStaffIds),
             new ArrayList<>(newTeamNames),
             validationWarning
         );
@@ -257,7 +257,7 @@ public class WorkspaceImportService {
             .collect(Collectors.toMap(team -> normalizeKey(team.getName()), team -> team, (left, right) -> left, LinkedHashMap::new));
         Map<String, StaffEntity> staffByCode = staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery())
             .stream()
-            .collect(Collectors.toMap(staff -> normalizeKey(staff.getStaffCode()), staff -> staff, (left, right) -> left, LinkedHashMap::new));
+            .collect(Collectors.toMap(staff -> normalizeKey(staff.getStaffId()), staff -> staff, (left, right) -> left, LinkedHashMap::new));
 
         int nextDisplayOrder = existingTeams.stream()
             .map(TeamEntity::getDisplayOrder)
@@ -268,7 +268,7 @@ public class WorkspaceImportService {
         int createdStaffCount = 0;
         Map<String, TeamEntity> resolvedTeamsByName = new LinkedHashMap<>();
         Map<String, StaffEntity> resolvedStaffByCode = new LinkedHashMap<>();
-        Set<String> seenImportedStaffCodes = new LinkedHashSet<>();
+        Set<String> seenImportedStaffIds = new LinkedHashSet<>();
 
         for (WorkspaceImportPreviewSaveRowRequest row : request.getRows()) {
             String normalizedTeamName = normalizeKey(row.getTeamName());
@@ -294,22 +294,22 @@ public class WorkspaceImportService {
 
             authContextService.requireWritableTeam(team.getId());
 
-            String normalizedStaffCode = normalizeKey(row.getStaffCode());
-            if (normalizedStaffCode.isBlank()) {
+            String normalizedStaffId = normalizeKey(row.getStaffId());
+            if (normalizedStaffId.isBlank()) {
                 throw new BadRequestException("staff_id is required for every imported row.");
             }
-            if (!seenImportedStaffCodes.add(normalizedStaffCode)) {
-                throw new BadRequestException("Duplicate staff_id '" + row.getStaffCode() + "' is not allowed in import preview save.");
+            if (!seenImportedStaffIds.add(normalizedStaffId)) {
+                throw new BadRequestException("Duplicate staff_id '" + row.getStaffId() + "' is not allowed in import preview save.");
             }
-            StaffEntity staff = resolvedStaffByCode.get(normalizedStaffCode);
+            StaffEntity staff = resolvedStaffByCode.get(normalizedStaffId);
             if (staff == null) {
-                staff = staffByCode.get(normalizedStaffCode);
+                staff = staffByCode.get(normalizedStaffId);
                 if (staff == null) {
-                    String staffCode = row.getStaffCode().trim();
-                    var employee = staffProfileSupport.lookupEmployeeSafely(staffCode);
+                    String staffId = row.getStaffId().trim();
+                    var employee = staffProfileSupport.lookupEmployeeSafely(staffId);
                     staff = new StaffEntity();
-                    staff.setStaffCode(staffCode);
-                    staff.setName(staffProfileSupport.resolveEmployeeName(staffCode, employee));
+                    staff.setStaffId(staffId);
+                    staff.setName(staffProfileSupport.resolveEmployeeName(staffId, employee));
                     staff.setEmail(employee == null ? null : staffProfileSupport.normalizeOptionalText(employee.emailAddress()));
                     staff.setPhone(null);
                     staff.setSlack(null);
@@ -323,7 +323,7 @@ public class WorkspaceImportService {
                     staff.setAvatar(null);
                     staff.setNotes(null);
                     staffMapper.insert(staff);
-                    staffByCode.put(normalizedStaffCode, staff);
+                    staffByCode.put(normalizedStaffId, staff);
                     createdStaffCount++;
                 } else {
                     if (staff.getTeamId() != null) {
@@ -334,7 +334,7 @@ public class WorkspaceImportService {
                         staffMapper.updateById(staff);
                     }
                 }
-                resolvedStaffByCode.put(normalizedStaffCode, staff);
+                resolvedStaffByCode.put(normalizedStaffId, staff);
             }
         }
 
@@ -351,7 +351,7 @@ public class WorkspaceImportService {
 
         for (WorkspaceImportPreviewSaveRowRequest row : request.getRows()) {
             TeamEntity team = resolvedTeamsByName.get(normalizeKey(row.getTeamName()));
-            StaffEntity staff = resolvedStaffByCode.get(normalizeKey(row.getStaffCode()));
+            StaffEntity staff = resolvedStaffByCode.get(normalizeKey(row.getStaffId()));
             if (team == null || staff == null) {
                 throw new BadRequestException("Imported preview row could not be resolved before save.");
             }
@@ -435,10 +435,10 @@ public class WorkspaceImportService {
                     TeamEntity team = teamMap.get(staff.getTeamId());
                     return team == null || team.getDisplayOrder() == null ? Integer.MAX_VALUE : team.getDisplayOrder();
                 })
-                .thenComparing(staff -> safeCellValue(staff.getStaffCode()), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(staff -> safeCellValue(staff.getStaffId()), String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(staff -> safeCellValue(staff.getName()), String.CASE_INSENSITIVE_ORDER))
             .map(staff -> new ImportedRosterRow(
-                safeCellValue(staff.getStaffCode()),
+                safeCellValue(staff.getStaffId()),
                 staff.getTeamId() == null || teamMap.get(staff.getTeamId()) == null ? "" : safeCellValue(teamMap.get(staff.getTeamId()).getName()),
                 scheduleByStaffId.getOrDefault(staff.getId(), Map.of())
             ))
@@ -468,10 +468,10 @@ public class WorkspaceImportService {
             .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<String, StaffEntity> staffByCode = allStaff.stream()
             .filter(staff -> staff.getTeamId() != null && readableTeamIdSet.contains(staff.getTeamId()))
-            .collect(Collectors.toMap(staff -> normalizeKey(staff.getStaffCode()), staff -> staff, (left, right) -> left, LinkedHashMap::new));
-        Set<String> blockedStaffCodes = allStaff.stream()
-            .filter(staff -> staff.getStaffCode() != null && (staff.getTeamId() == null || !readableTeamIdSet.contains(staff.getTeamId())))
-            .map(StaffEntity::getStaffCode)
+            .collect(Collectors.toMap(staff -> normalizeKey(staff.getStaffId()), staff -> staff, (left, right) -> left, LinkedHashMap::new));
+        Set<String> blockedStaffIds = allStaff.stream()
+            .filter(staff -> staff.getStaffId() != null && (staff.getTeamId() == null || !readableTeamIdSet.contains(staff.getTeamId())))
+            .map(StaffEntity::getStaffId)
             .map(this::normalizeKey)
             .collect(Collectors.toCollection(LinkedHashSet::new));
         List<ShiftDefinitionTeamRelEntity> visibleShiftRelations = readableTeamIds.isEmpty()
@@ -514,7 +514,7 @@ public class WorkspaceImportService {
             .distinct()
             .toList();
 
-        return new ImportContext(targetMonth, teamsByName, staffByCode, blockedTeamNames, blockedStaffCodes, shiftCodeOptions, shiftCodeOptionsByTeam, shiftCodeColorMap, shiftDetailsByTeam);
+        return new ImportContext(targetMonth, teamsByName, staffByCode, blockedTeamNames, blockedStaffIds, shiftCodeOptions, shiftCodeOptionsByTeam, shiftCodeColorMap, shiftDetailsByTeam);
     }
 
     private List<ImportedRosterRow> readImportRows(MultipartFile file, YearMonth targetMonth) {
@@ -575,7 +575,7 @@ public class WorkspaceImportService {
             int rowIndex = 1;
             for (ImportedRosterRow row : rows) {
                 Row sheetRow = sheet.createRow(rowIndex++);
-                sheetRow.createCell(0).setCellValue(row.staffCode());
+                sheetRow.createCell(0).setCellValue(row.staffId());
                 sheetRow.createCell(1).setCellValue(row.teamName());
                 for (int day = 1; day <= 31; day++) {
                     String value = day <= targetMonth.lengthOfMonth() ? safeCellValue(row.scheduleByDay().get(day)) : "";
@@ -678,7 +678,7 @@ public class WorkspaceImportService {
         return safeCellValue(primary).isBlank() ? safeCellValue(fallback) : primary;
     }
 
-    private record ImportedRosterRow(String staffCode, String teamName, Map<Integer, String> scheduleByDay) {
+    private record ImportedRosterRow(String staffId, String teamName, Map<Integer, String> scheduleByDay) {
     }
 
     private record ImportContext(
@@ -686,7 +686,7 @@ public class WorkspaceImportService {
         Map<String, TeamEntity> teamsByName,
         Map<String, StaffEntity> staffByCode,
         Set<String> blockedTeamNames,
-        Set<String> blockedStaffCodes,
+        Set<String> blockedStaffIds,
         List<String> shiftCodeOptions,
         Map<Long, List<String>> shiftCodeOptionsByTeam,
         Map<String, String> shiftCodeColorMap,
@@ -700,7 +700,7 @@ public class WorkspaceImportService {
     private static final class PreviewStaffState {
         private final Long previewStaffId;
         private final Long existingStaffId;
-        private final String staffCode;
+        private final String staffId;
         private final String staffName;
         private final String roleName;
         private final boolean newStaff;
@@ -708,10 +708,10 @@ public class WorkspaceImportService {
         private String teamName;
         private final Map<Integer, String> schedule = new LinkedHashMap<>();
 
-        private PreviewStaffState(Long previewStaffId, Long existingStaffId, String staffCode, String staffName, String roleName, boolean newStaff) {
+        private PreviewStaffState(Long previewStaffId, Long existingStaffId, String staffId, String staffName, String roleName, boolean newStaff) {
             this.previewStaffId = previewStaffId;
             this.existingStaffId = existingStaffId;
-            this.staffCode = staffCode;
+            this.staffId = staffId;
             this.staffName = staffName;
             this.roleName = roleName;
             this.newStaff = newStaff;
@@ -725,8 +725,8 @@ public class WorkspaceImportService {
             return existingStaffId;
         }
 
-        private String staffCode() {
-            return staffCode;
+        private String staffId() {
+            return staffId;
         }
 
         private String staffName() {

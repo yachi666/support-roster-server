@@ -52,16 +52,16 @@ import com.support.server.supportrosterserver.exception.BadRequestException;
             .build();
     }
 
-    public EmployeeDirectoryLookupResponse getEmployee(String staffCode) {
+    public EmployeeDirectoryLookupResponse getEmployee(String staffId) {
         try {
             EmployeeDirectoryLookupResponse response = restClient.get()
-                .uri("/api/employees/{staffId}", staffCode)
+                .uri("/api/employees/{staffId}", staffId)
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (_request, responseSpec) -> {
                     if (responseSpec.getStatusCode().value() == 404) {
-                        throw new BadRequestException("Employee not found for staff ID " + staffCode + ".");
+                        throw new BadRequestException("Employee not found for staff ID " + staffId + ".");
                     }
-                    throw new BadRequestException("Employee lookup was rejected for staff ID " + staffCode + ".");
+                    throw new BadRequestException("Employee lookup was rejected for staff ID " + staffId + ".");
                 })
                 .onStatus(HttpStatusCode::is5xxServerError, (_request, _responseSpec) -> {
                     throw new IllegalStateException("Employee lookup service is unavailable.");
@@ -69,7 +69,7 @@ import com.support.server.supportrosterserver.exception.BadRequestException;
                 .body(EmployeeDirectoryLookupResponse.class);
 
             if (response == null) {
-                throw new IllegalStateException("Employee lookup returned no data for staff ID " + staffCode + ".");
+                throw new IllegalStateException("Employee lookup returned no data for staff ID " + staffId + ".");
             }
 
             return response;
@@ -78,7 +78,7 @@ import com.support.server.supportrosterserver.exception.BadRequestException;
         } catch (ResourceAccessException ex) {
             throw new IllegalStateException("Employee lookup service is unavailable.", ex);
         } catch (RestClientException ex) {
-            throw new IllegalStateException("Employee lookup failed for staff ID " + staffCode + ".", ex);
+            throw new IllegalStateException("Employee lookup failed for staff ID " + staffId + ".", ex);
         }
     }
 }

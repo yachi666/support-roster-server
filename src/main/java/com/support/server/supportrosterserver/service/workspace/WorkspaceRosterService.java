@@ -119,7 +119,7 @@ public class WorkspaceRosterService {
                 persons.add(new WorkspaceRosterPersonDto(
                     staff.getId(),
                     staff.getName(),
-                    avatarUrlResolver.resolve(staff.getStaffCode()),
+                    avatarUrlResolver.resolve(staff.getStaffId()),
                     staff.getRoleName(),
                     staff.getTeamId(),
                     schedule

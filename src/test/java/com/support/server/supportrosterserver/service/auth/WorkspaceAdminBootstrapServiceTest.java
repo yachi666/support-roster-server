@@ -41,7 +41,7 @@ class WorkspaceAdminBootstrapServiceTest {
     void shouldCreatePendingAdminWhenBootstrapStaffHasNoAccount() throws Exception {
         StaffEntity staff = new StaffEntity();
         staff.setId(11L);
-        staff.setStaffCode("A1001");
+        staff.setStaffId("A1001");
         when(staffMapper.selectOne(any())).thenReturn(staff);
         when(workspaceAccountMapper.selectOne(any())).thenReturn(null);
 
@@ -51,19 +51,19 @@ class WorkspaceAdminBootstrapServiceTest {
 
         verify(workspaceAccountMapper).insert(any(WorkspaceAccountEntity.class));
         verify(workspaceOperationLogService).log("system", "Bootstrap workspace admin", "workspace_account", null,
-            "Created bootstrap admin for staff_code=A1001");
+            "Created bootstrap admin for staff_id=A1001");
     }
 
     @Test
     void shouldPromoteExistingAccountToAdmin() throws Exception {
         StaffEntity staff = new StaffEntity();
         staff.setId(12L);
-        staff.setStaffCode("A1002");
+        staff.setStaffId("A1002");
 
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(22L);
-        account.setStaffId(12L);
-        account.setStaffCode("A1002");
+        account.setStaffRecordId(12L);
+        account.setStaffId("A1002");
         account.setRoleCode("readonly");
         account.setAccountStatus(AccountStatus.DISABLED.getCode());
         account.setPasswordHash("hashed-password");
@@ -90,15 +90,15 @@ class WorkspaceAdminBootstrapServiceTest {
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.run(null));
         assertEquals(
-            "Configured support.auth.bootstrap-admin-staff-code does not match any workspace staff record: MISSING",
+            "Configured support.auth.bootstrap-admin-staff-id does not match any workspace staff record: MISSING",
             error.getMessage()
         );
         verify(workspaceAccountMapper, never()).insert(any(WorkspaceAccountEntity.class));
     }
 
-    private WorkspaceAdminBootstrapService createService(String bootstrapStaffCode) {
+    private WorkspaceAdminBootstrapService createService(String bootstrapStaffId) {
         return new WorkspaceAdminBootstrapService(
-            bootstrapStaffCode,
+            bootstrapStaffId,
             staffMapper,
             workspaceAccountMapper,
             workspaceAccountTeamScopeMapper,

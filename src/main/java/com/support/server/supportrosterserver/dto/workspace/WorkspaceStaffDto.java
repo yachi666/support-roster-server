@@ -14,7 +14,7 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 public class WorkspaceStaffDto {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
-    private String staffCode;
+    private String staffId;
     private String name;
     private String email;
     private String phone;

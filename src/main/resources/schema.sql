@@ -57,7 +57,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_team_role_group_rel
 
 CREATE TABLE IF NOT EXISTS workspace_staff (
     id BIGINT PRIMARY KEY,
-    staff_code VARCHAR(128) NOT NULL,
+    staff_id VARCHAR(128) NOT NULL,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     phone VARCHAR(64),
@@ -75,14 +75,14 @@ CREATE TABLE IF NOT EXISTS workspace_staff (
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_staff_code
-    ON workspace_staff (staff_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_staff_id
+    ON workspace_staff (staff_id)
     WHERE deleted = 0;
 
 CREATE TABLE IF NOT EXISTS workspace_account (
     id BIGINT PRIMARY KEY,
-    staff_id BIGINT NOT NULL REFERENCES workspace_staff (id),
-    staff_code VARCHAR(128) NOT NULL,
+    staff_record_id BIGINT NOT NULL REFERENCES workspace_staff (id),
+    staff_id VARCHAR(128) NOT NULL,
     role_code VARCHAR(32) NOT NULL,
     account_status VARCHAR(32) NOT NULL DEFAULT 'PENDING_ACTIVATION',
     password_hash VARCHAR(255),
@@ -101,8 +101,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_id
     ON workspace_account (staff_id)
     WHERE deleted = 0;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_code
-    ON workspace_account (staff_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_record_id
+    ON workspace_account (staff_record_id)
     WHERE deleted = 0;
 
 CREATE TABLE IF NOT EXISTS workspace_account_team_scope (

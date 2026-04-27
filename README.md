@@ -64,7 +64,7 @@ The application defaults to the `local` Spring profile. Common environment varia
 | `DB_USERNAME` | Database username | `lzn` in app config, current user in dev scripts |
 | `DB_PASSWORD` | Database password | `123456` |
 | `SA_TOKEN_JWT_SECRET_KEY` | JWT signing secret | Required outside local profile |
-| `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE` | Optional bootstrap admin staff code | empty |
+| `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID` | Optional bootstrap admin staff ID | empty |
 | `SUPPORT_EMPLOYEE_BASE_URL` | Employee directory service base URL | `https://api.heet.uk` |
 | `LOG_PATH` | Log output directory | `logs` |
 

@@ -129,9 +129,9 @@ public class WorkspaceValidationService {
                     continue;
                 }
                 WorkspaceAccountEntity account = accountsById.get(scope.getAccountId());
-                String accountLabel = account == null || account.getStaffCode() == null || account.getStaffCode().isBlank()
+                String accountLabel = account == null || account.getStaffId() == null || account.getStaffId().isBlank()
                     ? "unknown account"
-                    : account.getStaffCode();
+                    : account.getStaffId();
                 accumulator.record(
                     accumulator.nextSyntheticId(),
                     "medium",

@@ -19,7 +19,7 @@ public class SupportTeamContactStaffEntity extends BaseEntity {
 
     private Long contactId;
 
-    private String staffCode;
+    private String staffId;
 
     @TableLogic
     private Integer deleted;

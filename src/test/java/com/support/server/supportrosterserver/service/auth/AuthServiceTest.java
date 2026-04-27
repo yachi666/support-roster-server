@@ -49,7 +49,7 @@ class AuthServiceTest {
     void shouldRejectPasswordLoginWhenAccountIsPendingActivation() {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(101L);
-        account.setStaffCode("A001");
+        account.setStaffId("A001");
         account.setAccountStatus(AccountStatus.PENDING_ACTIVATION.getCode());
         when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
 
@@ -67,7 +67,7 @@ class AuthServiceTest {
     void shouldRejectActivationWhenPasswordWasAlreadyInitialized() {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(102L);
-        account.setStaffCode("A002");
+        account.setStaffId("A002");
         account.setAccountStatus(AccountStatus.ACTIVE.getCode());
         when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
 
@@ -85,7 +85,7 @@ class AuthServiceTest {
     void shouldRejectActivationWhenNewPasswordIsShorterThanFourCharacters() {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(103L);
-        account.setStaffCode("A003");
+        account.setStaffId("A003");
         account.setAccountStatus(AccountStatus.PENDING_ACTIVATION.getCode());
         when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
 

@@ -11,7 +11,7 @@ import lombok.Data;
 public class WorkspaceStaffBatchCreateRequest {
 
     @NotEmpty(message = "At least one staff ID is required.")
-    private List<@NotBlank(message = "Staff ID is required.") String> staffCodes;
+    private List<@NotBlank(message = "Staff ID is required.") String> staffIds;
 
     @NotNull(message = "Team is required.")
     private Long teamId;

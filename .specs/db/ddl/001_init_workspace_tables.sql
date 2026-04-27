@@ -52,7 +52,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_team_role_group_rel
 
 CREATE TABLE IF NOT EXISTS workspace_staff (
     id BIGINT PRIMARY KEY,
-    staff_code VARCHAR(128) NOT NULL,
+    staff_id VARCHAR(128) NOT NULL,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     phone VARCHAR(64),
@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS workspace_staff (
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_staff_code
-    ON workspace_staff (staff_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_staff_id
+    ON workspace_staff (staff_id)
     WHERE deleted = FALSE;
 
 CREATE TABLE IF NOT EXISTS workspace_shift_definition (
