@@ -16,7 +16,7 @@
 | 文档 / 目录 | 角色 | 重点内容 |
 |---|---|---|
 | [db-spec.md](./db-spec.md) | 数据库主规范 | 雪花主键、审计字段、DDL 存放与 Flyway 启动迁移约束 |
-| [ddl/README.md](./ddl/README.md) | DDL 说明 | 目录用途、命名与维护方式 |
+| [ddl/README.md](./ddl/README.md) / [中文](./ddl/README.zh-CN.md) | DDL 说明 | 目录用途、命名与维护方式 |
 | `ddl/001_init_workspace_tables.sql` | 初始化脚本 | workspace 核心表初始结构 |
 | `ddl/002_workspace_team_migration.sql` | 增量脚本 | team 维度迁移 |
 | `ddl/003_workspace_shift_definition_team_rel.sql` | 增量脚本 | 班次定义与团队多对多关联 |

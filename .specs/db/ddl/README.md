@@ -1,22 +1,25 @@
-# DDL 目录说明
+# DDL Directory
 
-## 文档定位
+[中文](./README.zh-CN.md)
 
-本目录统一存放数据库建表语句与增量迁移脚本，是数据库结构的正式 SQL 落点。
+## Purpose
 
-## 使用规则
+This directory is the reviewed SQL baseline for database table definitions and incremental schema scripts. It complements the runtime Flyway migrations under `src/main/resources/db/migration/`.
 
-- 所有新表的 `CREATE TABLE` 语句必须维护在本目录中。
-- 建议按“初始化脚本 / 增量脚本”命名，例如：
+## Usage Rules
+
+- Keep `CREATE TABLE` statements for new tables in this directory.
+- Prefer ordered, descriptive filenames, for example:
   - `001_init_tables.sql`
   - `010_create_staff_table.sql`
   - `020_create_shift_table.sql`
-- 与部署强相关、用于数据预置或上线引导的 SQL 模板，也应放在本目录统一维护，例如 `006_auth_bootstrap_admin_seed.sql`。
-- 若单次变更涉及多张表，可按同一批次组织，但文件仍需位于本目录。
-- 目录中的 SQL 应与 [../db-spec.md](../db-spec.md) 保持一致。
-- 运行时执行的正式迁移应同步落到 `src/main/resources/db/migration/`，本目录承担设计与审阅基线，不替代应用实际迁移入口。
+- SQL templates that are deployment-related or used for data bootstrap should also live here, for example `006_auth_bootstrap_admin_seed.sql`.
+- When one change affects several tables, group it by the same batch number when that makes review easier.
+- Keep SQL in this directory consistent with [`../db-spec.md`](../db-spec.md).
+- Runtime migrations must also be represented under `src/main/resources/db/migration/`; this directory is a design and review baseline, not the application migration entry point.
 
-## 维护提示
+## Maintenance Notes
 
-- 规范写在 `db-spec.md`，SQL 落地写在本目录；两者缺一不可。
-- 若脚本影响已有文档中的表关系或初始化方式，应同步更新上层 spec。
+- Put database rules in `db-spec.md` and concrete SQL in this directory.
+- If a script changes table relationships, initialization assumptions, or migration behavior, update the upper-level database spec at the same time.
+- Keep filenames stable once referenced by specs or reviews.
