@@ -1,6 +1,6 @@
 # Support Roster Server
 
-[English](./README.md)
+[English](./README.md) · [总仓库](https://github.com/yachi666/support-platform)
 
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.0.3-6db33f?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-25-e76f00?style=flat-square)
@@ -9,6 +9,8 @@
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
 `support-roster-server` 是支持排班平台的 Spring Boot 后端服务，支撑公开排班看板、认证后的管理工作台、联系信息、Linux 密码库元数据、认证、校验以及导入导出流程。
+
+本仓库作为 [`support-platform`](https://github.com/yachi666/support-platform) 的子模块运行，前端、自动化测试、本地脚本和截图资源都在总仓库中统一协调。
 
 ## 核心能力
 

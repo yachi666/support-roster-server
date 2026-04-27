@@ -1,6 +1,6 @@
 # Support Roster Server
 
-[中文](./README.zh-CN.md)
+[中文](./README.zh-CN.md) · [Parent workspace](https://github.com/yachi666/support-platform)
 
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.0.3-6db33f?style=flat-square)
 ![Java](https://img.shields.io/badge/Java-25-e76f00?style=flat-square)
@@ -9,6 +9,8 @@
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
 `support-roster-server` is the Spring Boot backend for the support roster platform. It serves the public roster viewer, the authenticated admin workspace, contact information pages, Linux password vault metadata, authentication, validation, and import/export workflows.
+
+This repository is designed to run as a submodule of [`support-platform`](https://github.com/yachi666/support-platform), where the frontend, automation tests, local scripts, and screenshots are coordinated.
 
 ## What It Provides
 
