@@ -137,10 +137,37 @@ public class WorkspaceLinuxPasswordService {
             .eq(normalizedAction != null, LinuxPasswordAccessAuditEntity::getAction, normalizedAction)
             .eq(normalizedResult != null, LinuxPasswordAccessAuditEntity::getResult, normalizedResult)
             .like(normalizedStaffId != null, LinuxPasswordAccessAuditEntity::getStaffId, normalizedStaffId)
-            .like(normalizedStaffName != null, LinuxPasswordAccessAuditEntity::getStaffName, normalizedStaffName)
-            .like(normalizedHostname != null, LinuxPasswordAccessAuditEntity::getHostnameSnapshot, normalizedHostname)
-            .like(normalizedIp != null, LinuxPasswordAccessAuditEntity::getIpSnapshot, normalizedIp)
-            .like(normalizedUsername != null, LinuxPasswordAccessAuditEntity::getUsernameSnapshot, normalizedUsername);
+            .like(normalizedStaffName != null, LinuxPasswordAccessAuditEntity::getStaffName, normalizedStaffName);
+
+        // Spec: hostname/ip/username filters prefer snapshot columns; fall back to live server/credential
+        // for legacy rows where snapshot columns are NULL (rows written before Task 2 snapshot backfill).
+        if (normalizedHostname != null) {
+            String likeParam = "%" + normalizedHostname + "%";
+            wrapper.apply(
+                "(LOWER(hostname_snapshot) LIKE {0}"
+                + " OR (hostname_snapshot IS NULL AND server_id IN ("
+                + "SELECT id FROM workspace_linux_password_server"
+                + " WHERE LOWER(hostname) LIKE {0} AND deleted = 0)))",
+                likeParam);
+        }
+        if (normalizedIp != null) {
+            String likeParam = "%" + normalizedIp + "%";
+            wrapper.apply(
+                "(LOWER(ip_snapshot) LIKE {0}"
+                + " OR (ip_snapshot IS NULL AND server_id IN ("
+                + "SELECT id FROM workspace_linux_password_server"
+                + " WHERE LOWER(ip) LIKE {0} AND deleted = 0)))",
+                likeParam);
+        }
+        if (normalizedUsername != null) {
+            String likeParam = "%" + normalizedUsername + "%";
+            wrapper.apply(
+                "(LOWER(username_snapshot) LIKE {0}"
+                + " OR (username_snapshot IS NULL AND credential_id IN ("
+                + "SELECT id FROM workspace_linux_password_credential"
+                + " WHERE LOWER(username) LIKE {0} AND deleted = 0)))",
+                likeParam);
+        }
 
         if (normalizedKeyword != null) {
             String likeParam = "%" + normalizedKeyword + "%";
@@ -152,7 +179,16 @@ public class WorkspaceLinuxPasswordService {
                 + " OR LOWER(username_snapshot) LIKE {0}"
                 + " OR LOWER(action) LIKE {0}"
                 + " OR LOWER(result) LIKE {0}"
-                + " OR LOWER(client_ip) LIKE {0})",
+                + " OR LOWER(client_ip) LIKE {0}"
+                + " OR (hostname_snapshot IS NULL AND server_id IN ("
+                + "SELECT id FROM workspace_linux_password_server"
+                + " WHERE LOWER(hostname) LIKE {0} AND deleted = 0))"
+                + " OR (ip_snapshot IS NULL AND server_id IN ("
+                + "SELECT id FROM workspace_linux_password_server"
+                + " WHERE LOWER(ip) LIKE {0} AND deleted = 0))"
+                + " OR (username_snapshot IS NULL AND credential_id IN ("
+                + "SELECT id FROM workspace_linux_password_credential"
+                + " WHERE LOWER(username) LIKE {0} AND deleted = 0)))",
                 likeParam
             );
         }

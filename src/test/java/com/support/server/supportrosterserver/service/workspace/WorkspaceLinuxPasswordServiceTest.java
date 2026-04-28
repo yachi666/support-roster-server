@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
@@ -533,6 +534,71 @@ class WorkspaceLinuxPasswordServiceTest {
         assertEquals(10L, response.getPageSize());
         verify(linuxPasswordAccessAuditMapper).selectPage(any(), any());
         verify(linuxPasswordAccessAuditMapper, never()).selectList(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldApplyFallbackSqlWhenFilteringByHostnameOnLegacyAuditRows() {
+        // Spec: hostname filter must prefer hostname_snapshot but fall back to live server
+        // for legacy rows where hostname_snapshot IS NULL.
+        IPage<LinuxPasswordAccessAuditEntity> page = buildPage(List.of(), 0L);
+        when(linuxPasswordAccessAuditMapper.selectPage(any(), any())).thenReturn(page);
+        when(linuxPasswordServerMapper.selectList(any())).thenReturn(List.of());
+
+        workspaceLinuxPasswordService.listAccessAudits(
+            null, null, null, "proxy", null, null, null, null, null, null, 1, 20);
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.AbstractWrapper<LinuxPasswordAccessAuditEntity, ?, ?>> captor =
+            ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.AbstractWrapper.class);
+        verify(linuxPasswordAccessAuditMapper).selectPage(any(), captor.capture());
+        String sql = captor.getValue().getExpression().getNormal().getSqlSegment();
+        assertTrue(sql.contains("hostname_snapshot IS NULL"),
+            "hostname filter SQL must include fallback for legacy rows: " + sql);
+        assertTrue(sql.contains("workspace_linux_password_server"),
+            "hostname filter fallback must query live server table: " + sql);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldApplyFallbackSqlWhenFilteringByUsernameOnLegacyAuditRows() {
+        // Spec: username filter must prefer username_snapshot but fall back to live credential
+        // for legacy rows where username_snapshot IS NULL.
+        IPage<LinuxPasswordAccessAuditEntity> page = buildPage(List.of(), 0L);
+        when(linuxPasswordAccessAuditMapper.selectPage(any(), any())).thenReturn(page);
+        when(linuxPasswordServerMapper.selectList(any())).thenReturn(List.of());
+
+        workspaceLinuxPasswordService.listAccessAudits(
+            null, null, null, null, null, "admin", null, null, null, null, 1, 20);
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.AbstractWrapper<LinuxPasswordAccessAuditEntity, ?, ?>> captor =
+            ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.AbstractWrapper.class);
+        verify(linuxPasswordAccessAuditMapper).selectPage(any(), captor.capture());
+        String sql = captor.getValue().getExpression().getNormal().getSqlSegment();
+        assertTrue(sql.contains("username_snapshot IS NULL"),
+            "username filter SQL must include fallback for legacy rows: " + sql);
+        assertTrue(sql.contains("workspace_linux_password_credential"),
+            "username filter fallback must query live credential table: " + sql);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldApplyFallbackSqlForKeywordSearchOnLegacyAuditRows() {
+        // Spec: keyword search must also cover hostname/ip/username of legacy rows via live join.
+        IPage<LinuxPasswordAccessAuditEntity> page = buildPage(List.of(), 0L);
+        when(linuxPasswordAccessAuditMapper.selectPage(any(), any())).thenReturn(page);
+        when(linuxPasswordServerMapper.selectList(any())).thenReturn(List.of());
+
+        workspaceLinuxPasswordService.listAccessAudits(
+            "proxy", null, null, null, null, null, null, null, null, null, 1, 20);
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.AbstractWrapper<LinuxPasswordAccessAuditEntity, ?, ?>> captor =
+            ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.AbstractWrapper.class);
+        verify(linuxPasswordAccessAuditMapper).selectPage(any(), captor.capture());
+        String sql = captor.getValue().getExpression().getNormal().getSqlSegment();
+        assertTrue(sql.contains("hostname_snapshot IS NULL"),
+            "keyword SQL must include server hostname fallback for legacy rows: " + sql);
+        assertTrue(sql.contains("username_snapshot IS NULL"),
+            "keyword SQL must include credential username fallback for legacy rows: " + sql);
     }
 
     private IPage<LinuxPasswordAccessAuditEntity> buildPage(List<LinuxPasswordAccessAuditEntity> records, long total) {
