@@ -364,6 +364,45 @@ class WorkspaceLinuxPasswordServiceTest {
     }
 
     @Test
+    void shouldWriteFailedAuditAndRethrowWhenDecryptThrows() {
+        when(authContextService.requireLogin()).thenReturn(loggedInAccount("readonly", "Readonly User"));
+        LinuxPasswordCredentialEntity credential = new LinuxPasswordCredentialEntity();
+        credential.setId(502L);
+        credential.setServerId(1L);
+        credential.setUsername("admin");
+        credential.setPasswordCiphertext("invalid-ciphertext");
+        credential.setPasswordIv("invalid-iv");
+        credential.setKeyVersion("v1");
+
+        when(linuxPasswordCredentialMapper.selectById(502L)).thenReturn(credential);
+        when(linuxPasswordServerMapper.selectById(1L)).thenReturn(buildServer(1L, "infra-proxy-01", "10.0.1.2", null, null, "online"));
+
+        assertThrows(RuntimeException.class,
+            () -> workspaceLinuxPasswordService.revealCredentialSecret(502L, "view", "127.0.0.1", "JUnit"));
+
+        ArgumentCaptor<LinuxPasswordAccessAuditEntity> auditCaptor = ArgumentCaptor.forClass(LinuxPasswordAccessAuditEntity.class);
+        verify(linuxPasswordAccessAuditMapper).insert(auditCaptor.capture());
+        assertEquals("FAILED", auditCaptor.getValue().getResult());
+        assertEquals("VIEW", auditCaptor.getValue().getAction());
+        assertEquals(502L, auditCaptor.getValue().getCredentialId());
+    }
+
+    @Test
+    void shouldWriteFailedAuditWhenCredentialNotFound() {
+        when(authContextService.requireLogin()).thenReturn(loggedInAccount("readonly", "Readonly User"));
+        when(linuxPasswordCredentialMapper.selectById(999L)).thenReturn(null);
+
+        assertThrows(RuntimeException.class,
+            () -> workspaceLinuxPasswordService.revealCredentialSecret(999L, "copy", "127.0.0.1", "JUnit"));
+
+        ArgumentCaptor<LinuxPasswordAccessAuditEntity> auditCaptor = ArgumentCaptor.forClass(LinuxPasswordAccessAuditEntity.class);
+        verify(linuxPasswordAccessAuditMapper).insert(auditCaptor.capture());
+        assertEquals("FAILED", auditCaptor.getValue().getResult());
+        assertEquals("COPY", auditCaptor.getValue().getAction());
+        assertEquals(999L, auditCaptor.getValue().getCredentialId());
+    }
+
+    @Test
     void shouldDeleteOrphanDirectoriesWhenDeletingServer() {
         when(linuxPasswordServerMapper.selectById(1L)).thenReturn(buildServer(1L, "fin-db-01", "10.0.10.5", "postgres", "P@ssw0rdFin1!", "online"));
         when(linuxPasswordServerBusinessUnitMapper.selectList(any())).thenReturn(
