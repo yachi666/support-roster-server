@@ -36,15 +36,15 @@
 
 ## 登录标识与首登设密
 
-- 登录标识使用 `workspace_staff.staff_code`，在产品语义上对应 `staffid`。
+- 登录标识使用 `workspace_staff.staff_id`，在产品语义上对应 `staffid`。
 - 账号由管理员预创建，并关联到唯一 staff 记录。
 - 员工首登时，如果账号尚未设置密码，则允许以 `staffid + 新密码` 完成激活。
 - 该首登方案仅适用于内网/测试环境；正式上线前必须补充激活校验（例如激活码、邮箱验证或企业身份验证）。
 
 ## 初始管理员引导
 
-- 为避免“系统已启用但还没有任何 admin 可登录”的死锁，后端允许通过配置项 `support.auth.bootstrap-admin-staff-code` 注入首个管理员 staffid。
-- 推荐通过环境变量 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE` 在部署时显式设置。
+- 为避免“系统已启用但还没有任何 admin 可登录”的死锁，后端允许通过配置项 `support.auth.bootstrap-admin-staff-id` 注入首个管理员 staff_id。
+- 推荐通过环境变量 `SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID` 在部署时显式设置。
 - 当配置存在时，系统启动会执行以下幂等逻辑：
   - 若对应 staff 尚无账号，则创建一个 `admin + PENDING_ACTIVATION + LOCAL_PASSWORD` 的待激活账号；
   - 若已存在账号，则将其提升为 `admin`，并清理 editor team 授权残留；

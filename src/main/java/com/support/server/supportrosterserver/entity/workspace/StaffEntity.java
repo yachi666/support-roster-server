@@ -16,7 +16,7 @@ public class StaffEntity extends BaseEntity {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    private String staffCode;
+    private String staffId;
 
     private String name;
 

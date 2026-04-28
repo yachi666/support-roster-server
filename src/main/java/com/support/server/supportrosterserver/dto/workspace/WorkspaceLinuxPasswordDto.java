@@ -16,8 +16,7 @@ public class WorkspaceLinuxPasswordDto {
     private Long id;
     private String hostname;
     private String ip;
-    private String username;
-    private String password;
+    private List<WorkspaceLinuxPasswordCredentialDto> credentials;
     private List<String> businessUnits;
     private String status;
 }

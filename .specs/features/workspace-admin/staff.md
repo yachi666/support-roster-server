@@ -32,10 +32,10 @@
 
 ## 核心规则
 
-- `staffCode`、`name`、`teamId` 为必填字段。
+- `staffId`、`name`、`teamId` 为必填字段。
 - 人员必须挂靠已存在团队。
 - 删除人员时，应按服务层约定处理排班或引用关系，不能留下悬挂引用。
-- `avatar` 为历史兼容入参；服务端返回时使用基于 `staffCode` 实时拼接的头像 URL。
+- `avatar` 为历史兼容入参；服务端返回时使用基于 `staffId` 实时拼接的头像 URL。
 - `rosterTags` 属于展示聚合字段，不是独立主数据写入口。
 
 ## 返回视图
@@ -52,7 +52,7 @@
 
 | 请求字段 | Request DTO | Response DTO 字段 | 必填 | 说明 |
 |---|---|---|---|---|
-| `staffCode` | `WorkspaceStaffUpsertRequest.staffCode` | `staffCode` | 是 | 人员编码 |
+| `staffId` | `WorkspaceStaffUpsertRequest.staffId` | `staffId` | 是 | 人员编码 |
 | `name` | `WorkspaceStaffUpsertRequest.name` | `name` | 是 | 人员姓名 |
 | `email` | `WorkspaceStaffUpsertRequest.email` | `email` | 否 | 邮箱 |
 | `phone` | `WorkspaceStaffUpsertRequest.phone` | `phone` | 否 | 电话 |
@@ -77,7 +77,7 @@
 | DTO 字段 | OpenAPI 字段 | 说明 |
 |---|---|---|
 | `id` | `id` | 主键 |
-| `staffCode` | `staffCode` | 人员编码 |
+| `staffId` | `staffId` | 人员编码 |
 | `name` | `name` | 姓名 |
 | `email` | `email` | 邮箱 |
 | `phone` | `phone` | 电话 |

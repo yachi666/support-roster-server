@@ -161,7 +161,7 @@ Content-Type: application/json
 | `teamId` | `String` | 团队 ID |
 | `staffId` | `Long` | 员工 ID |
 | `userName` | `String` | 员工姓名 |
-| `userAvatar` | `String` | 基于 `staffCode` 实时拼接 |
+| `userAvatar` | `String` | 基于 `staffId` 实时拼接 |
 | `code` | `String` | 班次代码 |
 | `meaning` | `String` | 班次含义 |
 | `start` | `OffsetDateTime` | 开始时间 |

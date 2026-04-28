@@ -86,7 +86,7 @@ class WorkspaceImportServiceTest {
         TeamEntity team = buildTeam(101L, "China Support");
         StaffEntity existingStaff = new StaffEntity();
         existingStaff.setId(201L);
-        existingStaff.setStaffCode("1001");
+        existingStaff.setStaffId("1001");
         existingStaff.setName("Alice");
         existingStaff.setRoleName("L1");
         existingStaff.setTeamId(101L);
@@ -152,7 +152,7 @@ class WorkspaceImportServiceTest {
         TeamEntity hiddenTeam = buildTeam(102L, "Secret Team");
         StaffEntity hiddenStaff = new StaffEntity();
         hiddenStaff.setId(301L);
-        hiddenStaff.setStaffCode("9001");
+        hiddenStaff.setStaffId("9001");
         hiddenStaff.setName("Hidden User");
         hiddenStaff.setRoleName("Secret");
         hiddenStaff.setTeamId(102L);
@@ -211,7 +211,7 @@ class WorkspaceImportServiceTest {
         }).when(staffMapper).insert(any(StaffEntity.class));
 
         WorkspaceImportPreviewSaveRowRequest row = new WorkspaceImportPreviewSaveRowRequest();
-        row.setStaffCode("1002");
+        row.setStaffId("1002");
         row.setTeamName("New Team");
         row.setSchedule(Map.of(1, "A", 2, ""));
 
@@ -225,7 +225,7 @@ class WorkspaceImportServiceTest {
         assertEquals(1, response.getAppliedStaffCount());
         assertEquals(1, response.getCreatedStaffCount());
         assertEquals(1, response.getCreatedTeamCount());
-        assertEquals("1002", insertedStaff[0].getStaffCode());
+        assertEquals("1002", insertedStaff[0].getStaffId());
         assertEquals("Alice Zhang", insertedStaff[0].getName());
         assertEquals("alice.zhang@example.com", insertedStaff[0].getEmail());
         assertEquals("xian, China", insertedStaff[0].getRegion());
@@ -237,7 +237,7 @@ class WorkspaceImportServiceTest {
         TeamEntity team = buildTeam(101L, "L1");
         StaffEntity staff = new StaffEntity();
         staff.setId(201L);
-        staff.setStaffCode("1001");
+        staff.setStaffId("1001");
         staff.setName("Alice");
         staff.setTeamId(101L);
 
@@ -272,13 +272,13 @@ class WorkspaceImportServiceTest {
 
         StaffEntity alice = new StaffEntity();
         alice.setId(201L);
-        alice.setStaffCode("1001");
+        alice.setStaffId("1001");
         alice.setName("Alice");
         alice.setTeamId(101L);
 
         StaffEntity bob = new StaffEntity();
         bob.setId(202L);
-        bob.setStaffCode("1002");
+        bob.setStaffId("1002");
         bob.setName("Bob");
         bob.setTeamId(102L);
 

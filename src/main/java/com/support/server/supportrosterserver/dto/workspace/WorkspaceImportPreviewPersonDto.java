@@ -16,9 +16,9 @@ public class WorkspaceImportPreviewPersonDto {
     private Long previewStaffId;
 
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long staffId;
+    private Long staffRecordId;
 
-    private String staffCode;
+    private String staffId;
     private String staffName;
     private String avatar;
     private String roleName;

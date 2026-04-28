@@ -89,7 +89,7 @@ class WorkspaceStaffServiceTest {
             long id = insertedStaff.size() + 1L;
             StaffEntity stored = new StaffEntity();
             stored.setId(id);
-            stored.setStaffCode(entity.getStaffCode());
+            stored.setStaffId(entity.getStaffId());
             stored.setName(entity.getName());
             stored.setEmail(entity.getEmail());
             stored.setPhone(entity.getPhone());
@@ -109,7 +109,7 @@ class WorkspaceStaffServiceTest {
         );
 
         WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
-        request.setStaffCode("A003");
+        request.setStaffId("A003");
         request.setPhone("+86-13800000000");
         request.setTeamId(10L);
         request.setTimezone("UTC");
@@ -118,7 +118,7 @@ class WorkspaceStaffServiceTest {
 
         WorkspaceStaffDto created = workspaceStaffService.createStaff(request);
 
-        Assertions.assertEquals("A003", created.getStaffCode());
+        Assertions.assertEquals("A003", created.getStaffId());
         Assertions.assertEquals("Zhang San", created.getName());
         Assertions.assertEquals("zhang.san@example.com", created.getEmail());
         Assertions.assertEquals("+86-13800000000", created.getPhone());
@@ -128,21 +128,21 @@ class WorkspaceStaffServiceTest {
     }
 
     @Test
-    void shouldSyncLinkedAccountStaffCodeWhenStaffCodeChanges() {
+    void shouldSyncLinkedAccountStaffIdWhenStaffIdChanges() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
-        staff.setStaffCode("A001");
+        staff.setStaffId("A001");
         staff.setTeamId(10L);
         when(staffMapper.selectById(1L)).thenReturn(staff);
 
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(2L);
-        account.setStaffId(1L);
-        account.setStaffCode("A001");
+        account.setStaffRecordId(1L);
+        account.setStaffId("A001");
         when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
 
         WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
-        request.setStaffCode("A009");
+        request.setStaffId("A009");
         request.setName("Alice");
         request.setTeamId(10L);
         request.setTimezone("UTC");
@@ -157,7 +157,7 @@ class WorkspaceStaffServiceTest {
     void shouldFillMissingProfileFieldsDuringUpdate() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
-        staff.setStaffCode("A001");
+        staff.setStaffId("A001");
         staff.setName("Existing");
         staff.setEmail("existing@example.com");
         staff.setTeamId(10L);
@@ -167,7 +167,7 @@ class WorkspaceStaffServiceTest {
         );
 
         WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
-        request.setStaffCode("A001");
+        request.setStaffId("A001");
         request.setName("   ");
         request.setEmail("   ");
         request.setTeamId(10L);
@@ -184,7 +184,7 @@ class WorkspaceStaffServiceTest {
     void shouldPreserveExistingProfileFieldsWhenLookupFailsDuringUpdate() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
-        staff.setStaffCode("A404");
+        staff.setStaffId("A404");
         staff.setName("Existing");
         staff.setEmail("existing@example.com");
         staff.setTeamId(10L);
@@ -192,7 +192,7 @@ class WorkspaceStaffServiceTest {
         when(employeeDirectoryClient.getEmployee("A404")).thenThrow(new IllegalStateException("lookup failed"));
 
         WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
-        request.setStaffCode("A404");
+        request.setStaffId("A404");
         request.setName("   ");
         request.setEmail("   ");
         request.setTeamId(10L);
@@ -213,7 +213,7 @@ class WorkspaceStaffServiceTest {
             long id = insertedStaff.size() + 1L;
             StaffEntity stored = new StaffEntity();
             stored.setId(id);
-            stored.setStaffCode(entity.getStaffCode());
+            stored.setStaffId(entity.getStaffId());
             stored.setName(entity.getName());
             stored.setEmail(entity.getEmail());
             stored.setRegion(entity.getRegion());
@@ -235,7 +235,7 @@ class WorkspaceStaffServiceTest {
         );
 
         WorkspaceStaffBatchCreateRequest request = new WorkspaceStaffBatchCreateRequest();
-        request.setStaffCodes(List.of("A001", "A002"));
+        request.setStaffIds(List.of("A001", "A002"));
         request.setTeamId(10L);
         request.setTimezone("UTC");
         request.setStatus("ACTIVE");
@@ -253,9 +253,9 @@ class WorkspaceStaffServiceTest {
     }
 
     @Test
-    void shouldRejectDuplicateStaffCodesInBatchRequest() {
+    void shouldRejectDuplicateStaffIdsInBatchRequest() {
         WorkspaceStaffBatchCreateRequest request = new WorkspaceStaffBatchCreateRequest();
-        request.setStaffCodes(List.of("A001", "A001"));
+        request.setStaffIds(List.of("A001", "A001"));
         request.setTeamId(10L);
         request.setTimezone("UTC");
 
@@ -275,7 +275,7 @@ class WorkspaceStaffServiceTest {
             long id = insertedStaff.size() + 1L;
             StaffEntity stored = new StaffEntity();
             stored.setId(id);
-            stored.setStaffCode(entity.getStaffCode());
+            stored.setStaffId(entity.getStaffId());
             stored.setName(entity.getName());
             stored.setEmail(entity.getEmail());
             stored.setRegion(entity.getRegion());
@@ -292,7 +292,7 @@ class WorkspaceStaffServiceTest {
         when(employeeDirectoryClient.getEmployee("A404")).thenThrow(new IllegalStateException("lookup failed"));
 
         WorkspaceStaffBatchCreateRequest request = new WorkspaceStaffBatchCreateRequest();
-        request.setStaffCodes(List.of("A404"));
+        request.setStaffIds(List.of("A404"));
         request.setTeamId(10L);
         request.setTimezone("UTC");
         request.setStatus("ACTIVE");
@@ -300,7 +300,7 @@ class WorkspaceStaffServiceTest {
         var createdStaff = workspaceStaffService.createStaffBatch(request);
 
         Assertions.assertEquals(1, createdStaff.size());
-        Assertions.assertEquals("A404", createdStaff.get(0).getStaffCode());
+        Assertions.assertEquals("A404", createdStaff.get(0).getStaffId());
         Assertions.assertEquals("A404", createdStaff.get(0).getName());
         Assertions.assertNull(createdStaff.get(0).getEmail());
         Assertions.assertNull(createdStaff.get(0).getRegion());
@@ -312,13 +312,13 @@ class WorkspaceStaffServiceTest {
     void shouldDeleteLinkedAccountAndScopesWhenDeletingStaff() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
-        staff.setStaffCode("A001");
+        staff.setStaffId("A001");
         staff.setTeamId(10L);
         when(staffMapper.selectById(1L)).thenReturn(staff);
 
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(2L);
-        account.setStaffId(1L);
+        account.setStaffRecordId(1L);
         when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
 
         workspaceStaffService.deleteStaff(1L);
@@ -334,7 +334,7 @@ class WorkspaceStaffServiceTest {
     void shouldDeleteStaffWithoutTouchingAccountsWhenNoLinkedAccountExists() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
-        staff.setStaffCode("A001");
+        staff.setStaffId("A001");
         staff.setTeamId(10L);
         when(staffMapper.selectById(1L)).thenReturn(staff);
         when(workspaceAccountMapper.selectOne(any())).thenReturn(null);
@@ -350,7 +350,7 @@ class WorkspaceStaffServiceTest {
     void shouldListOrphanStaffForAdminUsers() {
         StaffEntity orphanStaff = new StaffEntity();
         orphanStaff.setId(99L);
-        orphanStaff.setStaffCode("A099");
+        orphanStaff.setStaffId("A099");
         orphanStaff.setName("Orphan User");
         orphanStaff.setTeamId(null);
         orphanStaff.setStatus("ACTIVE");
@@ -362,7 +362,7 @@ class WorkspaceStaffServiceTest {
         List<WorkspaceStaffDto> result = workspaceStaffService.listStaff("");
 
         Assertions.assertEquals(1, result.size());
-        Assertions.assertEquals("A099", result.get(0).getStaffCode());
+        Assertions.assertEquals("A099", result.get(0).getStaffId());
         Assertions.assertNull(result.get(0).getTeamId());
         Assertions.assertNull(result.get(0).getTeamName());
     }
@@ -371,7 +371,7 @@ class WorkspaceStaffServiceTest {
     void shouldAllowAdminToRepairStaffWithoutCurrentTeam() {
         StaffEntity staff = new StaffEntity();
         staff.setId(1L);
-        staff.setStaffCode("A001");
+        staff.setStaffId("A001");
         staff.setName("Alice");
         staff.setEmail("alice@example.com");
         staff.setTeamId(null);
@@ -380,7 +380,7 @@ class WorkspaceStaffServiceTest {
         when(staffMapper.selectById(1L)).thenReturn(staff);
 
         WorkspaceStaffUpsertRequest request = new WorkspaceStaffUpsertRequest();
-        request.setStaffCode("A001");
+        request.setStaffId("A001");
         request.setName("Alice");
         request.setEmail("alice@example.com");
         request.setTeamId(10L);

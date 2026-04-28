@@ -9,6 +9,8 @@ support:
   logging:
     file:
       path: logs
+  linux-passwords:
+    secret-key: support-linux-passwords-local-dev-only-key-2026-change-before-production
 
 sa-token:
   jwt-secret-key: ${SA_TOKEN_JWT_SECRET_KEY:support-roster-dev-jwt-local-only-key-2026-change-before-production}

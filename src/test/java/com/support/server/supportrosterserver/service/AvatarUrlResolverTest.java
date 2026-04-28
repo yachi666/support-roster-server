@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 class AvatarUrlResolverTest {
 
     @Test
-    void shouldBuildAvatarUrlUsingFirstFourCharactersOfStaffCode() {
+    void shouldBuildAvatarUrlUsingFirstFourCharactersOfStaffId() {
         AvatarUrlResolver resolver = new AvatarUrlResolver("https://photos.global.image/casual/square");
 
         String avatarUrl = resolver.resolve("ABCD12345");
@@ -17,7 +17,7 @@ class AvatarUrlResolverTest {
     }
 
     @Test
-    void shouldUseWholeStaffCodeWhenShorterThanFourCharacters() {
+    void shouldUseWholeStaffIdWhenShorterThanFourCharacters() {
         AvatarUrlResolver resolver = new AvatarUrlResolver("https://photos.global.image/casual/square");
 
         String avatarUrl = resolver.resolve("123");
@@ -35,7 +35,7 @@ class AvatarUrlResolverTest {
     }
 
     @Test
-    void shouldReturnNullWhenStaffCodeIsBlank() {
+    void shouldReturnNullWhenStaffIdIsBlank() {
         AvatarUrlResolver resolver = new AvatarUrlResolver("https://photos.global.image/casual/square");
 
         assertNull(resolver.resolve("  "));

@@ -66,14 +66,14 @@ class WorkspaceRosterServiceTest {
 
         StaffEntity alice = new StaffEntity();
         alice.setId(401L);
-        alice.setStaffCode("401");
+        alice.setStaffId("401");
         alice.setName("Alice");
         alice.setRoleName("Analyst");
         alice.setTeamId(301L);
 
         StaffEntity bob = new StaffEntity();
         bob.setId(402L);
-        bob.setStaffCode("402X9");
+        bob.setStaffId("402X9");
         bob.setName("Bob");
         bob.setRoleName("Escalation");
         bob.setTeamId(301L);

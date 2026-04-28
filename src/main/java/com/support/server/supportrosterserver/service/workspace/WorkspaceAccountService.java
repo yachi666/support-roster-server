@@ -51,25 +51,25 @@ public class WorkspaceAccountService {
     public List<WorkspaceAccountDto> listAccounts(String keyword) {
         authContextService.requireAdmin();
         List<WorkspaceAccountEntity> accounts = workspaceAccountMapper.selectList(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-            .orderByAsc(WorkspaceAccountEntity::getStaffCode));
+            .orderByAsc(WorkspaceAccountEntity::getStaffId));
         if (accounts.isEmpty()) {
             return List.of();
         }
-        Map<Long, StaffEntity> staffById = staffMapper.selectBatchIds(accounts.stream().map(WorkspaceAccountEntity::getStaffId).toList())
+        Map<Long, StaffEntity> staffById = staffMapper.selectBatchIds(accounts.stream().map(WorkspaceAccountEntity::getStaffRecordId).toList())
             .stream()
             .collect(Collectors.toMap(StaffEntity::getId, staff -> staff));
         Map<Long, List<TeamEntity>> teamsByAccountId = loadTeamsByAccountId(accounts.stream().map(WorkspaceAccountEntity::getId).toList());
 
         return accounts.stream()
-            .filter(account -> matchesKeyword(account, staffById.get(account.getStaffId()), keyword))
-            .map(account -> toDto(account, staffById.get(account.getStaffId()), teamsByAccountId.getOrDefault(account.getId(), List.of())))
+            .filter(account -> matchesKeyword(account, staffById.get(account.getStaffRecordId()), keyword))
+            .map(account -> toDto(account, staffById.get(account.getStaffRecordId()), teamsByAccountId.getOrDefault(account.getId(), List.of())))
             .toList();
     }
 
     public WorkspaceAccountDto getAccount(Long id) {
         authContextService.requireAdmin();
         WorkspaceAccountEntity account = requireAccount(id);
-        StaffEntity staff = requireStaff(account.getStaffId());
+        StaffEntity staff = requireStaff(account.getStaffRecordId());
         List<TeamEntity> teams = loadTeamsByAccountId(List.of(id)).getOrDefault(id, List.of());
         return toDto(account, staff, teams);
     }
@@ -82,7 +82,7 @@ public class WorkspaceAccountService {
         }
         StaffEntity staff = requireStaff(request.getStaffRecordId());
         WorkspaceAccountEntity existing = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-            .eq(WorkspaceAccountEntity::getStaffId, request.getStaffRecordId())
+            .eq(WorkspaceAccountEntity::getStaffRecordId, request.getStaffRecordId())
             .last("limit 1"));
         if (existing != null) {
             throw new BadRequestException("The selected staff already has an account.");
@@ -92,8 +92,8 @@ public class WorkspaceAccountService {
         List<Long> editableTeamIds = normalizeEditableTeamIds(role, request.getEditableTeamIds());
 
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
-        account.setStaffId(staff.getId());
-        account.setStaffCode(staff.getStaffCode());
+        account.setStaffRecordId(staff.getId());
+        account.setStaffId(staff.getStaffId());
         account.setRoleCode(role.getCode());
         account.setAccountStatus(AccountStatus.PENDING_ACTIVATION.getCode());
         account.setPasswordHash(null);
@@ -115,7 +115,7 @@ public class WorkspaceAccountService {
     public WorkspaceAccountDto updateAccount(Long id, WorkspaceAccountUpsertRequest request) {
         authContextService.requireAdmin();
         WorkspaceAccountEntity account = requireAccount(id);
-        if (request.getStaffRecordId() != null && !request.getStaffRecordId().equals(account.getStaffId())) {
+        if (request.getStaffRecordId() != null && !request.getStaffRecordId().equals(account.getStaffRecordId())) {
             throw new BadRequestException("Changing the linked staff record is not supported.");
         }
 
@@ -185,7 +185,7 @@ public class WorkspaceAccountService {
         workspaceAccountTeamScopeMapper.delete(Wrappers.<WorkspaceAccountTeamScopeEntity>lambdaQuery()
             .eq(WorkspaceAccountTeamScopeEntity::getAccountId, id));
         workspaceAccountMapper.deleteById(id);
-        workspaceOperationLogService.log(current.staffName(), "Delete workspace account", "workspace_account", id, "Staff ID=" + account.getStaffCode());
+        workspaceOperationLogService.log(current.staffName(), "Delete workspace account", "workspace_account", id, "Staff ID=" + account.getStaffId());
     }
 
     private WorkspaceAccountEntity requireAccount(Long id) {
@@ -270,7 +270,7 @@ public class WorkspaceAccountService {
         }
         String normalized = keyword.trim().toLowerCase(Locale.ROOT);
         String haystack = String.join(" ",
-            safe(account.getStaffCode()),
+            safe(account.getStaffId()),
             safe(account.getRoleCode()),
             safe(account.getAccountStatus()),
             safe(staff == null ? null : staff.getName())
@@ -282,7 +282,7 @@ public class WorkspaceAccountService {
         return new WorkspaceAccountDto(
             account.getId(),
             staff == null ? null : staff.getId(),
-            account.getStaffCode(),
+            account.getStaffId(),
             staff == null ? null : staff.getName(),
             account.getRoleCode(),
             account.getAccountStatus(),

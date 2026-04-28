@@ -360,7 +360,7 @@ class WorkspaceValidationServiceTest {
     void shouldExposeInvalidTeamScopeAsAdminCleanupIssue() {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(10L);
-        account.setStaffCode("LOCAL-ADMIN");
+        account.setStaffId("LOCAL-ADMIN");
 
         WorkspaceAccountTeamScopeEntity scope = new WorkspaceAccountTeamScopeEntity();
         scope.setId(901L);
@@ -391,7 +391,7 @@ class WorkspaceValidationServiceTest {
     void shouldPreviewAndApplyInvalidTeamScopeRemediation() {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(10L);
-        account.setStaffCode("LOCAL-ADMIN");
+        account.setStaffId("LOCAL-ADMIN");
 
         WorkspaceAccountTeamScopeEntity scope = new WorkspaceAccountTeamScopeEntity();
         scope.setId(901L);
@@ -433,7 +433,7 @@ class WorkspaceValidationServiceTest {
     void shouldHideInvalidTeamScopeIssueFromNonAdminValidationView() {
         WorkspaceAccountEntity account = new WorkspaceAccountEntity();
         account.setId(10L);
-        account.setStaffCode("LOCAL-ADMIN");
+        account.setStaffId("LOCAL-ADMIN");
 
         WorkspaceAccountTeamScopeEntity scope = new WorkspaceAccountTeamScopeEntity();
         scope.setId(901L);

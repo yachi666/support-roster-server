@@ -58,10 +58,16 @@ support:
   employee:
     base-url: ${SUPPORT_EMPLOYEE_BASE_URL:https://api.heet.uk}
   auth:
-    bootstrap-admin-staff-code: ${SUPPORT_BOOTSTRAP_ADMIN_STAFF_CODE:}
+    bootstrap-admin-staff-id: ${SUPPORT_BOOTSTRAP_ADMIN_STAFF_ID:}
   logging:
     file:
       path: ${LOG_PATH:logs}
+  linux-passwords:
+    secret-key: ${SUPPORT_LINUX_PASSWORD_SECRET_KEY}
+  trusted-proxies:
+    ips:
+      - "127.0.0.1"
+      - "::1"
 
 sa-token:
   token-name: Authorization

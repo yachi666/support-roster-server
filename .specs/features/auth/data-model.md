@@ -13,8 +13,8 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `id` | `BIGINT` | 主键，雪花 ID |
-| `staff_id` | `BIGINT` | 关联 `workspace_staff.id` |
-| `staff_code` | `VARCHAR(128)` | 冗余登录标识，便于唯一约束和查询 |
+| `staff_record_id` | `BIGINT` | 关联 `workspace_staff.id` |
+| `staff_id` | `VARCHAR(128)` | 登录标识，即员工 ID |
 | `role_code` | `VARCHAR(32)` | `admin` / `editor` / `readonly` |
 | `account_status` | `VARCHAR(32)` | `PENDING_ACTIVATION` / `ACTIVE` / `DISABLED` |
 | `password_hash` | `VARCHAR(255)` | 本地密码哈希 |
@@ -28,8 +28,8 @@
 
 约束：
 
-- `staff_id` 唯一，确保一个 staff 仅有一个账号。
-- `staff_code` 唯一，便于用 `staffid` 登录。
+- `staff_record_id` 唯一，确保一个 staff 仅有一个账号。
+- `staff_id` 唯一；workspace 不另设用户名，登录账户语义就是员工 ID。
 - `password_hash` 在 `PENDING_ACTIVATION` 阶段可为空，其余激活状态必须有值。
 
 ### `workspace_account_team_scope`
@@ -70,7 +70,7 @@ stateDiagram-v2
 - `auth_source`
 - `external_subject`
 - `password_hash` 可为空
-- `staff_code` 继续作为内部业务主键，与外部身份标识解耦
+- `staff_id` 继续作为内部业务主键，与外部身份标识解耦
 
 ## DDL 组织
 

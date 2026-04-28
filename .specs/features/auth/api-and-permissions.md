@@ -41,7 +41,9 @@
 | Validation | 全量处理 | 仅授权 team 处理 | 只读 |
 | Import / Export | 全量执行 | 仅授权 team 执行 | 只读导出 |
 | Accounts | 全量读写 | 拒绝 | 拒绝 |
-| Linux Passwords | 通过 access policy 控制独立前端路由是否需要登录；当前无专属后端数据接口 | 同左 | 同左 |
+| Linux Passwords | 读、创建、按需解密密码并写审计、编辑、删除 | 读、创建、按需解密密码并写审计 | 读、创建、按需解密密码并写审计 |
+
+Linux Passwords 的编辑与删除仍仅限 `admin`；列表、详情、创建和密码解密要求已登录。密码解密审计中的员工身份必须来自当前 token 对应的 workspace account/staff 记录，不接受前端传入 staff_id。
 
 ## Team 范围规则
 

@@ -9,7 +9,7 @@ import lombok.Data;
 @Data
 public class WorkspaceImportPreviewSaveRowRequest {
     @NotBlank
-    private String staffCode;
+    private String staffId;
 
     @NotBlank
     private String teamName;

@@ -87,7 +87,7 @@ public class RosterService {
         dto.setTeamId(String.valueOf(team.getId()));
         dto.setStaffId(staff.getId());
         dto.setUserName(staff.getName());
-        dto.setUserAvatar(avatarUrlResolver.resolve(staff.getStaffCode()));
+        dto.setUserAvatar(avatarUrlResolver.resolve(staff.getStaffId()));
         dto.setCode(shiftDefinition.getCode());
         dto.setMeaning(shiftDefinition.getMeaning());
         dto.setStart(start.withZoneSameInstant(targetZone).toOffsetDateTime());

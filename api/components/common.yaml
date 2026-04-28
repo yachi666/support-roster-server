@@ -289,7 +289,7 @@ schemas:
     properties:
       id:
         type: string
-      staffCode:
+      staffId:
         type: string
       name:
         type: string
@@ -326,9 +326,9 @@ schemas:
 
   WorkspaceStaffUpsertRequest:
     type: object
-    required: [staffCode, name, teamId]
+    required: [staffId, name, teamId]
     properties:
-      staffCode:
+      staffId:
         type: string
       name:
         type: string
@@ -355,9 +355,9 @@ schemas:
 
   WorkspaceStaffBatchCreateRequest:
     type: object
-    required: [staffCodes, teamId]
+    required: [staffIds, teamId]
     properties:
-      staffCodes:
+      staffIds:
         type: array
         items:
           type: string

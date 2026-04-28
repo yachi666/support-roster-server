@@ -57,7 +57,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_team_role_group_rel
 
 CREATE TABLE IF NOT EXISTS workspace_staff (
     id BIGINT PRIMARY KEY,
-    staff_code VARCHAR(128) NOT NULL,
+    staff_id VARCHAR(128) NOT NULL,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     phone VARCHAR(64),
@@ -75,14 +75,14 @@ CREATE TABLE IF NOT EXISTS workspace_staff (
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_staff_code
-    ON workspace_staff (staff_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_staff_id
+    ON workspace_staff (staff_id)
     WHERE deleted = 0;
 
 CREATE TABLE IF NOT EXISTS workspace_account (
     id BIGINT PRIMARY KEY,
-    staff_id BIGINT NOT NULL REFERENCES workspace_staff (id),
-    staff_code VARCHAR(128) NOT NULL,
+    staff_record_id BIGINT NOT NULL REFERENCES workspace_staff (id),
+    staff_id VARCHAR(128) NOT NULL,
     role_code VARCHAR(32) NOT NULL,
     account_status VARCHAR(32) NOT NULL DEFAULT 'PENDING_ACTIVATION',
     password_hash VARCHAR(255),
@@ -101,8 +101,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_id
     ON workspace_account (staff_id)
     WHERE deleted = 0;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_code
-    ON workspace_account (staff_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_account_staff_record_id
+    ON workspace_account (staff_record_id)
     WHERE deleted = 0;
 
 CREATE TABLE IF NOT EXISTS workspace_account_team_scope (
@@ -363,5 +363,136 @@ CREATE TRIGGER trg_workspace_import_issue_update_time
 DROP TRIGGER IF EXISTS trg_workspace_operation_log_update_time ON workspace_operation_log;
 CREATE TRIGGER trg_workspace_operation_log_update_time
     BEFORE UPDATE ON workspace_operation_log
+    FOR EACH ROW
+    EXECUTE FUNCTION set_update_time();
+
+-- Linux password tables (V6 + V7 + V11 + V13)
+
+CREATE TABLE IF NOT EXISTS workspace_linux_password_server (
+    id BIGINT PRIMARY KEY,
+    hostname VARCHAR(255) NOT NULL,
+    ip VARCHAR(128) NOT NULL,
+    username VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'online',
+    deleted INTEGER NOT NULL DEFAULT 0,
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_linux_password_server_hostname
+    ON workspace_linux_password_server (LOWER(BTRIM(hostname)))
+    WHERE deleted = 0;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_linux_password_server_ip
+    ON workspace_linux_password_server (LOWER(BTRIM(ip)))
+    WHERE deleted = 0;
+
+CREATE TABLE IF NOT EXISTS workspace_linux_password_server_business_unit (
+    id BIGINT PRIMARY KEY,
+    server_id BIGINT NOT NULL REFERENCES workspace_linux_password_server (id),
+    business_unit VARCHAR(255) NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_linux_password_server_business_unit
+    ON workspace_linux_password_server_business_unit (server_id, LOWER(BTRIM(business_unit)))
+    WHERE deleted = 0;
+
+CREATE TABLE IF NOT EXISTS workspace_linux_password_directory (
+    id BIGINT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_linux_password_directory_name
+    ON workspace_linux_password_directory (LOWER(BTRIM(name)))
+    WHERE deleted = 0;
+
+CREATE TABLE IF NOT EXISTS workspace_linux_password_credential (
+    id BIGINT PRIMARY KEY,
+    server_id BIGINT NOT NULL REFERENCES workspace_linux_password_server (id),
+    username VARCHAR(255) NOT NULL,
+    password_ciphertext TEXT NOT NULL,
+    password_iv VARCHAR(128) NOT NULL,
+    key_version VARCHAR(32) NOT NULL DEFAULT 'v1',
+    notes VARCHAR(500),
+    deleted INTEGER NOT NULL DEFAULT 0,
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_workspace_linux_password_credential_username
+    ON workspace_linux_password_credential (server_id, LOWER(BTRIM(username)))
+    WHERE deleted = 0;
+
+CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_credential_server
+    ON workspace_linux_password_credential (server_id)
+    WHERE deleted = 0;
+
+CREATE TABLE IF NOT EXISTS workspace_linux_password_access_audit (
+    id BIGINT PRIMARY KEY,
+    account_id BIGINT,
+    staff_record_id BIGINT,
+    staff_id VARCHAR(128),
+    staff_name VARCHAR(255),
+    server_id BIGINT,
+    credential_id BIGINT,
+    action VARCHAR(32) NOT NULL,
+    result VARCHAR(32) NOT NULL,
+    client_ip VARCHAR(128),
+    user_agent VARCHAR(500),
+    hostname_snapshot VARCHAR(255),
+    ip_snapshot VARCHAR(128),
+    username_snapshot VARCHAR(255),
+    create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_staff
+    ON workspace_linux_password_access_audit (staff_id, create_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_credential
+    ON workspace_linux_password_access_audit (credential_id, create_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_hostname_snapshot
+    ON workspace_linux_password_access_audit (LOWER(hostname_snapshot), create_time DESC)
+    WHERE hostname_snapshot IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_username_snapshot
+    ON workspace_linux_password_access_audit (LOWER(username_snapshot), create_time DESC)
+    WHERE username_snapshot IS NOT NULL;
+
+DROP TRIGGER IF EXISTS trg_workspace_linux_password_server_update_time ON workspace_linux_password_server;
+CREATE TRIGGER trg_workspace_linux_password_server_update_time
+    BEFORE UPDATE ON workspace_linux_password_server
+    FOR EACH ROW
+    EXECUTE FUNCTION set_update_time();
+
+DROP TRIGGER IF EXISTS trg_workspace_linux_password_server_business_unit_update_time ON workspace_linux_password_server_business_unit;
+CREATE TRIGGER trg_workspace_linux_password_server_business_unit_update_time
+    BEFORE UPDATE ON workspace_linux_password_server_business_unit
+    FOR EACH ROW
+    EXECUTE FUNCTION set_update_time();
+
+DROP TRIGGER IF EXISTS trg_workspace_linux_password_directory_update_time ON workspace_linux_password_directory;
+CREATE TRIGGER trg_workspace_linux_password_directory_update_time
+    BEFORE UPDATE ON workspace_linux_password_directory
+    FOR EACH ROW
+    EXECUTE FUNCTION set_update_time();
+
+DROP TRIGGER IF EXISTS trg_workspace_linux_password_credential_update_time ON workspace_linux_password_credential;
+CREATE TRIGGER trg_workspace_linux_password_credential_update_time
+    BEFORE UPDATE ON workspace_linux_password_credential
+    FOR EACH ROW
+    EXECUTE FUNCTION set_update_time();
+
+DROP TRIGGER IF EXISTS trg_workspace_linux_password_access_audit_update_time ON workspace_linux_password_access_audit;
+CREATE TRIGGER trg_workspace_linux_password_access_audit_update_time
+    BEFORE UPDATE ON workspace_linux_password_access_audit
     FOR EACH ROW
     EXECUTE FUNCTION set_update_time();

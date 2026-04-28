@@ -19,9 +19,9 @@ public class WorkspaceAccountEntity extends BaseEntity {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    private Long staffId;
+    private Long staffRecordId;
 
-    private String staffCode;
+    private String staffId;
 
     private String roleCode;
 

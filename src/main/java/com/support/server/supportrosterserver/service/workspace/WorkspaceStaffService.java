@@ -53,7 +53,7 @@ public class WorkspaceStaffService {
 
     public List<WorkspaceStaffDto> listStaff(String keyword) {
         LambdaQueryWrapper<StaffEntity> query = Wrappers.<StaffEntity>lambdaQuery()
-            .orderByAsc(StaffEntity::getStaffCode)
+            .orderByAsc(StaffEntity::getStaffId)
             .orderByAsc(StaffEntity::getName);
         if (!shouldBypassTeamScopeFilter()) {
             List<Long> readableTeamIds = authContextService.readableTeamIds();
@@ -65,7 +65,7 @@ public class WorkspaceStaffService {
             query.and(wrapper -> wrapper
                 .like(StaffEntity::getName, keyword)
                 .or().like(StaffEntity::getEmail, keyword)
-                .or().like(StaffEntity::getStaffCode, keyword)
+                .or().like(StaffEntity::getStaffId, keyword)
                 .or().like(StaffEntity::getRoleName, keyword)
                 .or().like(StaffEntity::getRegion, keyword));
         }
@@ -88,11 +88,11 @@ public class WorkspaceStaffService {
     @Transactional
     public WorkspaceStaffDto createStaff(WorkspaceStaffUpsertRequest request) {
         authContextService.requireWritableTeam(request.getTeamId());
-        String staffCode = normalizeRequiredText(request.getStaffCode(), "Staff ID is required.");
-        ensureStaffCodesAvailable(List.of(staffCode), null);
-        EmployeeDirectoryLookupResponse employee = staffProfileSupport.lookupEmployeeSafely(staffCode);
+        String staffId = normalizeRequiredText(request.getStaffId(), "Staff ID is required.");
+        ensureStaffIdsAvailable(List.of(staffId), null);
+        EmployeeDirectoryLookupResponse employee = staffProfileSupport.lookupEmployeeSafely(staffId);
         StaffEntity entity = new StaffEntity();
-        applyCreate(entity, staffCode, employee, request);
+        applyCreate(entity, staffId, employee, request);
         staffMapper.insert(entity);
         WorkspaceStaffDto created = getStaff(entity.getId());
         workspaceOperationLogService.log(
@@ -100,7 +100,7 @@ public class WorkspaceStaffService {
             "Create workspace staff",
             "workspace_staff",
             entity.getId(),
-            "Staff ID=" + created.getStaffCode()
+            "Staff ID=" + created.getStaffId()
         );
         return created;
     }
@@ -110,15 +110,15 @@ public class WorkspaceStaffService {
         authContextService.requireWritableTeam(request.getTeamId());
         lookupService.requireTeam(request.getTeamId());
 
-        List<String> staffCodes = normalizeBatchStaffCodes(request.getStaffCodes());
-        ensureBatchDoesNotContainDuplicates(staffCodes);
-        ensureStaffCodesAvailable(staffCodes, null);
+        List<String> staffIds = normalizeBatchStaffIds(request.getStaffIds());
+        ensureBatchDoesNotContainDuplicates(staffIds);
+        ensureStaffIdsAvailable(staffIds, null);
 
         List<WorkspaceStaffDto> createdStaff = new ArrayList<>();
-        for (String staffCode : staffCodes) {
-            EmployeeDirectoryLookupResponse employee = staffProfileSupport.lookupEmployeeSafely(staffCode);
+        for (String staffId : staffIds) {
+            EmployeeDirectoryLookupResponse employee = staffProfileSupport.lookupEmployeeSafely(staffId);
             StaffEntity entity = new StaffEntity();
-            applyEmployeeLookup(entity, staffCode, employee, request);
+            applyEmployeeLookup(entity, staffId, employee, request);
             staffMapper.insert(entity);
             createdStaff.add(getStaff(entity.getId()));
         }
@@ -133,18 +133,18 @@ public class WorkspaceStaffService {
         }
         requireWritableExistingStaff(entity);
         authContextService.requireWritableTeam(request.getTeamId());
-        ensureStaffCodesAvailable(List.of(normalizeRequiredText(request.getStaffCode(), "Staff ID is required.")), id);
-        String previousStaffCode = entity.getStaffCode();
+        ensureStaffIdsAvailable(List.of(normalizeRequiredText(request.getStaffId(), "Staff ID is required.")), id);
+        String previousStaffId = entity.getStaffId();
         apply(entity, request);
         staffMapper.updateById(entity);
-        syncLinkedAccountStaffCode(entity.getId(), previousStaffCode, entity.getStaffCode());
+        syncLinkedAccountStaffId(entity.getId(), previousStaffId, entity.getStaffId());
         WorkspaceStaffDto updated = getStaff(id);
         workspaceOperationLogService.log(
             authContextService.currentActor("system"),
             "Update workspace staff",
             "workspace_staff",
             updated.getId(),
-            "Staff ID=" + updated.getStaffCode()
+            "Staff ID=" + updated.getStaffId()
         );
         return updated;
     }
@@ -158,7 +158,7 @@ public class WorkspaceStaffService {
         requireWritableExistingStaff(entity);
         String actor = authContextService.currentActor("system");
         WorkspaceAccountEntity linkedAccount = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-            .eq(WorkspaceAccountEntity::getStaffId, id)
+            .eq(WorkspaceAccountEntity::getStaffRecordId, id)
             .last("limit 1"));
         if (linkedAccount != null) {
             authTokenVersionService.bumpTokenVersion(linkedAccount);
@@ -173,8 +173,8 @@ public class WorkspaceStaffService {
             "workspace_staff",
             id,
             linkedAccount == null
-                ? "Staff ID=" + entity.getStaffCode()
-                : "Staff ID=" + entity.getStaffCode() + "; removed linked workspace account"
+                ? "Staff ID=" + entity.getStaffId()
+                : "Staff ID=" + entity.getStaffId() + "; removed linked workspace account"
         );
     }
 
@@ -186,7 +186,7 @@ public class WorkspaceStaffService {
             .map(entity -> new com.support.server.supportrosterserver.dto.StaffDto(
                 entity.getId(),
                 entity.getName(),
-                avatarUrlResolver.resolve(entity.getStaffCode()),
+                avatarUrlResolver.resolve(entity.getStaffId()),
                 entity.getEmail(),
                 entity.getPhone(),
                 entity.getSlack(),
@@ -206,7 +206,7 @@ public class WorkspaceStaffService {
         return new com.support.server.supportrosterserver.dto.StaffDto(
             entity.getId(),
             entity.getName(),
-            avatarUrlResolver.resolve(entity.getStaffCode()),
+            avatarUrlResolver.resolve(entity.getStaffId()),
             entity.getEmail(),
             entity.getPhone(),
             entity.getSlack(),
@@ -228,7 +228,7 @@ public class WorkspaceStaffService {
         tags.put("assignments", assignments.size() + " shifts this month");
         return new WorkspaceStaffDto(
             entity.getId(),
-            entity.getStaffCode(),
+            entity.getStaffId(),
             entity.getName(),
             entity.getEmail(),
             entity.getPhone(),
@@ -239,7 +239,7 @@ public class WorkspaceStaffService {
             entity.getTeamId(),
             team == null ? null : team.getName(),
             entity.getStatus(),
-            avatarUrlResolver.resolve(entity.getStaffCode()),
+            avatarUrlResolver.resolve(entity.getStaffId()),
             entity.getNotes(),
             new ArrayList<>(tags.values())
         );
@@ -247,15 +247,15 @@ public class WorkspaceStaffService {
 
     private void apply(StaffEntity entity, WorkspaceStaffUpsertRequest request) {
         lookupService.requireTeam(request.getTeamId());
-        String staffCode = normalizeRequiredText(request.getStaffCode(), "Staff ID is required.");
+        String staffId = normalizeRequiredText(request.getStaffId(), "Staff ID is required.");
         String requestedName = normalizeOptionalText(request.getName());
         String requestedEmail = normalizeOptionalText(request.getEmail());
         EmployeeDirectoryLookupResponse employee = shouldLookupMissingProfileFields(requestedName, requestedEmail)
-            ? staffProfileSupport.lookupEmployeeSafely(staffCode)
+            ? staffProfileSupport.lookupEmployeeSafely(staffId)
             : null;
 
-        entity.setStaffCode(staffCode);
-        entity.setName(resolveUpdateName(entity, staffCode, requestedName, employee));
+        entity.setStaffId(staffId);
+        entity.setName(resolveUpdateName(entity, staffId, requestedName, employee));
         entity.setEmail(resolveUpdateEmail(entity, requestedEmail, employee));
         entity.setPhone(normalizeOptionalText(request.getPhone()));
         entity.setSlack(normalizeOptionalText(request.getSlack()));
@@ -271,12 +271,12 @@ public class WorkspaceStaffService {
 
     private void applyCreate(
             StaffEntity entity,
-            String staffCode,
+            String staffId,
             EmployeeDirectoryLookupResponse employee,
             WorkspaceStaffUpsertRequest request) {
         lookupService.requireTeam(request.getTeamId());
-        entity.setStaffCode(staffCode);
-        entity.setName(resolveCreateName(staffCode, request.getName(), employee));
+        entity.setStaffId(staffId);
+        entity.setName(resolveCreateName(staffId, request.getName(), employee));
         entity.setEmail(staffProfileSupport.resolvePreferredText(request.getEmail(), employee == null ? null : employee.emailAddress()));
         entity.setPhone(normalizeOptionalText(request.getPhone()));
         entity.setSlack(normalizeOptionalText(request.getSlack()));
@@ -292,11 +292,11 @@ public class WorkspaceStaffService {
 
     private void applyEmployeeLookup(
             StaffEntity entity,
-            String staffCode,
+            String staffId,
             EmployeeDirectoryLookupResponse employee,
             WorkspaceStaffBatchCreateRequest request) {
-        entity.setStaffCode(staffCode);
-        entity.setName(staffProfileSupport.resolveEmployeeName(staffCode, employee));
+        entity.setStaffId(staffId);
+        entity.setName(staffProfileSupport.resolveEmployeeName(staffId, employee));
         entity.setEmail(employee == null ? null : normalizeOptionalText(employee.emailAddress()));
         entity.setPhone(null);
         entity.setSlack(null);
@@ -310,22 +310,22 @@ public class WorkspaceStaffService {
         entity.setNotes(normalizeOptionalText(request.getNotes()));
     }
 
-    private String resolveCreateName(String staffCode, String requestedName, EmployeeDirectoryLookupResponse employee) {
+    private String resolveCreateName(String staffId, String requestedName, EmployeeDirectoryLookupResponse employee) {
         String normalizedRequestedName = normalizeOptionalText(requestedName);
         if (normalizedRequestedName != null) {
             return normalizedRequestedName;
         }
-        return staffProfileSupport.resolveEmployeeName(staffCode, employee);
+        return staffProfileSupport.resolveEmployeeName(staffId, employee);
     }
 
-    private String resolveUpdateName(StaffEntity entity, String staffCode, String requestedName, EmployeeDirectoryLookupResponse employee) {
+    private String resolveUpdateName(StaffEntity entity, String staffId, String requestedName, EmployeeDirectoryLookupResponse employee) {
         if (requestedName != null) {
             return requestedName;
         }
         if (employee == null) {
             return normalizeOptionalText(entity.getName());
         }
-        return staffProfileSupport.resolveEmployeeName(staffCode, employee);
+        return staffProfileSupport.resolveEmployeeName(staffId, employee);
     }
 
     private String resolveUpdateEmail(StaffEntity entity, String requestedEmail, EmployeeDirectoryLookupResponse employee) {
@@ -336,12 +336,12 @@ public class WorkspaceStaffService {
         return requestedName == null || requestedEmail == null;
     }
 
-    private void ensureBatchDoesNotContainDuplicates(List<String> staffCodes) {
+    private void ensureBatchDoesNotContainDuplicates(List<String> staffIds) {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
         LinkedHashSet<String> duplicates = new LinkedHashSet<>();
-        for (String staffCode : staffCodes) {
-            if (!seen.add(staffCode)) {
-                duplicates.add(staffCode);
+        for (String staffId : staffIds) {
+            if (!seen.add(staffId)) {
+                duplicates.add(staffId);
             }
         }
         if (!duplicates.isEmpty()) {
@@ -349,14 +349,14 @@ public class WorkspaceStaffService {
         }
     }
 
-    private void ensureStaffCodesAvailable(List<String> staffCodes, Long excludedStaffId) {
+    private void ensureStaffIdsAvailable(List<String> staffIds, Long excludedStaffId) {
         List<StaffEntity> existingStaff = staffMapper.selectList(Wrappers.<StaffEntity>lambdaQuery()
-            .in(StaffEntity::getStaffCode, staffCodes)
+            .in(StaffEntity::getStaffId, staffIds)
             .ne(excludedStaffId != null, StaffEntity::getId, excludedStaffId));
 
         if (!existingStaff.isEmpty()) {
             String existingCodes = existingStaff.stream()
-                .map(StaffEntity::getStaffCode)
+                .map(StaffEntity::getStaffId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .sorted()
@@ -366,11 +366,11 @@ public class WorkspaceStaffService {
         }
     }
 
-    private List<String> normalizeBatchStaffCodes(List<String> staffCodes) {
-        if (staffCodes == null || staffCodes.isEmpty()) {
+    private List<String> normalizeBatchStaffIds(List<String> staffIds) {
+        if (staffIds == null || staffIds.isEmpty()) {
             throw new BadRequestException("At least one staff ID is required.");
         }
-        List<String> normalized = staffCodes.stream()
+        List<String> normalized = staffIds.stream()
             .map(value -> normalizeRequiredText(value, "Staff ID is required."))
             .toList();
         if (normalized.isEmpty()) {
@@ -428,17 +428,17 @@ public class WorkspaceStaffService {
         authContextService.requireAdmin();
     }
 
-    private void syncLinkedAccountStaffCode(Long staffId, String previousStaffCode, String currentStaffCode) {
-        if (staffId == null || java.util.Objects.equals(previousStaffCode, currentStaffCode)) {
+    private void syncLinkedAccountStaffId(Long staffId, String previousStaffId, String currentStaffId) {
+        if (staffId == null || java.util.Objects.equals(previousStaffId, currentStaffId)) {
             return;
         }
         WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-            .eq(WorkspaceAccountEntity::getStaffId, staffId)
+            .eq(WorkspaceAccountEntity::getStaffRecordId, staffId)
             .last("limit 1"));
         if (account == null) {
             return;
         }
-        account.setStaffCode(currentStaffCode);
+        account.setStaffId(currentStaffId);
         workspaceAccountMapper.updateById(account);
     }
 }

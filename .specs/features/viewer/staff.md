@@ -41,7 +41,7 @@
 |---|---|---|
 | `id` | `id` | 人员主键 |
 | `name` | `name` | 人员姓名 |
-| `avatar` | `avatar` | 基于 `staffCode` 实时拼接 |
+| `avatar` | `avatar` | 基于 `staffId` 实时拼接 |
 | `email` | `email` | 邮箱 |
 | `phone` | `phone` | 电话 |
 | `slack` | `slack` | Slack |

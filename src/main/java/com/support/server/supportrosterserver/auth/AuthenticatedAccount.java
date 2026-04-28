@@ -8,7 +8,7 @@ import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 public record AuthenticatedAccount(
     Long accountId,
     Long staffRecordId,
-    String staffCode,
+    String staffId,
     String staffName,
     String roleCode,
     String accountStatus,

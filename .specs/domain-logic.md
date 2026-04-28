@@ -126,7 +126,7 @@ erDiagram
 | 规则 | 定义位置 | 内容 |
 |---|---|---|
 | 班次 ID | `buildShiftId()` | `UUID.nameUUIDFromBytes("{staffId}|{shiftCode}|{date}".getBytes(UTF-8))` |
-| 头像 URL | [`service/AvatarUrlResolver.java`](../src/main/java/com/support/server/supportrosterserver/service/AvatarUrlResolver.java) | `{support.avatar.base-url}/{first4_of_staffCode}/{staffCode}.jpg` |
+| 头像 URL | [`service/AvatarUrlResolver.java`](../src/main/java/com/support/server/supportrosterserver/service/AvatarUrlResolver.java) | `{support.avatar.base-url}/{first4_of_staffId}/{staffId}.jpg` |
 | 跨天班次 | `RosterService` 时间计算逻辑 | `endTime < startTime` 时结束时间顺延到次日 |
 
 ## 业务流程

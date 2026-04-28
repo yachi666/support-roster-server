@@ -16,14 +16,14 @@ public class AvatarUrlResolver {
         this.baseUrl = trimTrailingSlash(baseUrl);
     }
 
-    public String resolve(String staffCode) {
-        if (!StringUtils.hasText(staffCode)) {
+    public String resolve(String staffId) {
+        if (!StringUtils.hasText(staffId)) {
             return null;
         }
 
-        String normalizedStaffCode = staffCode.trim();
-        String segment = normalizedStaffCode.length() <= 4 ? normalizedStaffCode : normalizedStaffCode.substring(0, 4);
-        return baseUrl + "/" + segment + "/" + normalizedStaffCode + ".jpg";
+        String normalizedStaffId = staffId.trim();
+        String segment = normalizedStaffId.length() <= 4 ? normalizedStaffId : normalizedStaffId.substring(0, 4);
+        return baseUrl + "/" + segment + "/" + normalizedStaffId + ".jpg";
     }
 
     private String trimTrailingSlash(String value) {

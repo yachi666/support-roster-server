@@ -24,6 +24,8 @@
 | `ddl/005_workspace_auth_tables.sql` | 增量脚本 | 账号、team 授权与 SSO 预留字段 |
 | `ddl/006_auth_bootstrap_admin_seed.sql` | 初始化模板 | 首个管理员 staff 数据准备与引导说明 |
 | `ddl/007_workspace_linux_passwords.sql` | 增量脚本 | Linux 密码库主表、目录表与业务单元关联表 |
+| `ddl/008_workspace_linux_password_credentials_audit.sql` | 增量脚本 | Linux 密码库多登录账户、密码密文与访问审计表（含 Task 2 快照列：hostname_snapshot、ip_snapshot、username_snapshot）|
+| `ddl/009_workspace_staff_id_rename.sql` | 增量脚本 | 将员工业务标识统一为 staff_id，账号 FK 改为 staff_record_id |
 
 ## 维护提示
 

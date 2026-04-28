@@ -103,7 +103,7 @@ Expected result: `0 rows`
 
 ```sql
 SELECT staff.id,
-       staff.staff_code,
+       staff.staff_id,
        staff.role_group_id
 FROM workspace_staff staff
 LEFT JOIN workspace_team_role_group_rel rel
