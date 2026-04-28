@@ -13,7 +13,9 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.support.server.supportrosterserver.auth.AuthenticatedAccount;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordAccessAuditDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordAccessAuditListResponse;
@@ -122,53 +124,77 @@ public class WorkspaceLinuxPasswordService {
         LocalDateTime toTime = parseDateTimeBoundary(to, true);
         String normalizedAction = normalizeAuditEnum(action);
         String normalizedResult = normalizeAuditEnum(result);
-
-        List<LinuxPasswordAccessAuditEntity> audits = linuxPasswordAccessAuditMapper.selectList(
-            Wrappers.<LinuxPasswordAccessAuditEntity>lambdaQuery()
-                .ge(fromTime != null, LinuxPasswordAccessAuditEntity::getCreateTime, fromTime)
-                .le(toTime != null, LinuxPasswordAccessAuditEntity::getCreateTime, toTime)
-                .eq(normalizedAction != null, LinuxPasswordAccessAuditEntity::getAction, normalizedAction)
-                .eq(normalizedResult != null, LinuxPasswordAccessAuditEntity::getResult, normalizedResult)
-                .orderByDesc(LinuxPasswordAccessAuditEntity::getCreateTime)
-        );
-        Map<Long, LinuxPasswordCredentialEntity> credentialsById = loadCredentialMap(audits.stream()
-            .map(LinuxPasswordAccessAuditEntity::getCredentialId)
-            .filter(Objects::nonNull)
-            .toList());
-        Map<Long, LinuxPasswordServerEntity> serversById = loadServerMap(audits.stream()
-            .map(LinuxPasswordAccessAuditEntity::getServerId)
-            .filter(Objects::nonNull)
-            .toList());
-        String normalizedKeyword = normalizeSearchKey(keyword);
         String normalizedStaffId = normalizeSearchKey(staffId);
         String normalizedStaffName = normalizeSearchKey(staffName);
         String normalizedHostname = normalizeSearchKey(hostname);
         String normalizedIp = normalizeSearchKey(ip);
         String normalizedUsername = normalizeSearchKey(username);
+        String normalizedKeyword = normalizeSearchKey(keyword);
 
-        List<WorkspaceLinuxPasswordAccessAuditDto> filteredItems = audits.stream()
+        var wrapper = Wrappers.<LinuxPasswordAccessAuditEntity>lambdaQuery()
+            .ge(fromTime != null, LinuxPasswordAccessAuditEntity::getCreateTime, fromTime)
+            .le(toTime != null, LinuxPasswordAccessAuditEntity::getCreateTime, toTime)
+            .eq(normalizedAction != null, LinuxPasswordAccessAuditEntity::getAction, normalizedAction)
+            .eq(normalizedResult != null, LinuxPasswordAccessAuditEntity::getResult, normalizedResult)
+            .like(normalizedStaffId != null, LinuxPasswordAccessAuditEntity::getStaffId, normalizedStaffId)
+            .like(normalizedStaffName != null, LinuxPasswordAccessAuditEntity::getStaffName, normalizedStaffName)
+            .like(normalizedHostname != null, LinuxPasswordAccessAuditEntity::getHostnameSnapshot, normalizedHostname)
+            .like(normalizedIp != null, LinuxPasswordAccessAuditEntity::getIpSnapshot, normalizedIp)
+            .like(normalizedUsername != null, LinuxPasswordAccessAuditEntity::getUsernameSnapshot, normalizedUsername);
+
+        if (normalizedKeyword != null) {
+            String likeParam = "%" + normalizedKeyword + "%";
+            wrapper.apply(
+                "(LOWER(staff_id) LIKE {0}"
+                + " OR LOWER(staff_name) LIKE {0}"
+                + " OR LOWER(hostname_snapshot) LIKE {0}"
+                + " OR LOWER(ip_snapshot) LIKE {0}"
+                + " OR LOWER(username_snapshot) LIKE {0}"
+                + " OR LOWER(action) LIKE {0}"
+                + " OR LOWER(result) LIKE {0}"
+                + " OR LOWER(client_ip) LIKE {0})",
+                likeParam
+            );
+        }
+
+        wrapper.orderByDesc(LinuxPasswordAccessAuditEntity::getCreateTime);
+
+        Page<LinuxPasswordAccessAuditEntity> pageParam = new Page<>(normalizedPage, normalizedPageSize);
+        IPage<LinuxPasswordAccessAuditEntity> pageResult = linuxPasswordAccessAuditMapper.selectPage(pageParam, wrapper);
+
+        List<LinuxPasswordAccessAuditEntity> audits = pageResult.getRecords();
+        long total = pageResult.getTotal();
+
+        // For legacy records without snapshots, fall back to live join
+        List<Long> legacyServerIds = audits.stream()
+            .filter(a -> a.getHostnameSnapshot() == null && a.getServerId() != null)
+            .map(LinuxPasswordAccessAuditEntity::getServerId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        List<Long> legacyCredentialIds = audits.stream()
+            .filter(a -> a.getUsernameSnapshot() == null && a.getCredentialId() != null)
+            .map(LinuxPasswordAccessAuditEntity::getCredentialId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+
+        Map<Long, LinuxPasswordServerEntity> serversById = legacyServerIds.isEmpty()
+            ? Map.of()
+            : loadServerMap(legacyServerIds);
+        Map<Long, LinuxPasswordCredentialEntity> credentialsById = legacyCredentialIds.isEmpty()
+            ? Map.of()
+            : loadCredentialMap(legacyCredentialIds);
+
+        List<WorkspaceLinuxPasswordAccessAuditDto> items = audits.stream()
             .map(audit -> toAuditDto(
                 audit,
                 serversById.get(audit.getServerId()),
                 credentialsById.get(audit.getCredentialId())
             ))
-            .filter(audit -> containsIgnoreCase(audit.getStaffId(), normalizedStaffId))
-            .filter(audit -> containsIgnoreCase(audit.getStaffName(), normalizedStaffName))
-            .filter(audit -> containsIgnoreCase(audit.getHostname(), normalizedHostname))
-            .filter(audit -> containsIgnoreCase(audit.getIp(), normalizedIp))
-            .filter(audit -> containsIgnoreCase(audit.getUsername(), normalizedUsername))
-            .filter(audit -> matchesAuditKeyword(audit, normalizedKeyword))
             .toList();
 
-        long total = filteredItems.size();
-        int fromIndex = (int) Math.min((normalizedPage - 1) * normalizedPageSize, total);
-        int toIndex = (int) Math.min(fromIndex + normalizedPageSize, total);
-        return new WorkspaceLinuxPasswordAccessAuditListResponse(
-            filteredItems.subList(fromIndex, toIndex),
-            normalizedPage,
-            normalizedPageSize,
-            total
-        );
+        return new WorkspaceLinuxPasswordAccessAuditListResponse(items, normalizedPage, normalizedPageSize, total);
     }
 
     public WorkspaceLinuxPasswordSecretResponse revealCredentialSecret(Long credentialId, String action, String clientIp, String userAgent) {
@@ -188,10 +214,18 @@ public class WorkspaceLinuxPasswordService {
         }
         try {
             String password = linuxPasswordSecretService.decrypt(credential.getPasswordCiphertext(), credential.getPasswordIv());
-            writeAccessAudit(current, server.getId(), credential.getId(), normalizedAction, "SUCCESS", clientIp, userAgent);
+            writeAccessAudit(
+                current, server.getId(), credential.getId(), normalizedAction, "SUCCESS",
+                clientIp, userAgent,
+                server.getHostname(), server.getIp(), credential.getUsername()
+            );
             return new WorkspaceLinuxPasswordSecretResponse(password);
         } catch (RuntimeException ex) {
-            writeAccessAudit(current, server.getId(), credential.getId(), normalizedAction, "FAILED", clientIp, userAgent);
+            writeAccessAudit(
+                current, server.getId(), credential.getId(), normalizedAction, "FAILED",
+                clientIp, userAgent,
+                server.getHostname(), server.getIp(), credential.getUsername()
+            );
             throw ex;
         }
     }
@@ -429,13 +463,11 @@ public class WorkspaceLinuxPasswordService {
         List<LinuxPasswordCredentialEntity> credentials = linuxPasswordCredentialMapper.selectList(Wrappers.<LinuxPasswordCredentialEntity>lambdaQuery()
             .in(LinuxPasswordCredentialEntity::getServerId, serverIds)
             .orderByAsc(LinuxPasswordCredentialEntity::getUsername));
-        Map<Long, List<LinuxPasswordCredentialEntity>> credentialsByServerId = credentials.stream()
+        return credentials.stream()
             .collect(Collectors.groupingBy(
                 LinuxPasswordCredentialEntity::getServerId,
                 Collectors.toList()
             ));
-        backfillLegacyCredentialsIfNeeded(servers, credentialsByServerId);
-        return credentialsByServerId;
     }
 
     private Map<Long, LinuxPasswordCredentialEntity> loadCredentialMap(List<Long> credentialIds) {
@@ -474,6 +506,8 @@ public class WorkspaceLinuxPasswordService {
     private void backfillLegacyCredentialsIfNeeded(
             List<LinuxPasswordServerEntity> servers,
             Map<Long, List<LinuxPasswordCredentialEntity>> credentialsByServerId) {
+        // Legacy lazy backfill - kept for backwards compatibility but explicit startup
+        // backfill via LinuxPasswordLegacyBackfillRunner is the preferred path.
         for (LinuxPasswordServerEntity server : servers) {
             if (server.getId() == null
                     || !credentialsByServerId.getOrDefault(server.getId(), List.of()).isEmpty()
@@ -614,6 +648,16 @@ public class WorkspaceLinuxPasswordService {
             LinuxPasswordAccessAuditEntity audit,
             LinuxPasswordServerEntity server,
             LinuxPasswordCredentialEntity credential) {
+        // Prefer persisted snapshots; fall back to live join for legacy records without snapshots
+        String hostname = audit.getHostnameSnapshot() != null
+            ? audit.getHostnameSnapshot()
+            : (server != null ? server.getHostname() : null);
+        String ip = audit.getIpSnapshot() != null
+            ? audit.getIpSnapshot()
+            : (server != null ? server.getIp() : null);
+        String username = audit.getUsernameSnapshot() != null
+            ? audit.getUsernameSnapshot()
+            : (credential != null ? credential.getUsername() : null);
         return new WorkspaceLinuxPasswordAccessAuditDto(
             audit.getId(),
             audit.getAccountId(),
@@ -621,10 +665,10 @@ public class WorkspaceLinuxPasswordService {
             audit.getStaffId(),
             audit.getStaffName(),
             audit.getServerId(),
-            server == null ? null : server.getHostname(),
-            server == null ? null : server.getIp(),
+            hostname,
+            ip,
             audit.getCredentialId(),
-            credential == null ? null : credential.getUsername(),
+            username,
             audit.getAction(),
             audit.getResult(),
             audit.getClientIp(),
@@ -641,6 +685,20 @@ public class WorkspaceLinuxPasswordService {
             String result,
             String clientIp,
             String userAgent) {
+        writeAccessAudit(current, serverId, credentialId, action, result, clientIp, userAgent, null, null, null);
+    }
+
+    private void writeAccessAudit(
+            AuthenticatedAccount current,
+            Long serverId,
+            Long credentialId,
+            String action,
+            String result,
+            String clientIp,
+            String userAgent,
+            String hostnameSnapshot,
+            String ipSnapshot,
+            String usernameSnapshot) {
         LinuxPasswordAccessAuditEntity audit = new LinuxPasswordAccessAuditEntity();
         audit.setAccountId(current.accountId());
         audit.setStaffRecordId(current.staffRecordId());
@@ -652,6 +710,9 @@ public class WorkspaceLinuxPasswordService {
         audit.setResult(result);
         audit.setClientIp(truncate(clientIp, 128));
         audit.setUserAgent(truncate(userAgent, 500));
+        audit.setHostnameSnapshot(truncate(hostnameSnapshot, 255));
+        audit.setIpSnapshot(truncate(ipSnapshot, 128));
+        audit.setUsernameSnapshot(truncate(usernameSnapshot, 255));
         linuxPasswordAccessAuditMapper.insert(audit);
     }
 

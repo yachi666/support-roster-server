@@ -110,16 +110,16 @@
 
 `GET /api/workspace/linux-passwords/access-audits`
 
-仅 `admin` 可访问。支持按多个维度组合过滤，并按访问时间倒序返回分页结果。
+仅 `admin` 可访问。支持按多个维度组合过滤，并按访问时间倒序返回分页结果。**过滤与分页均在数据库层执行，不在内存中处理。**
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `keyword` | `string` | 否 | 在员工、机器、登录账户、动作、结果、来源 IP 中模糊搜索 |
 | `staffId` | `string` | 否 | 员工 ID 模糊匹配 |
 | `staffName` | `string` | 否 | 员工姓名模糊匹配 |
-| `hostname` | `string` | 否 | 主机名模糊匹配 |
-| `ip` | `string` | 否 | IP 地址模糊匹配 |
-| `username` | `string` | 否 | Linux 登录账户模糊匹配 |
+| `hostname` | `string` | 否 | 主机名模糊匹配（优先匹配快照列 `hostname_snapshot`） |
+| `ip` | `string` | 否 | IP 地址模糊匹配（优先匹配快照列 `ip_snapshot`） |
+| `username` | `string` | 否 | Linux 登录账户模糊匹配（优先匹配快照列 `username_snapshot`） |
 | `action` | `string` | 否 | `VIEW` / `COPY` |
 | `result` | `string` | 否 | `SUCCESS` / `FAILED` |
 | `from` / `to` | `string` | 否 | 日期或日期时间范围 |
@@ -152,6 +152,24 @@
   "pageSize": 20,
   "total": 1
 }
+```
+
+### 审计快照字段
+
+密码解密接口（`POST .../credentials/{credentialId}/secret`）在写入审计记录时，会将当时的机器信息持久化到审计表的快照列（`hostname_snapshot`、`ip_snapshot`、`username_snapshot`）。审计详情展示时优先返回快照值，仅在快照为空（历史记录）时回退到关联表 join。
+
+### 客户端 IP 信任策略
+
+`resolveClientIp` 只有在请求来源地址（`remoteAddr`）属于受信代理 IP 列表时才信任 `X-Forwarded-For` 头，否则直接使用 `remoteAddr` 作为 `clientIp`。
+
+受信代理列表通过配置项 `support.trusted-proxies.ips` 控制，默认值为 `["127.0.0.1", "::1"]`。
+
+```yaml
+support:
+  trusted-proxies:
+    ips:
+      - "127.0.0.1"
+      - "::1"
 ```
 
 ## 写接口契约
@@ -241,7 +259,7 @@
 | `hostname` | 主机名 |
 | `ip` | IP 地址 |
 | `username` | 历史兼容字段；新写入不再使用 |
-| `password` | 历史兼容字段；新写入不再使用，运行时回填到 credential 表后加密保存 |
+| `password` | 历史兼容字段；新写入不再使用，历史数据由启动 backfill runner 迁移到 credential 表并加密保存 |
 | `status` | `online` / `maintenance` / `offline` |
 | `deleted` | 逻辑删除标记 |
 | `create_time` / `update_time` | 审计字段 |
@@ -271,6 +289,9 @@
 | `staff_name` | 员工姓名 |
 | `server_id` | 被访问主机 |
 | `credential_id` | 被访问登录账户 |
+| `hostname_snapshot` | 访问时主机名快照 |
+| `ip_snapshot` | 访问时 IP 快照 |
+| `username_snapshot` | 访问时登录账户名快照 |
 | `action` | `VIEW` / `COPY` |
 | `result` | `SUCCESS` / `FAILED` |
 | `client_ip` | 请求来源 IP |
@@ -302,7 +323,7 @@
 - 创建/编辑机器：登录账户写入 `workspace_linux_password_credential`，密码只保存密文。
 - 编辑机器：先更新机器目录关联，再删除所有“已无任何机器引用”的目录记录。
 - 删除机器：删除机器、登录账户及目录关联后，同样清理无引用目录。
-- 若历史主表存在 `username/password` 且没有 credential 行，服务端读取列表/详情时会回填一条加密 credential。
+- 若历史主表存在 `username/password` 且没有 credential 行，服务端会在启动时由 `LinuxPasswordLegacyBackfillRunner` 一次性回填加密 credential；列表/详情只读取已迁移数据。
 
 ## 密钥配置
 
@@ -336,8 +357,9 @@
 | Credential Mapper | `src/main/java/com/support/server/supportrosterserver/mapper/LinuxPasswordCredentialMapper.java` |
 | Access Audit Mapper | `src/main/java/com/support/server/supportrosterserver/mapper/LinuxPasswordAccessAuditMapper.java` |
 | Directory Mapper | `src/main/java/com/support/server/supportrosterserver/mapper/LinuxPasswordDirectoryMapper.java` |
-| Flyway | `src/main/resources/db/migration/V6__workspace_linux_passwords.sql` / `V7__workspace_linux_password_directories.sql` / `V8__workspace_linux_password_directories_backfill.sql` / `V11__workspace_linux_password_credentials_audit.sql` |
+| Flyway | `V6__workspace_linux_passwords.sql` / `V7__workspace_linux_password_directories.sql` / `V8__workspace_linux_password_directories_backfill.sql` / `V11__workspace_linux_password_credentials_audit.sql` / `V13__audit_snapshot_columns.sql` |
+| 启动迁移 | `LinuxPasswordLegacyBackfillRunner`（`ApplicationRunner`）— 将 server 表遗留的明文 username/password 在启动时一次性迁移到 credential 表并加密 |
 
 ## 验证命令
 
-- `cd support-roster-server && mvn -q -Dtest=WorkspaceLinuxPasswordServiceTest,LinuxPasswordSecretServiceTest,LinuxPasswordSecretServicePropertyWiringTest,WorkspaceAccountServiceTest,WorkspaceOverviewControllerTest test`
+- `cd support-roster-server && mvn -q -Dtest=WorkspaceLinuxPasswordServiceTest,WorkspaceLinuxPasswordControllerTest,LinuxPasswordLegacyBackfillRunnerTest,LinuxPasswordSecretServiceTest,LinuxPasswordSecretServicePropertyWiringTest test`

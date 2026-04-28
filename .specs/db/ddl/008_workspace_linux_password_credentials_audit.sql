@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS workspace_linux_password_access_audit (
     result VARCHAR(32) NOT NULL,
     client_ip VARCHAR(128),
     user_agent VARCHAR(500),
+    hostname_snapshot VARCHAR(255),
+    ip_snapshot VARCHAR(128),
+    username_snapshot VARCHAR(255),
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -40,3 +43,11 @@ CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_staff
 
 CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_credential
     ON workspace_linux_password_access_audit (credential_id, create_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_hostname_snapshot
+    ON workspace_linux_password_access_audit (LOWER(hostname_snapshot), create_time DESC)
+    WHERE hostname_snapshot IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_workspace_linux_password_access_audit_username_snapshot
+    ON workspace_linux_password_access_audit (LOWER(username_snapshot), create_time DESC)
+    WHERE username_snapshot IS NOT NULL;

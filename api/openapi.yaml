@@ -22,6 +22,7 @@ tags:
   - name: Workspace Roster
   - name: Workspace Validation
   - name: Workspace ImportExport
+  - name: Workspace LinuxPasswords
 
 paths:
   /teams:
@@ -74,3 +75,13 @@ paths:
     $ref: ./paths/workspace/import-export.yaml#/save
   /workspace/import-export/export:
     $ref: ./paths/workspace/import-export.yaml#/export
+  /workspace/linux-passwords:
+    $ref: ./paths/workspace/linux-passwords.yaml#/linuxPasswordCollection
+  /workspace/linux-passwords/{id}:
+    $ref: ./paths/workspace/linux-passwords.yaml#/linuxPasswordItem
+  /workspace/linux-passwords/access-audits:
+    $ref: ./paths/workspace/linux-passwords.yaml#/linuxPasswordAccessAudits
+  /workspace/linux-passwords/credentials/{credentialId}/secret:
+    $ref: ./paths/workspace/linux-passwords.yaml#/linuxPasswordCredentialSecret
+  /workspace/linux-password-directories:
+    $ref: ./paths/workspace/linux-password-directories.yaml#/linuxPasswordDirectories

@@ -64,6 +64,10 @@ support:
       path: ${LOG_PATH:logs}
   linux-passwords:
     secret-key: ${SUPPORT_LINUX_PASSWORD_SECRET_KEY}
+  trusted-proxies:
+    ips:
+      - "127.0.0.1"
+      - "::1"
 
 sa-token:
   token-name: Authorization

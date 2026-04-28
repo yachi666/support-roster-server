@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.support.server.supportrosterserver.config.TrustedProxyProperties;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordAccessAuditListResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceLinuxPasswordListResponse;
@@ -29,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 public class WorkspaceLinuxPasswordController {
 
     private final WorkspaceLinuxPasswordService workspaceLinuxPasswordService;
+    private final TrustedProxyProperties trustedProxyProperties;
 
     @GetMapping
     public ResponseEntity<WorkspaceLinuxPasswordListResponse> listServers(
@@ -101,11 +103,25 @@ public class WorkspaceLinuxPasswordController {
         return ResponseEntity.noContent().build();
     }
 
-    private String resolveClientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
+    /**
+     * Resolves the real client IP address. X-Forwarded-For is only trusted when
+     * the direct connection comes from a configured trusted proxy IP.
+     */
+    String resolveClientIp(HttpServletRequest request) {
+        String remoteAddr = request.getRemoteAddr();
+        if (isTrustedProxy(remoteAddr)) {
+            String forwardedFor = request.getHeader("X-Forwarded-For");
+            if (forwardedFor != null && !forwardedFor.isBlank()) {
+                return forwardedFor.split(",")[0].trim();
+            }
         }
-        return request.getRemoteAddr();
+        return remoteAddr;
+    }
+
+    private boolean isTrustedProxy(String remoteAddr) {
+        if (remoteAddr == null) {
+            return false;
+        }
+        return trustedProxyProperties.getIps().contains(remoteAddr.trim());
     }
 }

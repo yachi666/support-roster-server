@@ -34,4 +34,10 @@ public class LinuxPasswordAccessAuditEntity extends BaseEntity {
     private String clientIp;
 
     private String userAgent;
+
+    private String hostnameSnapshot;
+
+    private String ipSnapshot;
+
+    private String usernameSnapshot;
 }
