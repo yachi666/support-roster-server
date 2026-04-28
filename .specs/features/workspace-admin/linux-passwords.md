@@ -96,6 +96,7 @@
 - `action` 仅允许 `VIEW` 或 `COPY`。
 - 后端先校验登录态，再读取 credential，最后使用服务端密钥解密。
 - 无论是查看还是复制，只要后端返回明文密码，都必须写入 `workspace_linux_password_access_audit`。
+- 解密失败（credential 不存在或密文损坏）时，也必须写入 `result=FAILED` 的审计记录；该写入在任何异常抛出前独立提交，不会被事务回滚。
 
 响应：
 
@@ -303,6 +304,16 @@
 - 删除机器：删除机器、登录账户及目录关联后，同样清理无引用目录。
 - 若历史主表存在 `username/password` 且没有 credential 行，服务端读取列表/详情时会回填一条加密 credential。
 
+## 密钥配置
+
+| 环境 | 配置来源 | 说明 |
+|---|---|---|
+| 非 local 环境（生产/预发） | 环境变量 `SUPPORT_LINUX_PASSWORD_SECRET_KEY` | 必须显式设置；缺失则服务启动失败 |
+| local 开发环境 | `application-local.yml` 中 `support.linux-passwords.secret-key` 固定值 | 仅用于开发，禁止在生产使用 |
+
+- **不允许**回退到 JWT secret key（`SA_TOKEN_JWT_SECRET_KEY`）或任何硬编码默认值。
+- `LinuxPasswordSecretService` 收到空白密钥时会抛出 `IllegalStateException`，使服务快速失败（fail-fast）。
+
 ## 源码映射
 
 | 角色 | 文件 |
@@ -329,4 +340,4 @@
 
 ## 验证命令
 
-- `cd support-roster-server && mvn -q -Dtest=WorkspaceLinuxPasswordServiceTest,WorkspaceAccountServiceTest,WorkspaceOverviewControllerTest test`
+- `cd support-roster-server && mvn -q -Dtest=WorkspaceLinuxPasswordServiceTest,LinuxPasswordSecretServiceTest,LinuxPasswordSecretServicePropertyWiringTest,WorkspaceAccountServiceTest,WorkspaceOverviewControllerTest test`

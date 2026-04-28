@@ -27,7 +27,12 @@ public class LinuxPasswordSecretService {
     private final SecretKeySpec secretKey;
 
     public LinuxPasswordSecretService(
-            @Value("${support.linux-passwords.secret-key:${SA_TOKEN_JWT_SECRET_KEY:support-linux-passwords-local-secret-change-before-production}}") String secretKeyMaterial) {
+            @Value("${support.linux-passwords.secret-key}") String secretKeyMaterial) {
+        if (secretKeyMaterial == null || secretKeyMaterial.isBlank()) {
+            throw new IllegalStateException(
+                "support.linux-passwords.secret-key must be explicitly configured; " +
+                "do not fall back to the JWT secret key in non-local environments.");
+        }
         this.secretKey = new SecretKeySpec(deriveKey(secretKeyMaterial), "AES");
     }
 

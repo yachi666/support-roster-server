@@ -171,7 +171,6 @@ public class WorkspaceLinuxPasswordService {
         );
     }
 
-    @Transactional
     public WorkspaceLinuxPasswordSecretResponse revealCredentialSecret(Long credentialId, String action, String clientIp, String userAgent) {
         AuthenticatedAccount current = authContextService.requireLogin();
         String normalizedAction = normalizeSecretAction(action);
