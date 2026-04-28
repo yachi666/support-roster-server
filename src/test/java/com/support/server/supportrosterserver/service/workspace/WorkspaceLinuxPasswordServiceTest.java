@@ -1,6 +1,8 @@
 package com.support.server.supportrosterserver.service.workspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -14,6 +16,9 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -314,7 +319,8 @@ class WorkspaceLinuxPasswordServiceTest {
         credential.setServerId(1L);
         credential.setUsername("admin");
 
-        when(linuxPasswordAccessAuditMapper.selectList(any())).thenReturn(List.of(audit));
+        IPage<LinuxPasswordAccessAuditEntity> page = buildPage(List.of(audit), 1L);
+        when(linuxPasswordAccessAuditMapper.selectPage(any(), any())).thenReturn(page);
         when(linuxPasswordCredentialMapper.selectList(any())).thenReturn(List.of(credential));
         when(linuxPasswordServerMapper.selectList(any())).thenReturn(List.of(
             buildServer(1L, "infra-proxy-01", "10.0.1.2", null, null, "online")
@@ -360,7 +366,7 @@ class WorkspaceLinuxPasswordServiceTest {
             20
         ));
 
-        verify(linuxPasswordAccessAuditMapper, never()).selectList(any());
+        verify(linuxPasswordAccessAuditMapper, never()).selectPage(any(), any());
     }
 
     @Test
@@ -434,6 +440,117 @@ class WorkspaceLinuxPasswordServiceTest {
         workspaceLinuxPasswordService.deleteServer(1L);
 
         verify(linuxPasswordDirectoryMapper).delete(any());
+    }
+
+    @Test
+    void shouldPreferAuditSnapshotFieldsOverLiveJoin() {
+        // Audit entity has snapshot fields populated - server/credential may be deleted
+        LinuxPasswordAccessAuditEntity audit = buildAudit(902L, 99L, 599L, "U002", "Alice Wang", "VIEW", "SUCCESS");
+        audit.setHostnameSnapshot("deleted-host-01");
+        audit.setIpSnapshot("10.99.0.1");
+        audit.setUsernameSnapshot("root");
+
+        IPage<LinuxPasswordAccessAuditEntity> page = buildPage(List.of(audit), 1L);
+        when(linuxPasswordAccessAuditMapper.selectPage(any(), any())).thenReturn(page);
+        // No server or credential returned from mapper (both deleted)
+        when(linuxPasswordServerMapper.selectList(any())).thenReturn(List.of());
+
+        WorkspaceLinuxPasswordAccessAuditListResponse response = workspaceLinuxPasswordService.listAccessAudits(
+            null, null, null, null, null, null, null, null, null, null, 1, 20);
+
+        assertEquals(1, response.getTotal());
+        assertEquals("deleted-host-01", response.getItems().get(0).getHostname());
+        assertEquals("10.99.0.1", response.getItems().get(0).getIp());
+        assertEquals("root", response.getItems().get(0).getUsername());
+    }
+
+    @Test
+    void shouldFallbackToLiveJoinWhenSnapshotsAbsent() {
+        // Audit entity without snapshots (legacy record) - falls back to live join
+        LinuxPasswordAccessAuditEntity audit = buildAudit(903L, 1L, 501L, "U003", "Bob Lee", "COPY", "SUCCESS");
+        assertNull(audit.getHostnameSnapshot());
+
+        LinuxPasswordCredentialEntity credential = new LinuxPasswordCredentialEntity();
+        credential.setId(501L);
+        credential.setServerId(1L);
+        credential.setUsername("deploy");
+
+        IPage<LinuxPasswordAccessAuditEntity> page = buildPage(List.of(audit), 1L);
+        when(linuxPasswordAccessAuditMapper.selectPage(any(), any())).thenReturn(page);
+        when(linuxPasswordCredentialMapper.selectList(any())).thenReturn(List.of(credential));
+        when(linuxPasswordServerMapper.selectList(any())).thenReturn(List.of(
+            buildServer(1L, "app-server-01", "10.0.2.5", null, null, "online")
+        ));
+
+        WorkspaceLinuxPasswordAccessAuditListResponse response = workspaceLinuxPasswordService.listAccessAudits(
+            null, null, null, null, null, null, null, null, null, null, 1, 20);
+
+        assertEquals(1, response.getTotal());
+        assertEquals("app-server-01", response.getItems().get(0).getHostname());
+        assertEquals("10.0.2.5", response.getItems().get(0).getIp());
+        assertEquals("deploy", response.getItems().get(0).getUsername());
+    }
+
+    @Test
+    void shouldWriteAuditWithSnapshotFieldsAtCreationTime() {
+        when(authContextService.requireLogin()).thenReturn(loggedInAccount("readonly", "Readonly User"));
+        LinuxPasswordSecretService.EncryptedSecret encryptedSecret = linuxPasswordSecretService.encrypt("Pass@Word1");
+        LinuxPasswordCredentialEntity credential = new LinuxPasswordCredentialEntity();
+        credential.setId(601L);
+        credential.setServerId(10L);
+        credential.setUsername("ubuntu");
+        credential.setPasswordCiphertext(encryptedSecret.ciphertext());
+        credential.setPasswordIv(encryptedSecret.iv());
+        credential.setKeyVersion(encryptedSecret.keyVersion());
+
+        when(linuxPasswordCredentialMapper.selectById(601L)).thenReturn(credential);
+        when(linuxPasswordServerMapper.selectById(10L)).thenReturn(
+            buildServer(10L, "snapshot-host-01", "192.168.1.10", null, null, "online"));
+
+        workspaceLinuxPasswordService.revealCredentialSecret(601L, "view", "10.1.1.1", "TestAgent");
+
+        ArgumentCaptor<LinuxPasswordAccessAuditEntity> auditCaptor = ArgumentCaptor.forClass(LinuxPasswordAccessAuditEntity.class);
+        verify(linuxPasswordAccessAuditMapper).insert(auditCaptor.capture());
+        assertEquals("snapshot-host-01", auditCaptor.getValue().getHostnameSnapshot());
+        assertEquals("192.168.1.10", auditCaptor.getValue().getIpSnapshot());
+        assertEquals("ubuntu", auditCaptor.getValue().getUsernameSnapshot());
+    }
+
+    @Test
+    void shouldPaginateAuditsUsingSelectPageNotInMemory() {
+        // Verify that pagination is pushed to DB via selectPage, not done in memory
+        LinuxPasswordAccessAuditEntity audit = buildAudit(904L, 1L, 501L, "U004", "Carol", "VIEW", "SUCCESS");
+        IPage<LinuxPasswordAccessAuditEntity> page = buildPage(List.of(audit), 42L);
+        when(linuxPasswordAccessAuditMapper.selectPage(any(), any())).thenReturn(page);
+        when(linuxPasswordServerMapper.selectList(any())).thenReturn(List.of());
+
+        WorkspaceLinuxPasswordAccessAuditListResponse response = workspaceLinuxPasswordService.listAccessAudits(
+            null, null, null, null, null, null, null, null, null, null, 3, 10);
+
+        // Total comes from DB page result (42), not from in-memory list size
+        assertEquals(42L, response.getTotal());
+        assertEquals(3L, response.getPage());
+        assertEquals(10L, response.getPageSize());
+        verify(linuxPasswordAccessAuditMapper).selectPage(any(), any());
+        verify(linuxPasswordAccessAuditMapper, never()).selectList(any());
+    }
+
+    private IPage<LinuxPasswordAccessAuditEntity> buildPage(List<LinuxPasswordAccessAuditEntity> records, long total) {
+        Page<LinuxPasswordAccessAuditEntity> page = new Page<>();
+        page.setRecords(records);
+        page.setTotal(total);
+        return page;
+    }
+
+    private LinuxPasswordAccessAuditEntity buildAuditWithSnapshots(
+            Long id, Long serverId, Long credentialId,
+            String staffId, String staffName, String action, String result,
+            String hostnameSnapshot, String ipSnapshot, String usernameSnapshot) {
+        LinuxPasswordAccessAuditEntity entity = buildAudit(id, serverId, credentialId, staffId, staffName, action, result);
+        entity.setHostnameSnapshot(hostnameSnapshot);
+        entity.setIpSnapshot(ipSnapshot);
+        entity.setUsernameSnapshot(usernameSnapshot);
+        return entity;
     }
 
     private AuthenticatedAccount loggedInAccount(String role, String staffName) {
