@@ -179,7 +179,13 @@ public class WorkspaceLinuxPasswordService {
             writeAccessAudit(current, null, credentialId, normalizedAction, "FAILED", clientIp, userAgent);
             throw new ResourceNotFoundException("LinuxPasswordCredential", "id", credentialId);
         }
-        LinuxPasswordServerEntity server = requireServer(credential.getServerId());
+        LinuxPasswordServerEntity server;
+        try {
+            server = requireServer(credential.getServerId());
+        } catch (RuntimeException ex) {
+            writeAccessAudit(current, null, credential.getId(), normalizedAction, "FAILED", clientIp, userAgent);
+            throw ex;
+        }
         try {
             String password = linuxPasswordSecretService.decrypt(credential.getPasswordCiphertext(), credential.getPasswordIv());
             writeAccessAudit(current, server.getId(), credential.getId(), normalizedAction, "SUCCESS", clientIp, userAgent);

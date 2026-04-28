@@ -403,6 +403,27 @@ class WorkspaceLinuxPasswordServiceTest {
     }
 
     @Test
+    void shouldWriteFailedAuditWhenServerMissingForCredential() {
+        when(authContextService.requireLogin()).thenReturn(loggedInAccount("readonly", "Readonly User"));
+        LinuxPasswordCredentialEntity credential = new LinuxPasswordCredentialEntity();
+        credential.setId(503L);
+        credential.setServerId(99L);
+        credential.setUsername("admin");
+
+        when(linuxPasswordCredentialMapper.selectById(503L)).thenReturn(credential);
+        when(linuxPasswordServerMapper.selectById(99L)).thenReturn(null);
+
+        assertThrows(RuntimeException.class,
+            () -> workspaceLinuxPasswordService.revealCredentialSecret(503L, "view", "127.0.0.1", "JUnit"));
+
+        ArgumentCaptor<LinuxPasswordAccessAuditEntity> auditCaptor = ArgumentCaptor.forClass(LinuxPasswordAccessAuditEntity.class);
+        verify(linuxPasswordAccessAuditMapper).insert(auditCaptor.capture());
+        assertEquals("FAILED", auditCaptor.getValue().getResult());
+        assertEquals("VIEW", auditCaptor.getValue().getAction());
+        assertEquals(503L, auditCaptor.getValue().getCredentialId());
+    }
+
+    @Test
     void shouldDeleteOrphanDirectoriesWhenDeletingServer() {
         when(linuxPasswordServerMapper.selectById(1L)).thenReturn(buildServer(1L, "fin-db-01", "10.0.10.5", "postgres", "P@ssw0rdFin1!", "online"));
         when(linuxPasswordServerBusinessUnitMapper.selectList(any())).thenReturn(
