@@ -38,6 +38,7 @@
 - 班次定义必须至少绑定一个已存在团队。
 - 同一团队下，相同 `code` 只能关联一条有效班次定义。
 - 共享班次通过团队关联表实现，而不是复制多条主记录。
+- 团队级重排会先校验 `teamId` 对应团队存在，且 `shiftDefinitionIds` 必须与该团队当前关联班次集合一一精确匹配（不能缺失、重复或混入其他团队班次）。
 - 顺序按 `workspace_shift_definition_team_rel.display_order` 持久化；未显式配置时按既有稳定顺序兜底。
 - 写入语义使用 `startTime + durationMinutes`，其中 `durationMinutes` 范围为 `1..1440`。
 - `primaryShift` 参与主班次校验规则；`visible` 控制是否出现在后台排班选项和公共 Viewer 中，不能再额外依赖 `primaryShift=true` 才可见。

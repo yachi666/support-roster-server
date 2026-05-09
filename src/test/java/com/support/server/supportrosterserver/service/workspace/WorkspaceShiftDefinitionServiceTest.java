@@ -1,6 +1,7 @@
 package com.support.server.supportrosterserver.service.workspace;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -22,6 +23,8 @@ import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefini
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
+import com.support.server.supportrosterserver.exception.BadRequestException;
+import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
@@ -88,6 +91,73 @@ class WorkspaceShiftDefinitionServiceTest {
         verify(shiftDefinitionTeamRelMapper).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>argThat(rel ->
             rel.getTeamId().equals(201L) && rel.getShiftDefinitionId().equals(11L) && rel.getDisplayOrder().equals(0)
         ));
+    }
+
+    @Test
+    void shouldRequireExistingTeamBeforeReordering() {
+        when(lookupService.requireTeam(999L)).thenThrow(new ResourceNotFoundException("Team", "id", 999L));
+
+        ResourceNotFoundException error = assertThrows(ResourceNotFoundException.class, () ->
+            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
+                new WorkspaceShiftDefinitionReorderRequest(999L, List.of(11L))
+            )
+        );
+
+        assertEquals("Team not found with id: '999'", error.getMessage());
+        verify(lookupService).requireTeam(999L);
+        verify(authContextService, never()).requireWritableTeams(List.of(999L));
+        verify(shiftDefinitionTeamRelMapper, never()).selectList(any());
+    }
+
+    @Test
+    void shouldRejectDuplicateShiftIdsInReorderPayload() {
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
+            buildRelation(11L, 201L, 0),
+            buildRelation(12L, 201L, 1)
+        ));
+
+        BadRequestException error = assertThrows(BadRequestException.class, () ->
+            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
+                new WorkspaceShiftDefinitionReorderRequest(201L, List.of(11L, 11L))
+            )
+        );
+
+        assertEquals("Reorder payload must contain exactly the shifts currently linked to the selected team.", error.getMessage());
+        verify(shiftDefinitionTeamRelMapper, never()).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>any());
+    }
+
+    @Test
+    void shouldRejectMissingShiftIdsInReorderPayload() {
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
+            buildRelation(11L, 201L, 0),
+            buildRelation(12L, 201L, 1)
+        ));
+
+        BadRequestException error = assertThrows(BadRequestException.class, () ->
+            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
+                new WorkspaceShiftDefinitionReorderRequest(201L, List.of(11L))
+            )
+        );
+
+        assertEquals("Reorder payload must contain exactly the shifts currently linked to the selected team.", error.getMessage());
+        verify(shiftDefinitionTeamRelMapper, never()).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>any());
+    }
+
+    @Test
+    void shouldRejectShiftIdsFromOtherTeamsInReorderPayload() {
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
+            buildRelation(11L, 201L, 0),
+            buildRelation(12L, 201L, 1)
+        ));
+
+        BadRequestException error = assertThrows(BadRequestException.class, () ->
+            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
+                new WorkspaceShiftDefinitionReorderRequest(201L, List.of(11L, 99L))
+            )
+        );
+
+        assertEquals("Reorder payload must contain exactly the shifts currently linked to the selected team.", error.getMessage());
+        verify(shiftDefinitionTeamRelMapper, never()).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>any());
     }
 
     @Test

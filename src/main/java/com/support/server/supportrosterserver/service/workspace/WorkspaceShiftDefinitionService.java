@@ -147,6 +147,7 @@ public class WorkspaceShiftDefinitionService {
 
     @Transactional
     public void reorderShiftDefinitionsForTeam(WorkspaceShiftDefinitionReorderRequest request) {
+        lookupService.requireTeam(request.getTeamId());
         authContextService.requireWritableTeams(List.of(request.getTeamId()));
         List<ShiftDefinitionTeamRelEntity> relations = shiftDefinitionTeamRelMapper.selectList(
             Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
