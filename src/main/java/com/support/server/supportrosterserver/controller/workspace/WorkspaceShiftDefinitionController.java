@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionDto;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionReorderRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionUpsertRequest;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceShiftDefinitionService;
 
@@ -46,6 +47,12 @@ public class WorkspaceShiftDefinitionController {
     @PutMapping("/{id}")
     public ResponseEntity<WorkspaceShiftDefinitionDto> updateShiftDefinition(@PathVariable Long id, @Valid @RequestBody WorkspaceShiftDefinitionUpsertRequest request) {
         return ResponseEntity.ok(workspaceShiftDefinitionService.updateShiftDefinition(id, request));
+    }
+
+    @PostMapping("/reorder")
+    public ResponseEntity<Void> reorderShiftDefinitions(@Valid @RequestBody WorkspaceShiftDefinitionReorderRequest request) {
+        workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(request);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")

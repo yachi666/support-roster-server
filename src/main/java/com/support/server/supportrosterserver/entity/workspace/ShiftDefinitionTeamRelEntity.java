@@ -18,4 +18,6 @@ public class ShiftDefinitionTeamRelEntity extends BaseEntity {
     private Long shiftDefinitionId;
 
     private Long teamId;
+
+    private Integer displayOrder;
 }
