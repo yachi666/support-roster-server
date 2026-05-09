@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationApplyResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationDto;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRecordDto;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationPreviewResponse;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationRemediationRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceValidationIssueDto;
@@ -189,7 +190,10 @@ public class WorkspaceValidationService {
                     "-",
                     TARGET_PAGE_SHIFTS,
                     false,
-                    RESOLUTION_KIND_MANUAL
+                    RESOLUTION_KIND_MANUAL,
+                    null,
+                    def.getId(),
+                    null
                 );
             }
         }
@@ -216,7 +220,10 @@ public class WorkspaceValidationService {
                     "-",
                     TARGET_PAGE_STAFF,
                     false,
-                    RESOLUTION_KIND_MANUAL
+                    RESOLUTION_KIND_MANUAL,
+                    staff.getId(),
+                    null,
+                    null
                 );
             }
             if (staff.getTeamId() == null || teamMap.get(staff.getTeamId()) == null) {
@@ -290,7 +297,10 @@ public class WorkspaceValidationService {
                     true,
                     RESOLUTION_KIND_SYSTEM_CLEANUP,
                     ACTION_DELETE_ORPHAN_ASSIGNMENT,
-                    assignment.getId()
+                    assignment.getId(),
+                    assignment.getStaffId(),
+                    null,
+                    assignment.getAssignmentDate().getDayOfMonth()
                 );
                 continue;
             }
@@ -307,7 +317,10 @@ public class WorkspaceValidationService {
                     assignment.getAssignmentDate().format(DATE_FORMATTER),
                     TARGET_PAGE_STAFF,
                     false,
-                    RESOLUTION_KIND_MANUAL
+                    RESOLUTION_KIND_MANUAL,
+                    staff.getId(),
+                    null,
+                    null
                 );
             }
 
@@ -357,7 +370,10 @@ public class WorkspaceValidationService {
                     sample.getAssignmentDate().format(DATE_FORMATTER),
                     TARGET_PAGE_ROSTER,
                     false,
-                    RESOLUTION_KIND_MANUAL
+                    RESOLUTION_KIND_MANUAL,
+                    sample.getStaffId(),
+                    null,
+                    sample.getAssignmentDate().getDayOfMonth()
                 );
             }
         }
@@ -453,7 +469,8 @@ public class WorkspaceValidationService {
                 "This removes the orphaned team scope record and keeps the linked workspace account intact.",
                 "The account itself will not be deleted. This cleanup is permanent.",
                 1,
-                List.of(requireRemediationRecordId(issue))
+                List.of(requireRemediationRecordId(issue)),
+                List.of(buildInvalidTeamScopePreviewRecord(requireRemediationRecordId(issue)))
             );
             case ACTION_DELETE_ORPHAN_ASSIGNMENT -> new WorkspaceValidationRemediationPreviewResponse(
                 issue.getId(),
@@ -462,7 +479,8 @@ public class WorkspaceValidationService {
                 "This removes the roster assignment record whose staff, team, or shift definition reference is no longer valid.",
                 "The roster entry will be permanently deleted from the selected month.",
                 1,
-                List.of(requireRemediationRecordId(issue))
+                List.of(requireRemediationRecordId(issue)),
+                List.of(buildOrphanAssignmentPreviewRecord(requireRemediationRecordId(issue)))
             );
             default -> throw new BadRequestException("Unsupported remediation action.");
         };
@@ -487,7 +505,7 @@ public class WorkspaceValidationService {
 
     private List<Long> applyDeleteOrphanAssignment(WorkspaceValidationIssueDto issue) {
         Long assignmentId = requireRemediationRecordId(issue);
-        RosterAssignmentEntity assignment = rosterAssignmentMapper.selectById(assignmentId);
+        RosterAssignmentEntity assignment = findAssignmentById(assignmentId);
         if (assignment == null) {
             throw new BadRequestException("The orphan assignment has already been removed.");
         }
@@ -508,6 +526,80 @@ public class WorkspaceValidationService {
             throw new BadRequestException("Validation remediation record is unavailable.");
         }
         return recordId;
+    }
+
+    private WorkspaceValidationRemediationRecordDto buildInvalidTeamScopePreviewRecord(Long scopeId) {
+        WorkspaceAccountTeamScopeEntity scope = workspaceAccountTeamScopeMapper.selectById(scopeId);
+        if (scope == null) {
+            throw new BadRequestException("The invalid team scope has already been removed.");
+        }
+        WorkspaceAccountEntity account = workspaceAccountMapper.selectBatchIds(List.of(scope.getAccountId())).stream()
+            .findFirst()
+            .orElse(null);
+        String title = account == null || account.getStaffId() == null || account.getStaffId().isBlank()
+            ? "Unknown account #" + scope.getAccountId()
+            : account.getStaffId();
+        String subtitle = scope.getTeamId() == null
+            ? "Missing team scope target"
+            : "Missing team ID " + scope.getTeamId();
+        return new WorkspaceValidationRemediationRecordDto(
+            scopeId,
+            title,
+            subtitle,
+            "Only the invalid team scope record will be deleted. The workspace account will remain active."
+        );
+    }
+
+    private WorkspaceValidationRemediationRecordDto buildOrphanAssignmentPreviewRecord(Long assignmentId) {
+        RosterAssignmentEntity assignment = findAssignmentById(assignmentId);
+        if (assignment == null) {
+            throw new BadRequestException("The orphan assignment has already been removed.");
+        }
+        StaffEntity staff = assignment.getStaffId() == null ? null : staffMapper.selectById(assignment.getStaffId());
+        TeamEntity team = assignment.getTeamId() == null ? null : lookupService.teamMap().get(assignment.getTeamId());
+        ShiftDefinitionEntity shiftDefinition = assignment.getShiftDefinitionId() == null
+            ? null
+            : shiftDefinitionMapper.selectById(assignment.getShiftDefinitionId());
+        Map<Long, Set<Long>> teamIdsByDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery())
+            .stream()
+            .collect(Collectors.groupingBy(
+                ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
+                Collectors.mapping(ShiftDefinitionTeamRelEntity::getTeamId, Collectors.toSet())
+            ));
+        boolean invalidShiftTeamMapping = shiftDefinition != null
+            && assignment.getTeamId() != null
+            && !resolveDefinitionTeamIds(shiftDefinition, teamIdsByDefinitionId).contains(assignment.getTeamId());
+
+        String title = staff == null || safeCellValue(staff.getName()).isBlank()
+            ? "Unknown staff #" + assignment.getStaffId()
+            : staff.getName();
+        String teamLabel = team == null ? "Unknown team" : team.getName();
+        String dateLabel = assignment.getAssignmentDate() == null ? "-" : assignment.getAssignmentDate().toString();
+        String codeLabel = shiftDefinition == null || safeCellValue(shiftDefinition.getCode()).isBlank()
+            ? safeCellValue(assignment.getShiftCode())
+            : shiftDefinition.getCode();
+        return new WorkspaceValidationRemediationRecordDto(
+            assignmentId,
+            title,
+            teamLabel + " · " + dateLabel + " · " + codeLabel,
+            buildOrphanAssignmentDescription(assignment, team, staff, shiftDefinition, invalidShiftTeamMapping)
+        );
+    }
+
+    private RosterAssignmentEntity findAssignmentById(Long assignmentId) {
+        if (assignmentId == null) {
+            return null;
+        }
+        RosterAssignmentEntity assignment = rosterAssignmentMapper.selectById(assignmentId);
+        if (assignment != null) {
+            return assignment;
+        }
+        return rosterAssignmentMapper.selectList(Wrappers.<RosterAssignmentEntity>lambdaQuery()
+                .eq(RosterAssignmentEntity::getId, assignmentId))
+            .stream()
+            .filter(candidate -> Objects.equals(candidate.getId(), assignmentId))
+            .findFirst()
+            .orElse(null);
     }
 
     private String buildOrphanAssignmentDescription(
@@ -619,6 +711,10 @@ public class WorkspaceValidationService {
         return teamName == null ? "" : teamName.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String safeCellValue(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private YearMonth resolveMonth(Integer year, Integer month) {
         YearMonth now = YearMonth.now();
         return YearMonth.of(year == null ? now.getYear() : year, month == null ? now.getMonthValue() : month);
@@ -675,6 +771,24 @@ public class WorkspaceValidationService {
                 String targetPage,
                 boolean resolvable,
                 String resolutionKind,
+                Long staffRecordId,
+                Long shiftDefinitionId,
+                Integer focusDay) {
+            record(id, severity, ruleCode, domain, blocking, type, description, team, date, targetPage, resolvable, resolutionKind, null, null, staffRecordId, shiftDefinitionId, focusDay);
+        }
+
+        private void record(Long id,
+                String severity,
+                String ruleCode,
+                String domain,
+                boolean blocking,
+                String type,
+                String description,
+                String team,
+                String date,
+                String targetPage,
+                boolean resolvable,
+                String resolutionKind,
                 String remediationActionKey) {
             record(id, severity, ruleCode, domain, blocking, type, description, team, date, targetPage, resolvable, resolutionKind, remediationActionKey, null);
         }
@@ -693,6 +807,26 @@ public class WorkspaceValidationService {
                 String resolutionKind,
                 String remediationActionKey,
                 Long remediationRecordId) {
+            record(id, severity, ruleCode, domain, blocking, type, description, team, date, targetPage, resolvable, resolutionKind, remediationActionKey, remediationRecordId, null, null, null);
+        }
+
+        private void record(Long id,
+                String severity,
+                String ruleCode,
+                String domain,
+                boolean blocking,
+                String type,
+                String description,
+                String team,
+                String date,
+                String targetPage,
+                boolean resolvable,
+                String resolutionKind,
+                String remediationActionKey,
+                Long remediationRecordId,
+                Long staffRecordId,
+                Long shiftDefinitionId,
+                Integer focusDay) {
             if (!isReadableTeam(team)) {
                 return;
             }
@@ -720,7 +854,10 @@ public class WorkspaceValidationService {
                 targetPage,
                 resolvable,
                 resolutionKind,
-                buildRemediation(remediationActionKey, remediationRecordId)
+                buildRemediation(remediationActionKey, remediationRecordId),
+                staffRecordId,
+                shiftDefinitionId,
+                focusDay
             );
 
             if (collectIssues) {

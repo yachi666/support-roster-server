@@ -58,8 +58,8 @@ flowchart LR
 
 ## 导出与模板下载
 
-- 导出接口按 `year`、`month` 输出 CSV。
-- CSV 使用 UTF-8 BOM 与 `text/csv; charset=UTF-8`，保证 Excel 打开中文字段不乱码。
+- 导出接口按 `year`、`month` 输出 Excel 工作簿，供管理员直接再次导入或离线核对。
+- 月排班工作簿中的 `Monthly Roster` sheet 固定包含 `staff_id`、`team`、`name` 与 `1-31` 日期列；`name` 仅用于人工核对，不改变 staff 的主匹配键。
 - 模板文件位于 `src/main/resources/roster.xlsx`。
 - 模板下载响应头固定为附件下载：`import-template.xlsx`。
 
@@ -68,7 +68,7 @@ flowchart LR
 | Sheet Index | Sheet Name | 说明 |
 |---|---|---|
 | 0 | Shift Definitions | 班次定义，包含 `team`、`code`、`meaning`、`start_time`、`end_time`、`timezone`、`show_on_roster_page`、`remark` |
-| 1 | Staff Shifts | 员工班次，包含 `name`、`staff_id`、`team`、`region`、`contact`、`notes` 与 `1-31` 天列 |
+| 1 | Staff Shifts | 员工班次；简化月排班 sheet 至少包含 `staff_id`、`team`、`name` 与 `1-31` 天列 |
 | 2 | Color Definitions | 颜色定义，包含 `code`、`color_name`、`rgb`、`hex` |
 
 ## 资源约束
@@ -76,6 +76,7 @@ flowchart LR
 - 导入预览与应用必须通过 `batchId` 建立批次关联。
 - `batchId` 在 JSON 中按字符串传输，避免前端精度丢失。
 - 预览问题列表与校验中心问题模型保持一致。
+- 重新读取导出/模板工作簿时，服务端必须兼容 `name` 列引入后的日期列偏移，避免把第 1 天班次读丢。
 - `operator` 可选，用于批次与日志记录。
 
 ## 导入验证规则
@@ -131,4 +132,3 @@ flowchart LR
 
 - 若模板格式、校验级别或批次状态语义变化，必须同步更新本文、前端 Import / Export spec 与 OpenAPI 文档。
 - 若未来支持浏览器内字段映射修复，应新增独立章节，而不是把交互细节堆进资源总览。
-

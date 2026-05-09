@@ -73,7 +73,7 @@ public class RosterService {
         ShiftDefinitionEntity shiftDefinition = shiftDefinitionMapper.selectById(assignment.getShiftDefinitionId());
         StaffEntity staff = staffMapper.selectById(assignment.getStaffId());
         TeamEntity team = teamMap.get(assignment.getTeamId());
-        if (shiftDefinition == null || staff == null || team == null || !Boolean.TRUE.equals(team.getVisible()) || !Boolean.TRUE.equals(shiftDefinition.getVisible()) || !Boolean.TRUE.equals(shiftDefinition.getPrimaryShift())) {
+        if (shiftDefinition == null || staff == null || team == null || !Boolean.TRUE.equals(team.getVisible()) || !Boolean.TRUE.equals(shiftDefinition.getVisible())) {
             return null;
         }
 

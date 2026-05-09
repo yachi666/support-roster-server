@@ -36,7 +36,7 @@
 - 同一团队下，相同 `code` 只能关联一条有效班次定义。
 - 共享班次通过团队关联表实现，而不是复制多条主记录。
 - 写入语义使用 `startTime + durationMinutes`，其中 `durationMinutes` 范围为 `1..1440`。
-- `primaryShift` 参与主班次校验规则；`visible` 控制是否出现在后台排班选项和相关展示中。
+- `primaryShift` 参与主班次校验规则；`visible` 控制是否出现在后台排班选项和公共 Viewer 中，不能再额外依赖 `primaryShift=true` 才可见。
 - 历史排班与人员分配通过 `shiftDefinitionId` 关联；编辑 `code` 不会破坏既有 assignment。
 
 ## 关联影响
