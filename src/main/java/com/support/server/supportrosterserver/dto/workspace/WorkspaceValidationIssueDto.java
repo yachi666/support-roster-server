@@ -26,4 +26,9 @@ public class WorkspaceValidationIssueDto {
     private Boolean resolvable;
     private String resolutionKind;
     private WorkspaceValidationRemediationDto remediation;
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long staffRecordId;
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long shiftDefinitionId;
+    private Integer focusDay;
 }

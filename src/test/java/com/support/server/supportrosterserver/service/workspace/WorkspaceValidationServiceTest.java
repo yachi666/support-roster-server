@@ -134,6 +134,11 @@ class WorkspaceValidationServiceTest {
         assertTrue(issues.stream().anyMatch(issue -> issue.getType().equals("Time Zone Ambiguity")));
         assertFalse(issues.stream().anyMatch(issue -> issue.getType().equals("Missing Primary Coverage")));
         assertFalse(issues.stream().anyMatch(issue -> issue.getType().equals("Invalid Shift Code")));
+        assertEquals(1L, issues.stream()
+            .filter(issue -> issue.getType().equals("Time Zone Ambiguity"))
+            .findFirst()
+            .orElseThrow()
+            .getStaffRecordId());
     }
 
     @Test
@@ -422,6 +427,7 @@ class WorkspaceValidationServiceTest {
         var preview = validationService.previewRemediation(issueId, remediationRequest(2026, 3, "delete_invalid_team_scope", 901L));
         assertEquals(1, preview.getRecordCount());
         assertEquals(List.of(901L), preview.getRecordIds());
+        assertEquals("LOCAL-ADMIN", preview.getRecords().get(0).getTitle());
 
         var apply = validationService.applyRemediation(issueId, remediationRequest(2026, 3, "delete_invalid_team_scope", 901L));
         assertEquals(1, apply.getAppliedCount());
@@ -489,11 +495,15 @@ class WorkspaceValidationServiceTest {
         assertEquals("delete_orphan_assignment", response.getIssues().get(0).getRemediation().getActionKey());
         assertNotEquals(701L, response.getIssues().get(0).getId());
         assertEquals(701L, response.getIssues().get(0).getRemediation().getRecordId());
+        assertEquals(88L, response.getIssues().get(0).getStaffRecordId());
+        assertEquals(Integer.valueOf(1), response.getIssues().get(0).getFocusDay());
         var issueId = response.getIssues().get(0).getId();
 
         var preview = validationService.previewRemediation(issueId, remediationRequest(2026, 3, "delete_orphan_assignment", 701L));
         assertEquals("Delete orphan assignment", preview.getTitle());
         assertEquals(List.of(701L), preview.getRecordIds());
+        assertEquals("Unknown staff #88", preview.getRecords().get(0).getTitle());
+        assertEquals("AP L2 · 2026-03-01 · DS", preview.getRecords().get(0).getSubtitle());
 
         var apply = validationService.applyRemediation(issueId, remediationRequest(2026, 3, "delete_orphan_assignment", 701L));
         assertEquals(1, apply.getAppliedCount());

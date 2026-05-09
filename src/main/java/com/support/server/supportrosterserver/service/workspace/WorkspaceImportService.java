@@ -440,6 +440,7 @@ public class WorkspaceImportService {
             .map(staff -> new ImportedRosterRow(
                 safeCellValue(staff.getStaffId()),
                 staff.getTeamId() == null || teamMap.get(staff.getTeamId()) == null ? "" : safeCellValue(teamMap.get(staff.getTeamId()).getName()),
+                safeCellValue(staff.getName()),
                 scheduleByStaffId.getOrDefault(staff.getId(), Map.of())
             ))
             .toList();
@@ -536,11 +537,12 @@ public class WorkspaceImportService {
                 }
                 Map<Integer, String> schedule = new LinkedHashMap<>();
                 for (int day = 1; day <= targetMonth.lengthOfMonth(); day++) {
-                    schedule.put(day, safeCellValue(formatter.formatCellValue(row.getCell(day + 1))));
+                    schedule.put(day, safeCellValue(formatter.formatCellValue(row.getCell(day + 2))));
                 }
                 rows.add(new ImportedRosterRow(
                     safeCellValue(formatter.formatCellValue(row.getCell(0))),
                     safeCellValue(formatter.formatCellValue(row.getCell(1))),
+                    safeCellValue(formatter.formatCellValue(row.getCell(2))),
                     schedule
                 ));
             }
@@ -551,7 +553,7 @@ public class WorkspaceImportService {
     }
 
     private boolean isBlankRow(Row row, int totalDays, DataFormatter formatter) {
-        for (int index = 0; index <= totalDays + 1; index++) {
+        for (int index = 0; index <= totalDays + 2; index++) {
             if (!safeCellValue(formatter.formatCellValue(row.getCell(index))).isBlank()) {
                 return false;
             }
@@ -565,11 +567,13 @@ public class WorkspaceImportService {
             Row headerRow = sheet.createRow(0);
             headerRow.createCell(0).setCellValue("staff_id");
             headerRow.createCell(1).setCellValue("team");
+            headerRow.createCell(2).setCellValue("name");
             sheet.setColumnWidth(0, 20 * 256);
             sheet.setColumnWidth(1, 24 * 256);
+            sheet.setColumnWidth(2, 24 * 256);
             for (int day = 1; day <= 31; day++) {
-                headerRow.createCell(day + 1).setCellValue(String.valueOf(day));
-                sheet.setColumnWidth(day + 1, 10 * 256);
+                headerRow.createCell(day + 2).setCellValue(String.valueOf(day));
+                sheet.setColumnWidth(day + 2, 10 * 256);
             }
 
             int rowIndex = 1;
@@ -577,9 +581,10 @@ public class WorkspaceImportService {
                 Row sheetRow = sheet.createRow(rowIndex++);
                 sheetRow.createCell(0).setCellValue(row.staffId());
                 sheetRow.createCell(1).setCellValue(row.teamName());
+                sheetRow.createCell(2).setCellValue(row.staffName());
                 for (int day = 1; day <= 31; day++) {
                     String value = day <= targetMonth.lengthOfMonth() ? safeCellValue(row.scheduleByDay().get(day)) : "";
-                    sheetRow.createCell(day + 1).setCellValue(value);
+                    sheetRow.createCell(day + 2).setCellValue(value);
                 }
             }
 
@@ -657,6 +662,9 @@ public class WorkspaceImportService {
             "/workspace/import-export",
             false,
             null,
+            null,
+            null,
+            null,
             null
         );
     }
@@ -678,7 +686,7 @@ public class WorkspaceImportService {
         return safeCellValue(primary).isBlank() ? safeCellValue(fallback) : primary;
     }
 
-    private record ImportedRosterRow(String staffId, String teamName, Map<Integer, String> scheduleByDay) {
+    private record ImportedRosterRow(String staffId, String teamName, String staffName, Map<Integer, String> scheduleByDay) {
     }
 
     private record ImportContext(

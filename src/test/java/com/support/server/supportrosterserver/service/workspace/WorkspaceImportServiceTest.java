@@ -258,10 +258,12 @@ class WorkspaceImportServiceTest {
             var sheet = workbook.getSheet("Monthly Roster");
             assertEquals("staff_id", sheet.getRow(0).getCell(0).getStringCellValue());
             assertEquals("team", sheet.getRow(0).getCell(1).getStringCellValue());
+            assertEquals("name", sheet.getRow(0).getCell(2).getStringCellValue());
             assertEquals("1001", sheet.getRow(1).getCell(0).getStringCellValue());
             assertEquals("L1", sheet.getRow(1).getCell(1).getStringCellValue());
-            assertEquals("A", sheet.getRow(1).getCell(2).getStringCellValue());
-            assertEquals("B", sheet.getRow(1).getCell(3).getStringCellValue());
+            assertEquals("Alice", sheet.getRow(1).getCell(2).getStringCellValue());
+            assertEquals("A", sheet.getRow(1).getCell(3).getStringCellValue());
+            assertEquals("B", sheet.getRow(1).getCell(4).getStringCellValue());
         }
     }
 
@@ -299,7 +301,8 @@ class WorkspaceImportServiceTest {
             var sheet = workbook.getSheet("Monthly Roster");
             assertEquals("1001", sheet.getRow(1).getCell(0).getStringCellValue());
             assertEquals("L1", sheet.getRow(1).getCell(1).getStringCellValue());
-            assertEquals("A", sheet.getRow(1).getCell(2).getStringCellValue());
+            assertEquals("Alice", sheet.getRow(1).getCell(2).getStringCellValue());
+            assertEquals("A", sheet.getRow(1).getCell(3).getStringCellValue());
             assertEquals(1, sheet.getLastRowNum());
         }
     }
@@ -352,16 +355,18 @@ class WorkspaceImportServiceTest {
             var header = sheet.createRow(0);
             header.createCell(0).setCellValue("staff_id");
             header.createCell(1).setCellValue("team");
+            header.createCell(2).setCellValue("name");
             for (int day = 1; day <= 31; day++) {
-                header.createCell(day + 1).setCellValue(String.valueOf(day));
+                header.createCell(day + 2).setCellValue(String.valueOf(day));
             }
             int rowIndex = 1;
             for (Map<String, String> row : rows) {
                 var sheetRow = sheet.createRow(rowIndex++);
                 sheetRow.createCell(0).setCellValue(row.getOrDefault("staff_id", ""));
                 sheetRow.createCell(1).setCellValue(row.getOrDefault("team", ""));
+                sheetRow.createCell(2).setCellValue(row.getOrDefault("name", ""));
                 for (int day = 1; day <= 31; day++) {
-                    sheetRow.createCell(day + 1).setCellValue(row.getOrDefault(String.valueOf(day), ""));
+                    sheetRow.createCell(day + 2).setCellValue(row.getOrDefault(String.valueOf(day), ""));
                 }
             }
             workbook.write(outputStream);
