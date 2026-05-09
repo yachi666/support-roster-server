@@ -9,6 +9,7 @@
 - `GET /api/workspace/shift-definitions`
 - `GET /api/workspace/shift-definitions/{id}`
 - `POST /api/workspace/shift-definitions`
+- `POST /api/workspace/shift-definitions/reorder`
 - `PUT /api/workspace/shift-definitions/{id}`
 - `DELETE /api/workspace/shift-definitions/{id}`
 - Controller：`WorkspaceShiftDefinitionController`
@@ -23,11 +24,13 @@
 | Service | [WorkspaceShiftDefinitionService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceShiftDefinitionService.java) |
 | 响应 DTO | [WorkspaceShiftDefinitionDto.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionDto.java) |
 | 写入请求 | [WorkspaceShiftDefinitionUpsertRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionUpsertRequest.java) |
+| 重排请求 | [WorkspaceShiftDefinitionReorderRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionReorderRequest.java) |
 
 ## 能力边界
 
 - 列表接口支持可选 `keyword`。
 - 单条班次定义可关联多个团队。
+- 新增 `POST /api/workspace/shift-definitions/reorder`，仅在单团队上下文下重排该团队关联班次的显示顺序。
 - 响应通过 `teams` 数组返回共享团队列表，并保留 `teamId` / `teamName` 作为主显示团队。
 
 ## 核心规则
@@ -35,9 +38,11 @@
 - 班次定义必须至少绑定一个已存在团队。
 - 同一团队下，相同 `code` 只能关联一条有效班次定义。
 - 共享班次通过团队关联表实现，而不是复制多条主记录。
+- 顺序按 `workspace_shift_definition_team_rel.display_order` 持久化；未显式配置时按既有稳定顺序兜底。
 - 写入语义使用 `startTime + durationMinutes`，其中 `durationMinutes` 范围为 `1..1440`。
 - `primaryShift` 参与主班次校验规则；`visible` 控制是否出现在后台排班选项和公共 Viewer 中，不能再额外依赖 `primaryShift=true` 才可见。
 - 历史排班与人员分配通过 `shiftDefinitionId` 关联；编辑 `code` 不会破坏既有 assignment。
+- Viewer 与工作台列表都可消费该团队级顺序，不再只按 code 排序。
 
 ## 关联影响
 
@@ -67,6 +72,7 @@
 | 接口 | 输入位置 | 字段 | 控制器参数 | 必填 | 说明 |
 |---|---|---|---|---|---|
 | `GET /api/workspace/shift-definitions` | query | `keyword` | `String keyword` | 否 | 关键字筛选 |
+| `POST /api/workspace/shift-definitions/reorder` | body | `teamId` / `shiftDefinitionIds` | `WorkspaceShiftDefinitionReorderRequest request` | 是 | 单团队班次重排 |
 | `GET/PUT/DELETE /api/workspace/shift-definitions/{id}` | path | `id` | `Long id` | 是 | 班次定义主键 |
 
 ### 响应 DTO 字段
