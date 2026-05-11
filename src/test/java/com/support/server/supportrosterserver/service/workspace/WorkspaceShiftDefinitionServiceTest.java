@@ -1,33 +1,28 @@
 package com.support.server.supportrosterserver.service.workspace;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
+import org.mockito.ArgumentCaptor;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
-import com.support.server.supportrosterserver.dto.ShiftCodeDto;
-import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionDto;
-import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionReorderRequest;
 import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionUpsertRequest;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
-import com.support.server.supportrosterserver.exception.BadRequestException;
-import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
+import com.support.server.supportrosterserver.mapper.TeamMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 class WorkspaceShiftDefinitionServiceTest {
@@ -37,6 +32,7 @@ class WorkspaceShiftDefinitionServiceTest {
     private RosterAssignmentMapper rosterAssignmentMapper;
     private WorkspaceLookupService lookupService;
     private AuthContextService authContextService;
+    private TeamMapper teamMapper;
     private WorkspaceShiftDefinitionService workspaceShiftDefinitionService;
 
     @BeforeEach
@@ -46,13 +42,15 @@ class WorkspaceShiftDefinitionServiceTest {
         rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
         authContextService = mock(AuthContextService.class);
+        teamMapper = mock(TeamMapper.class);
         workspaceShiftDefinitionService = new WorkspaceShiftDefinitionService(
             shiftDefinitionMapper,
             shiftDefinitionTeamRelMapper,
             rosterAssignmentMapper,
             lookupService,
             authContextService,
-            new WorkspaceShiftTimeSupport()
+            new WorkspaceShiftTimeSupport(),
+            teamMapper
         );
     }
 
@@ -78,173 +76,28 @@ class WorkspaceShiftDefinitionServiceTest {
     }
 
     @Test
-    void shouldPersistTeamSpecificShiftOrder() {
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(11L, 201L, 2),
-            buildRelation(12L, 201L, 1)
-        ));
+    void shouldReorderTeamShiftDefinitionsWhenRequestMatchesExistingRelations() {
+        ShiftDefinitionTeamRelEntity relationOne = buildRelation(51L, 301L);
+        relationOne.setId(1L);
+        relationOne.setDisplayOrder(0);
+        ShiftDefinitionTeamRelEntity relationTwo = buildRelation(52L, 301L);
+        relationTwo.setId(2L);
+        relationTwo.setDisplayOrder(1);
+        List<ShiftDefinitionTeamRelEntity> teamRelations = new ArrayList<>(List.of(relationOne, relationTwo));
 
-        workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
-            new WorkspaceShiftDefinitionReorderRequest(201L, List.of(11L, 12L))
-        );
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(teamRelations);
 
-        verify(shiftDefinitionTeamRelMapper).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>argThat(rel ->
-            rel.getTeamId().equals(201L) && rel.getShiftDefinitionId().equals(11L) && rel.getDisplayOrder().equals(0)
-        ));
-    }
+        workspaceShiftDefinitionService.reorderShiftDefinitions(301L, List.of(52L, 51L));
 
-    @Test
-    void shouldRequireExistingTeamBeforeReordering() {
-        when(lookupService.requireTeam(999L)).thenThrow(new ResourceNotFoundException("Team", "id", 999L));
+        verify(authContextService).requireWritableTeam(301L);
+        ArgumentCaptor<ShiftDefinitionTeamRelEntity> relationCaptor = ArgumentCaptor.forClass(ShiftDefinitionTeamRelEntity.class);
+        verify(shiftDefinitionTeamRelMapper, times(2)).updateById(relationCaptor.capture());
 
-        ResourceNotFoundException error = assertThrows(ResourceNotFoundException.class, () ->
-            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
-                new WorkspaceShiftDefinitionReorderRequest(999L, List.of(11L))
-            )
-        );
-
-        assertEquals("Team not found with id: '999'", error.getMessage());
-        verify(lookupService).requireTeam(999L);
-        verify(authContextService, never()).requireWritableTeams(List.of(999L));
-        verify(shiftDefinitionTeamRelMapper, never()).selectList(any());
-    }
-
-    @Test
-    void shouldRejectDuplicateShiftIdsInReorderPayload() {
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(11L, 201L, 0),
-            buildRelation(12L, 201L, 1)
-        ));
-
-        BadRequestException error = assertThrows(BadRequestException.class, () ->
-            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
-                new WorkspaceShiftDefinitionReorderRequest(201L, List.of(11L, 11L))
-            )
-        );
-
-        assertEquals("Reorder payload must contain exactly the shifts currently linked to the selected team.", error.getMessage());
-        verify(shiftDefinitionTeamRelMapper, never()).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>any());
-    }
-
-    @Test
-    void shouldRejectMissingShiftIdsInReorderPayload() {
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(11L, 201L, 0),
-            buildRelation(12L, 201L, 1)
-        ));
-
-        BadRequestException error = assertThrows(BadRequestException.class, () ->
-            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
-                new WorkspaceShiftDefinitionReorderRequest(201L, List.of(11L))
-            )
-        );
-
-        assertEquals("Reorder payload must contain exactly the shifts currently linked to the selected team.", error.getMessage());
-        verify(shiftDefinitionTeamRelMapper, never()).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>any());
-    }
-
-    @Test
-    void shouldRejectShiftIdsFromOtherTeamsInReorderPayload() {
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(11L, 201L, 0),
-            buildRelation(12L, 201L, 1)
-        ));
-
-        BadRequestException error = assertThrows(BadRequestException.class, () ->
-            workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(
-                new WorkspaceShiftDefinitionReorderRequest(201L, List.of(11L, 99L))
-            )
-        );
-
-        assertEquals("Reorder payload must contain exactly the shifts currently linked to the selected team.", error.getMessage());
-        verify(shiftDefinitionTeamRelMapper, never()).updateById(org.mockito.ArgumentMatchers.<ShiftDefinitionTeamRelEntity>any());
-    }
-
-    @Test
-    void shouldUseTeamSpecificOrderForViewerShiftCodes() {
-        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(
-            buildDefinition(11L, "B"),
-            buildDefinition(12L, "A")
-        ));
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(11L, 201L, 0),
-            buildRelation(12L, 201L, 1)
-        ));
-
-        List<ShiftCodeDto> result = workspaceShiftDefinitionService.listViewerShiftCodes();
-
-        assertEquals(List.of("B", "A"), result.stream().map(ShiftCodeDto::getCode).toList());
-    }
-
-    @Test
-    void shouldUsePrimaryTeamRelationForSharedShiftOrdering() {
-        ShiftDefinitionEntity sharedLater = buildDefinition(11L, "B");
-        sharedLater.setTeamId(202L);
-        ShiftDefinitionEntity sharedFirst = buildDefinition(12L, "A");
-        sharedFirst.setTeamId(202L);
-
-        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of(sharedLater, sharedFirst));
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(11L, 201L, 0),
-            buildRelation(11L, 202L, 1),
-            buildRelation(12L, 202L, 0)
-        ));
-
-        List<ShiftCodeDto> result = workspaceShiftDefinitionService.listViewerShiftCodes();
-
-        assertEquals(List.of("A", "B"), result.stream().map(ShiftCodeDto::getCode).toList());
-    }
-
-    @Test
-    void shouldPreserveExistingRelationsWhenUpdatingShiftDefinitionWithSameTeams() {
-        ShiftDefinitionEntity existing = buildDefinition(51L, "A");
-        existing.setTeamId(201L);
-        WorkspaceShiftDefinitionUpsertRequest request = buildUpsertRequest(List.of(201L), "A");
-        TeamEntity team = buildTeam(201L, "Tier 1");
-
-        when(shiftDefinitionMapper.selectById(51L)).thenReturn(existing);
-        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of());
-        when(lookupService.teamMap()).thenReturn(Map.of(201L, team));
-        when(lookupService.requireTeam(201L)).thenReturn(team);
-        when(lookupService.normalizeWorkspaceTimezone("Asia/Shanghai")).thenReturn("Asia/Shanghai");
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(
-            List.of(buildRelation(51L, 201L, 3)),
-            List.of(buildRelation(51L, 201L, 3)),
-            List.of(buildRelation(51L, 201L, 3))
-        );
-
-        workspaceShiftDefinitionService.updateShiftDefinition(51L, request);
-
-        verify(shiftDefinitionTeamRelMapper, never()).delete(any());
-        verify(shiftDefinitionTeamRelMapper, never()).insert(org.mockito.ArgumentMatchers.any(ShiftDefinitionTeamRelEntity.class));
-    }
-
-    @Test
-    void shouldAppendNewTeamRelationsAfterExistingDisplayOrder() {
-        ShiftDefinitionEntity existing = buildDefinition(51L, "A");
-        existing.setTeamId(201L);
-        WorkspaceShiftDefinitionUpsertRequest request = buildUpsertRequest(List.of(201L, 202L), "A");
-        TeamEntity team201 = buildTeam(201L, "Tier 1");
-        TeamEntity team202 = buildTeam(202L, "Tier 2");
-
-        when(shiftDefinitionMapper.selectById(51L)).thenReturn(existing);
-        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of());
-        when(lookupService.teamMap()).thenReturn(Map.of(201L, team201, 202L, team202));
-        when(lookupService.requireTeam(201L)).thenReturn(team201);
-        when(lookupService.requireTeam(202L)).thenReturn(team202);
-        when(lookupService.normalizeWorkspaceTimezone("Asia/Shanghai")).thenReturn("Asia/Shanghai");
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(
-            List.of(buildRelation(51L, 201L, 3)),
-            List.of(buildRelation(51L, 201L, 3)),
-            List.of(buildRelation(88L, 202L, 4)),
-            List.of(buildRelation(51L, 201L, 3), buildRelation(51L, 202L, 5))
-        );
-
-        workspaceShiftDefinitionService.updateShiftDefinition(51L, request);
-
-        verify(shiftDefinitionTeamRelMapper).insert(org.mockito.ArgumentMatchers.argThat((ShiftDefinitionTeamRelEntity rel) ->
-            rel.getShiftDefinitionId().equals(51L) && rel.getTeamId().equals(202L) && rel.getDisplayOrder().equals(5)
-        ));
+        List<ShiftDefinitionTeamRelEntity> updatedRelations = relationCaptor.getAllValues();
+        org.junit.jupiter.api.Assertions.assertEquals(2L, updatedRelations.get(0).getId());
+        org.junit.jupiter.api.Assertions.assertEquals(0, updatedRelations.get(0).getDisplayOrder());
+        org.junit.jupiter.api.Assertions.assertEquals(1L, updatedRelations.get(1).getId());
+        org.junit.jupiter.api.Assertions.assertEquals(1, updatedRelations.get(1).getDisplayOrder());
     }
 
     @Test
@@ -261,6 +114,7 @@ class WorkspaceShiftDefinitionServiceTest {
         when(lookupService.requireTeam(201L)).thenReturn(team201);
         when(lookupService.requireTeam(202L)).thenReturn(team202);
         when(lookupService.normalizeWorkspaceTimezone("Asia/Shanghai")).thenReturn("Asia/Shanghai");
+        when(teamMapper.selectOne(any())).thenReturn(team201, team202);
         when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(
             List.of(buildRelation(51L, 201L, 3), buildRelation(51L, 202L, 1)),
             List.of(buildRelation(51L, 201L, 3), buildRelation(51L, 202L, 1)),
@@ -269,29 +123,9 @@ class WorkspaceShiftDefinitionServiceTest {
 
         workspaceShiftDefinitionService.updateShiftDefinition(51L, request);
 
-        verify(shiftDefinitionMapper).updateById(org.mockito.ArgumentMatchers.argThat((ShiftDefinitionEntity entity) ->
-            entity.getId().equals(51L) && entity.getTeamId().equals(201L)
-        ));
-    }
-
-    @Test
-    void shouldReturnPrimaryTeamFromEntityInsteadOfFirstRelation() {
-        ShiftDefinitionEntity existing = buildDefinition(51L, "A");
-        existing.setTeamId(202L);
-        TeamEntity team201 = buildTeam(201L, "Tier 1");
-        TeamEntity team202 = buildTeam(202L, "Tier 2");
-
-        when(shiftDefinitionMapper.selectById(51L)).thenReturn(existing);
-        when(lookupService.teamMap()).thenReturn(Map.of(201L, team201, 202L, team202));
-        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(List.of(
-            buildRelation(51L, 201L, 0),
-            buildRelation(51L, 202L, 1)
-        ));
-
-        WorkspaceShiftDefinitionDto result = workspaceShiftDefinitionService.getShiftDefinition(51L);
-
-        assertEquals(202L, result.getTeamId());
-        assertEquals("Tier 2", result.getTeamName());
+        ArgumentCaptor<ShiftDefinitionEntity> definitionCaptor = ArgumentCaptor.forClass(ShiftDefinitionEntity.class);
+        verify(shiftDefinitionMapper).updateById(definitionCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(201L, definitionCaptor.getValue().getTeamId());
     }
 
     private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {

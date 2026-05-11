@@ -56,6 +56,7 @@ flowchart LR
 - 不使用整月 JSON 覆盖式存储。
 - 班次存在性校验基于“团队 + 班次定义关联关系”，而不是 `workspace_shift_definition.team_id` 单字段。
 - 月视图展示班次编码时，以 assignment 关联到的最新班次定义为准，因此 `code` 改名会反映到历史格子。
+- `shiftCodeOptionsByTeam` 与 `shiftDetailsByTeam` 内的班次顺序应遵循 `workspace_shift_definition_team_rel.display_order`，以便与班次定义页拖拽结果一致。
 - 校验中心若带入 `focusStaffId` + `focusDay`，前端可以直接定位到对应单元格；服务端需稳定返回按 staff 分组、按自然日索引的月视图，保证该类精准跳转可复用。
 
 ## 资源约束

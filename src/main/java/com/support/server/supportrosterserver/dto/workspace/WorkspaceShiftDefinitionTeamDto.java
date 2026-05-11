@@ -14,4 +14,5 @@ public class WorkspaceShiftDefinitionTeamDto {
     private Long id;
     private String name;
     private String color;
+    private Integer displayOrder;
 }

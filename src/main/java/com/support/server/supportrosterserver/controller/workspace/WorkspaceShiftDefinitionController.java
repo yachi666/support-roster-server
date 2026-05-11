@@ -51,7 +51,7 @@ public class WorkspaceShiftDefinitionController {
 
     @PostMapping("/reorder")
     public ResponseEntity<Void> reorderShiftDefinitions(@Valid @RequestBody WorkspaceShiftDefinitionReorderRequest request) {
-        workspaceShiftDefinitionService.reorderShiftDefinitionsForTeam(request);
+        workspaceShiftDefinitionService.reorderShiftDefinitions(request.getTeamId(), request.getShiftDefinitionIds());
         return ResponseEntity.noContent().build();
     }
 

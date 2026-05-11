@@ -76,6 +76,8 @@ public class WorkspaceRosterService {
             Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
                 .in(!readableTeamIds.isEmpty(), ShiftDefinitionTeamRelEntity::getTeamId, readableTeamIds)
                 .orderByAsc(ShiftDefinitionTeamRelEntity::getTeamId)
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getDisplayOrder)
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getShiftDefinitionId)
         );
         Set<Long> visibleShiftDefinitionIds = visibleShiftRelations.stream()
             .map(ShiftDefinitionTeamRelEntity::getShiftDefinitionId)
@@ -128,24 +130,15 @@ public class WorkspaceRosterService {
             groups.add(new WorkspaceRosterGroupDto(team.getId(), team.getName(), team.getColor(), persons));
         }
 
-        List<ShiftDefinitionEntity> visibleShiftDefinitions = shiftDefinitionById.values().stream()
-            .filter(shiftDefinition -> Boolean.TRUE.equals(shiftDefinition.getVisible()))
-            .sorted(java.util.Comparator
-                .comparing(ShiftDefinitionEntity::getTeamId, java.util.Comparator.nullsLast(Long::compareTo))
-                .thenComparing(ShiftDefinitionEntity::getCode, java.util.Comparator.nullsLast(String::compareTo)))
-            .toList();
-        Map<Long, List<Long>> teamIdsByShiftDefinitionId = visibleShiftRelations.stream()
-            .collect(Collectors.groupingBy(
-                ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
-                LinkedHashMap::new,
-                Collectors.mapping(ShiftDefinitionTeamRelEntity::getTeamId, Collectors.toList())
-            ));
-
         Map<Long, List<String>> shiftCodeOptionsByTeam = new LinkedHashMap<>();
         Map<String, String> shiftCodeColorMap = new HashMap<>();
         Map<Long, Map<String, WorkspaceRosterShiftDetailDto>> shiftDetailsByTeam = new LinkedHashMap<>();
 
-        for (ShiftDefinitionEntity shiftDefinition : visibleShiftDefinitions) {
+        for (ShiftDefinitionTeamRelEntity relation : visibleShiftRelations) {
+            ShiftDefinitionEntity shiftDefinition = shiftDefinitionById.get(relation.getShiftDefinitionId());
+            if (shiftDefinition == null || !Boolean.TRUE.equals(shiftDefinition.getVisible())) {
+                continue;
+            }
             if (shiftDefinition.getCode() == null || shiftDefinition.getCode().isBlank()) {
                 continue;
             }
@@ -155,17 +148,16 @@ public class WorkspaceRosterService {
                 shiftCodeColorMap.putIfAbsent(shiftDefinition.getCode(), shiftDefinition.getColorHex());
             }
 
-            for (Long teamId : teamIdsByShiftDefinitionId.getOrDefault(shiftDefinition.getId(), List.of())) {
-                if (!readableTeamIds.contains(teamId)) {
-                    continue;
-                }
-                shiftCodeOptionsByTeam.computeIfAbsent(teamId, ignored -> new ArrayList<>());
-                if (!shiftCodeOptionsByTeam.get(teamId).contains(shiftDefinition.getCode())) {
-                    shiftCodeOptionsByTeam.get(teamId).add(shiftDefinition.getCode());
-                }
-                shiftDetailsByTeam.computeIfAbsent(teamId, ignored -> new LinkedHashMap<>())
-                    .put(shiftDefinition.getCode(), detail);
+            Long teamId = relation.getTeamId();
+            if (!readableTeamIds.contains(teamId)) {
+                continue;
             }
+            shiftCodeOptionsByTeam.computeIfAbsent(teamId, ignored -> new ArrayList<>());
+            if (!shiftCodeOptionsByTeam.get(teamId).contains(shiftDefinition.getCode())) {
+                shiftCodeOptionsByTeam.get(teamId).add(shiftDefinition.getCode());
+            }
+            shiftDetailsByTeam.computeIfAbsent(teamId, ignored -> new LinkedHashMap<>())
+                .put(shiftDefinition.getCode(), detail);
         }
 
         List<String> shiftOptions = shiftCodeOptionsByTeam.values().stream()

@@ -34,6 +34,22 @@ shiftDefinitionCollection:
             schema:
               $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinition
 
+shiftDefinitionReorder:
+  post:
+    tags: [Workspace ShiftDefinitions]
+    summary: Reorder shift definitions for one team
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinitionReorderRequest
+    responses:
+      '204':
+        description: Reordered
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
+
 shiftDefinitionItem:
   get:
     tags: [Workspace ShiftDefinitions]
@@ -75,31 +91,3 @@ shiftDefinitionItem:
     responses:
       '204':
         description: Deleted
-
-shiftDefinitionReorder:
-  post:
-    tags: [Workspace ShiftDefinitions]
-    summary: Reorder shift definitions for a team
-    description: Payload must include exactly the shift definitions currently linked to the selected team.
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required: [teamId, shiftDefinitionIds]
-            properties:
-              teamId:
-                type: integer
-                format: int64
-              shiftDefinitionIds:
-                type: array
-                minItems: 1
-                items:
-                  type: integer
-                  format: int64
-    responses:
-      '204':
-        description: Reordered
-      '400':
-        $ref: ../../components/common.yaml#/responses/BadRequest

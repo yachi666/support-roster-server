@@ -2,7 +2,7 @@
 
 ## 文档定位
 
-本文描述 `/api/workspace/shift-definitions` 资源的查询与 CRUD 规则，重点说明班次定义与团队的关联方式。
+本文描述 `/api/workspace/shift-definitions` 资源的查询、CRUD 与 TEAM 维度重排规则，重点说明班次定义与团队的关联方式。
 
 ## 资源范围
 
@@ -24,32 +24,32 @@
 | Service | [WorkspaceShiftDefinitionService.java](../../../src/main/java/com/support/server/supportrosterserver/service/workspace/WorkspaceShiftDefinitionService.java) |
 | 响应 DTO | [WorkspaceShiftDefinitionDto.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionDto.java) |
 | 写入请求 | [WorkspaceShiftDefinitionUpsertRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionUpsertRequest.java) |
-| 重排请求 | [WorkspaceShiftDefinitionReorderRequest.java](../../../src/main/java/com/support/server/supportrosterserver/dto/workspace/WorkspaceShiftDefinitionReorderRequest.java) |
 
 ## 能力边界
 
 - 列表接口支持可选 `keyword`。
 - 单条班次定义可关联多个团队。
-- 新增 `POST /api/workspace/shift-definitions/reorder`，仅在单团队上下文下重排该团队关联班次的显示顺序。
 - 响应通过 `teams` 数组返回共享团队列表，并保留 `teamId` / `teamName` 作为主显示团队。
+- 更新共享班次时，如果原 `teamId` 仍包含在新的 `teamIds` 中，必须保持原主显示团队不变；只有原团队被移除时才使用新的首个团队作为主显示团队。
+- `teams[].displayOrder` 记录当前班次在对应 TEAM 下的展示顺序，供工作台拖拽排序、月排班和导入预览复用。
 
 ## 核心规则
 
 - 班次定义必须至少绑定一个已存在团队。
 - 同一团队下，相同 `code` 只能关联一条有效班次定义。
 - 共享班次通过团队关联表实现，而不是复制多条主记录。
-- 团队级重排会先校验 `teamId` 对应团队存在，且 `shiftDefinitionIds` 必须与该团队当前关联班次集合一一精确匹配（不能缺失、重复或混入其他团队班次）。
-- 顺序按 `workspace_shift_definition_team_rel.display_order` 持久化；未显式配置时按既有稳定顺序兜底。
+- `teamId/teamName` 是主显示团队，更新 `teamIds` 时应优先保留既有主显示团队，避免普通编辑改变共享班次身份与默认排序锚点。
+- TEAM 维度的排序持久化在 `workspace_shift_definition_team_rel.display_order`，允许同一条共享班次在不同 TEAM 下拥有不同顺序。
 - 写入语义使用 `startTime + durationMinutes`，其中 `durationMinutes` 范围为 `1..1440`。
 - `primaryShift` 参与主班次校验规则；`visible` 控制是否出现在后台排班选项和公共 Viewer 中，不能再额外依赖 `primaryShift=true` 才可见。
 - 历史排班与人员分配通过 `shiftDefinitionId` 关联；编辑 `code` 不会破坏既有 assignment。
-- Viewer 与工作台列表都可消费该团队级顺序，不再只按 code 排序。
 
 ## 关联影响
 
 - 月度排班保存时通过班次编码引用本资源。
 - 校验中心会基于班次定义完整性输出问题。
 - 导入预览复用同一套班次存在性校验口径。
+- 月排班与导入预览返回的 `shiftCodeOptionsByTeam` 需要遵循同一 TEAM 维度展示顺序。
 
 ## 字段映射
 
@@ -73,7 +73,8 @@
 | 接口 | 输入位置 | 字段 | 控制器参数 | 必填 | 说明 |
 |---|---|---|---|---|---|
 | `GET /api/workspace/shift-definitions` | query | `keyword` | `String keyword` | 否 | 关键字筛选 |
-| `POST /api/workspace/shift-definitions/reorder` | body | `teamId` / `shiftDefinitionIds` | `WorkspaceShiftDefinitionReorderRequest request` | 是 | 单团队班次重排 |
+| `POST /api/workspace/shift-definitions/reorder` | body | `teamId` | `WorkspaceShiftDefinitionReorderRequest.teamId` | 是 | 被重排的团队主键；JSON 中按字符串传输以避免前端 Long 精度丢失 |
+| `POST /api/workspace/shift-definitions/reorder` | body | `shiftDefinitionIds[]` | `WorkspaceShiftDefinitionReorderRequest.shiftDefinitionIds` | 是 | 该 TEAM 下完整班次顺序；JSON 中按字符串传输 |
 | `GET/PUT/DELETE /api/workspace/shift-definitions/{id}` | path | `id` | `Long id` | 是 | 班次定义主键 |
 
 ### 响应 DTO 字段
@@ -94,6 +95,7 @@
 | `colorHex` | `colorHex` | 颜色 |
 | `remark` | `remark` | 备注 |
 | `teams` | `teams` | 共享团队列表 |
+| `teams[].displayOrder` | `teams[].displayOrder` | 当前班次在对应 TEAM 下的展示顺序 |
 
 ## 维护提示
 
