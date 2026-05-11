@@ -15,9 +15,11 @@ import org.mockito.ArgumentCaptor;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
+import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
+import com.support.server.supportrosterserver.mapper.TeamMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 class WorkspaceShiftDefinitionServiceTest {
@@ -27,6 +29,7 @@ class WorkspaceShiftDefinitionServiceTest {
     private RosterAssignmentMapper rosterAssignmentMapper;
     private WorkspaceLookupService lookupService;
     private AuthContextService authContextService;
+    private TeamMapper teamMapper;
     private WorkspaceShiftDefinitionService workspaceShiftDefinitionService;
 
     @BeforeEach
@@ -36,13 +39,15 @@ class WorkspaceShiftDefinitionServiceTest {
         rosterAssignmentMapper = mock(RosterAssignmentMapper.class);
         lookupService = mock(WorkspaceLookupService.class);
         authContextService = mock(AuthContextService.class);
+        teamMapper = mock(TeamMapper.class);
         workspaceShiftDefinitionService = new WorkspaceShiftDefinitionService(
             shiftDefinitionMapper,
             shiftDefinitionTeamRelMapper,
             rosterAssignmentMapper,
             lookupService,
             authContextService,
-            new WorkspaceShiftTimeSupport()
+            new WorkspaceShiftTimeSupport(),
+            teamMapper
         );
     }
 
@@ -97,5 +102,11 @@ class WorkspaceShiftDefinitionServiceTest {
         relation.setShiftDefinitionId(shiftDefinitionId);
         relation.setTeamId(teamId);
         return relation;
+    }
+
+    private TeamEntity buildTeam(Long id) {
+        TeamEntity team = new TeamEntity();
+        team.setId(id);
+        return team;
     }
 }

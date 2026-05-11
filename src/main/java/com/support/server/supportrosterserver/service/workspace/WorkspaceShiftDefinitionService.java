@@ -27,6 +27,7 @@ import com.support.server.supportrosterserver.exception.ResourceNotFoundExceptio
 import com.support.server.supportrosterserver.mapper.RosterAssignmentMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionMapper;
 import com.support.server.supportrosterserver.mapper.ShiftDefinitionTeamRelMapper;
+import com.support.server.supportrosterserver.mapper.TeamMapper;
 import com.support.server.supportrosterserver.service.auth.AuthContextService;
 
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class WorkspaceShiftDefinitionService {
     private final WorkspaceLookupService lookupService;
     private final AuthContextService authContextService;
     private final WorkspaceShiftTimeSupport shiftTimeSupport;
+    private final TeamMapper teamMapper;
 
     public List<WorkspaceShiftDefinitionDto> listShiftDefinitions(String keyword) {
         LambdaQueryWrapper<ShiftDefinitionEntity> query = Wrappers.<ShiftDefinitionEntity>lambdaQuery()
@@ -299,11 +301,14 @@ public class WorkspaceShiftDefinitionService {
             }
         }
 
+        Map<Long, Integer> nextDisplayOrderByTeamId = prepareNextDisplayOrderByTeamId(normalizedTeamIds);
+
         for (Long teamId : normalizedTeamIds) {
             ShiftDefinitionTeamRelEntity existingRelation = existingRelationByTeamId.get(teamId);
             if (existingRelation != null) {
                 if (existingRelation.getDisplayOrder() == null) {
-                    existingRelation.setDisplayOrder(resolveNextDisplayOrder(teamId));
+                    existingRelation.setDisplayOrder(nextDisplayOrderByTeamId.get(teamId));
+                    nextDisplayOrderByTeamId.computeIfPresent(teamId, (ignored, currentOrder) -> currentOrder + 1);
                     shiftDefinitionTeamRelMapper.updateById(existingRelation);
                 }
                 continue;
@@ -312,12 +317,40 @@ public class WorkspaceShiftDefinitionService {
             ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
             relation.setShiftDefinitionId(shiftDefinitionId);
             relation.setTeamId(teamId);
-            relation.setDisplayOrder(resolveNextDisplayOrder(teamId));
+            relation.setDisplayOrder(nextDisplayOrderByTeamId.get(teamId));
+            nextDisplayOrderByTeamId.computeIfPresent(teamId, (ignored, currentOrder) -> currentOrder + 1);
             shiftDefinitionTeamRelMapper.insert(relation);
         }
     }
 
-    private int resolveNextDisplayOrder(Long teamId) {
+    private Map<Long, Integer> prepareNextDisplayOrderByTeamId(List<Long> teamIds) {
+        List<Long> normalizedTeamIds = teamIds.stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .sorted()
+            .toList();
+        Map<Long, Integer> nextDisplayOrderByTeamId = new LinkedHashMap<>();
+
+        for (Long teamId : normalizedTeamIds) {
+            lockTeamForDisplayOrder(teamId);
+            nextDisplayOrderByTeamId.put(teamId, resolveNextDisplayOrderUnderLock(teamId));
+        }
+
+        return nextDisplayOrderByTeamId;
+    }
+
+    private void lockTeamForDisplayOrder(Long teamId) {
+        TeamEntity team = teamMapper.selectOne(
+            Wrappers.<TeamEntity>lambdaQuery()
+                .eq(TeamEntity::getId, teamId)
+                .last("for update")
+        );
+        if (team == null) {
+            throw new ResourceNotFoundException("Team", "id", teamId);
+        }
+    }
+
+    private int resolveNextDisplayOrderUnderLock(Long teamId) {
         ShiftDefinitionTeamRelEntity lastRelation = shiftDefinitionTeamRelMapper.selectOne(
             Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
                 .eq(ShiftDefinitionTeamRelEntity::getTeamId, teamId)
