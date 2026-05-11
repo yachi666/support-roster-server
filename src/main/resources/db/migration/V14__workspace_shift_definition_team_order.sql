@@ -1,5 +1,5 @@
 ALTER TABLE workspace_shift_definition_team_rel
-ADD COLUMN display_order integer NOT NULL DEFAULT 0;
+ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0;
 
 WITH ordered AS (
     SELECT rel.id,

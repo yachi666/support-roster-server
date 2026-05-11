@@ -20,6 +20,7 @@ public class FlywayStartupConfig {
             .locations("classpath:db/migration")
             .baselineOnMigrate(true)
             .baselineVersion(MigrationVersion.fromVersion("0"))
+            .outOfOrder(true)
             .load();
     }
 
