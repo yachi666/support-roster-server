@@ -2,13 +2,16 @@ package com.support.server.supportrosterserver.service.workspace;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
@@ -62,6 +65,31 @@ class WorkspaceShiftDefinitionServiceTest {
         verify(rosterAssignmentMapper).delete(any(Wrapper.class));
         verify(shiftDefinitionTeamRelMapper).delete(any());
         verify(shiftDefinitionMapper).deleteById(51L);
+    }
+
+    @Test
+    void shouldReorderTeamShiftDefinitionsWhenRequestMatchesExistingRelations() {
+        ShiftDefinitionTeamRelEntity relationOne = buildRelation(51L, 301L);
+        relationOne.setId(1L);
+        relationOne.setDisplayOrder(0);
+        ShiftDefinitionTeamRelEntity relationTwo = buildRelation(52L, 301L);
+        relationTwo.setId(2L);
+        relationTwo.setDisplayOrder(1);
+        List<ShiftDefinitionTeamRelEntity> teamRelations = new ArrayList<>(List.of(relationOne, relationTwo));
+
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(teamRelations);
+
+        workspaceShiftDefinitionService.reorderShiftDefinitions(301L, List.of(52L, 51L));
+
+        verify(authContextService).requireWritableTeam(301L);
+        ArgumentCaptor<ShiftDefinitionTeamRelEntity> relationCaptor = ArgumentCaptor.forClass(ShiftDefinitionTeamRelEntity.class);
+        verify(shiftDefinitionTeamRelMapper, times(2)).updateById(relationCaptor.capture());
+
+        List<ShiftDefinitionTeamRelEntity> updatedRelations = relationCaptor.getAllValues();
+        org.junit.jupiter.api.Assertions.assertEquals(2L, updatedRelations.get(0).getId());
+        org.junit.jupiter.api.Assertions.assertEquals(0, updatedRelations.get(0).getDisplayOrder());
+        org.junit.jupiter.api.Assertions.assertEquals(1L, updatedRelations.get(1).getId());
+        org.junit.jupiter.api.Assertions.assertEquals(1, updatedRelations.get(1).getDisplayOrder());
     }
 
     private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {

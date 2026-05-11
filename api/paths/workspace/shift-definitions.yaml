@@ -34,6 +34,20 @@ shiftDefinitionCollection:
             schema:
               $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinition
 
+shiftDefinitionReorder:
+  post:
+    tags: [Workspace ShiftDefinitions]
+    summary: Reorder shift definitions for one team
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../../components/common.yaml#/schemas/WorkspaceShiftDefinitionReorderRequest
+    responses:
+      '204':
+        description: Reordered
+
 shiftDefinitionItem:
   get:
     tags: [Workspace ShiftDefinitions]

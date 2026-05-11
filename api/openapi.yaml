@@ -51,6 +51,8 @@ paths:
     $ref: ./paths/workspace/staff.yaml#/staffItem
   /workspace/shift-definitions:
     $ref: ./paths/workspace/shift-definitions.yaml#/shiftDefinitionCollection
+  /workspace/shift-definitions/reorder:
+    $ref: ./paths/workspace/shift-definitions.yaml#/shiftDefinitionReorder
   /workspace/shift-definitions/{id}:
     $ref: ./paths/workspace/shift-definitions.yaml#/shiftDefinitionItem
   /workspace/teams:

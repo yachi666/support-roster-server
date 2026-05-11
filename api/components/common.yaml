@@ -415,6 +415,8 @@ schemas:
         type: string
       color:
         type: string
+      displayOrder:
+        type: integer
 
   WorkspaceShiftDefinitionUpsertRequest:
     type: object
@@ -446,6 +448,18 @@ schemas:
         type: string
       remark:
         type: string
+
+  WorkspaceShiftDefinitionReorderRequest:
+    type: object
+    required: [teamId, shiftDefinitionIds]
+    properties:
+      teamId:
+        type: string
+      shiftDefinitionIds:
+        type: array
+        minItems: 1
+        items:
+          type: string
 
   WorkspaceRosterPerson:
     type: object

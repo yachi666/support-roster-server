@@ -26,6 +26,7 @@
 | `ddl/007_workspace_linux_passwords.sql` | 增量脚本 | Linux 密码库主表、目录表与业务单元关联表 |
 | `ddl/008_workspace_linux_password_credentials_audit.sql` | 增量脚本 | Linux 密码库多登录账户、密码密文与访问审计表（含 Task 2 快照列：hostname_snapshot、ip_snapshot、username_snapshot）|
 | `ddl/009_workspace_staff_id_rename.sql` | 增量脚本 | 将员工业务标识统一为 staff_id，账号 FK 改为 staff_record_id |
+| `ddl/010_workspace_shift_definition_team_display_order.sql` | 增量脚本 | 为班次定义-团队关联补充 TEAM 维度展示顺序 |
 
 ## 维护提示
 

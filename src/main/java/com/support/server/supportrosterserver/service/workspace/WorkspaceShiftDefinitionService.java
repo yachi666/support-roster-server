@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -54,14 +55,14 @@ public class WorkspaceShiftDefinitionService {
 
         List<ShiftDefinitionEntity> definitions = shiftDefinitionMapper.selectList(query);
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
-        Map<Long, List<TeamEntity>> teamsByShiftDefinitionId = loadTeamsByShiftDefinitionId(
+        Map<Long, List<WorkspaceShiftDefinitionTeamDto>> teamsByShiftDefinitionId = loadTeamsByShiftDefinitionId(
             definitions.stream().map(ShiftDefinitionEntity::getId).toList(),
             teamMap
         );
 
         return definitions.stream()
             .filter(definition -> teamsByShiftDefinitionId.getOrDefault(definition.getId(), List.of()).stream()
-                .map(TeamEntity::getId)
+                .map(WorkspaceShiftDefinitionTeamDto::getId)
                 .anyMatch(authContextService::canReadTeam))
             .map(definition -> toDto(definition, teamsByShiftDefinitionId.getOrDefault(definition.getId(), List.of())))
             .toList();
@@ -74,8 +75,8 @@ public class WorkspaceShiftDefinitionService {
         }
 
         Map<Long, TeamEntity> teamMap = lookupService.teamMap();
-        Map<Long, List<TeamEntity>> teamsByShiftDefinitionId = loadTeamsByShiftDefinitionId(List.of(id), teamMap);
-        authContextService.requireReadableAnyTeam(teamsByShiftDefinitionId.getOrDefault(id, List.of()).stream().map(TeamEntity::getId).toList());
+        Map<Long, List<WorkspaceShiftDefinitionTeamDto>> teamsByShiftDefinitionId = loadTeamsByShiftDefinitionId(List.of(id), teamMap);
+        authContextService.requireReadableAnyTeam(teamsByShiftDefinitionId.getOrDefault(id, List.of()).stream().map(WorkspaceShiftDefinitionTeamDto::getId).toList());
         return toDto(entity, teamsByShiftDefinitionId.getOrDefault(id, List.of()));
     }
 
@@ -87,7 +88,7 @@ public class WorkspaceShiftDefinitionService {
         ShiftDefinitionEntity entity = new ShiftDefinitionEntity();
         apply(entity, request);
         shiftDefinitionMapper.insert(entity);
-        replaceTeamRelations(entity.getId(), request.getTeamIds());
+        syncTeamRelations(entity.getId(), request.getTeamIds());
         return getShiftDefinition(entity.getId());
     }
 
@@ -99,7 +100,7 @@ public class WorkspaceShiftDefinitionService {
         }
         String previousCode = entity.getCode();
         List<Long> existingTeamIds = loadTeamsByShiftDefinitionId(List.of(id), lookupService.teamMap()).getOrDefault(id, List.of()).stream()
-            .map(TeamEntity::getId)
+            .map(WorkspaceShiftDefinitionTeamDto::getId)
             .toList();
         authContextService.requireWritableTeams(existingTeamIds);
         authContextService.requireWritableTeams(request.getTeamIds());
@@ -107,11 +108,53 @@ public class WorkspaceShiftDefinitionService {
         validateCodeAvailability(id, request.getCode(), request.getTeamIds());
         apply(entity, request);
         shiftDefinitionMapper.updateById(entity);
-        replaceTeamRelations(id, request.getTeamIds());
+        syncTeamRelations(id, request.getTeamIds());
         if (!Objects.equals(previousCode, entity.getCode())) {
             syncAssignmentShiftCodes(id, entity.getCode());
         }
         return getShiftDefinition(id);
+    }
+
+    @Transactional
+    public void reorderShiftDefinitions(Long teamId, List<Long> shiftDefinitionIds) {
+        authContextService.requireWritableTeam(teamId);
+
+        List<ShiftDefinitionTeamRelEntity> teamRelations = shiftDefinitionTeamRelMapper.selectList(
+            Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                .eq(ShiftDefinitionTeamRelEntity::getTeamId, teamId)
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getDisplayOrder)
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getShiftDefinitionId)
+        );
+
+        if (teamRelations.isEmpty()) {
+            throw new BadRequestException("Team has no shift definitions to reorder.");
+        }
+        if (shiftDefinitionIds.size() != teamRelations.size()) {
+            throw new BadRequestException("Reorder request must include all shift definitions for the selected team.");
+        }
+
+        Set<Long> requestedIds = new LinkedHashSet<>(shiftDefinitionIds);
+        if (requestedIds.size() != shiftDefinitionIds.size()) {
+            throw new BadRequestException("Reorder request contains duplicate shift definition ids.");
+        }
+
+        Map<Long, ShiftDefinitionTeamRelEntity> relationByShiftDefinitionId = teamRelations.stream()
+            .collect(Collectors.toMap(
+                ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
+                Function.identity(),
+                (left, right) -> left,
+                LinkedHashMap::new
+            ));
+
+        if (!relationByShiftDefinitionId.keySet().equals(requestedIds)) {
+            throw new BadRequestException("Reorder request does not match existing shift definitions for the selected team.");
+        }
+
+        for (int index = 0; index < shiftDefinitionIds.size(); index++) {
+            ShiftDefinitionTeamRelEntity relation = relationByShiftDefinitionId.get(shiftDefinitionIds.get(index));
+            relation.setDisplayOrder(index);
+            shiftDefinitionTeamRelMapper.updateById(relation);
+        }
     }
 
     @Transactional
@@ -157,8 +200,11 @@ public class WorkspaceShiftDefinitionService {
             .toList();
     }
 
-    private WorkspaceShiftDefinitionDto toDto(ShiftDefinitionEntity entity, List<TeamEntity> teams) {
-        TeamEntity primaryTeam = teams.isEmpty() ? null : teams.get(0);
+    private WorkspaceShiftDefinitionDto toDto(ShiftDefinitionEntity entity, List<WorkspaceShiftDefinitionTeamDto> teams) {
+        WorkspaceShiftDefinitionTeamDto primaryTeam = teams.stream()
+            .filter(team -> Objects.equals(team.getId(), entity.getTeamId()))
+            .findFirst()
+            .orElse(teams.isEmpty() ? null : teams.get(0));
         return new WorkspaceShiftDefinitionDto(
             entity.getId(),
             primaryTeam == null ? entity.getTeamId() : primaryTeam.getId(),
@@ -173,9 +219,7 @@ public class WorkspaceShiftDefinitionService {
             entity.getVisible(),
             entity.getColorHex(),
             entity.getRemark(),
-            teams.stream()
-                .map(team -> new WorkspaceShiftDefinitionTeamDto(team.getId(), team.getName(), team.getColor()))
-                .toList()
+            teams
         );
     }
 
@@ -210,35 +254,80 @@ public class WorkspaceShiftDefinitionService {
         return normalized.toLowerCase();
     }
 
-    private Map<Long, List<TeamEntity>> loadTeamsByShiftDefinitionId(List<Long> shiftDefinitionIds, Map<Long, TeamEntity> teamMap) {
+    private Map<Long, List<WorkspaceShiftDefinitionTeamDto>> loadTeamsByShiftDefinitionId(List<Long> shiftDefinitionIds, Map<Long, TeamEntity> teamMap) {
         if (shiftDefinitionIds.isEmpty()) {
             return Map.of();
         }
 
-        Map<Long, List<TeamEntity>> teamsByShiftDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+        Map<Long, List<WorkspaceShiftDefinitionTeamDto>> teamsByShiftDefinitionId = shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
                 .in(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, shiftDefinitionIds)
                 .orderByAsc(ShiftDefinitionTeamRelEntity::getTeamId))
             .stream()
             .collect(Collectors.groupingBy(
                 ShiftDefinitionTeamRelEntity::getShiftDefinitionId,
                 LinkedHashMap::new,
-                Collectors.mapping(relation -> teamMap.get(relation.getTeamId()), Collectors.toList())
+                Collectors.mapping(relation -> {
+                    TeamEntity team = teamMap.get(relation.getTeamId());
+                    if (team == null) {
+                        return null;
+                    }
+                    return new WorkspaceShiftDefinitionTeamDto(
+                        team.getId(),
+                        team.getName(),
+                        team.getColor(),
+                        relation.getDisplayOrder()
+                    );
+                }, Collectors.toList())
             ));
 
         teamsByShiftDefinitionId.replaceAll((ignored, teams) -> teams.stream().filter(Objects::nonNull).toList());
         return teamsByShiftDefinitionId;
     }
 
-    private void replaceTeamRelations(Long shiftDefinitionId, List<Long> teamIds) {
-        shiftDefinitionTeamRelMapper.delete(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
-            .eq(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, shiftDefinitionId));
+    private void syncTeamRelations(Long shiftDefinitionId, List<Long> teamIds) {
+        List<Long> normalizedTeamIds = teamIds.stream().distinct().toList();
+        List<ShiftDefinitionTeamRelEntity> existingRelations = shiftDefinitionTeamRelMapper.selectList(
+            Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                .eq(ShiftDefinitionTeamRelEntity::getShiftDefinitionId, shiftDefinitionId)
+        );
+        Map<Long, ShiftDefinitionTeamRelEntity> existingRelationByTeamId = existingRelations.stream()
+            .collect(Collectors.toMap(ShiftDefinitionTeamRelEntity::getTeamId, Function.identity(), (left, right) -> left));
 
-        for (Long teamId : teamIds.stream().distinct().toList()) {
+        for (ShiftDefinitionTeamRelEntity relation : existingRelations) {
+            if (!normalizedTeamIds.contains(relation.getTeamId())) {
+                shiftDefinitionTeamRelMapper.deleteById(relation.getId());
+            }
+        }
+
+        for (Long teamId : normalizedTeamIds) {
+            ShiftDefinitionTeamRelEntity existingRelation = existingRelationByTeamId.get(teamId);
+            if (existingRelation != null) {
+                if (existingRelation.getDisplayOrder() == null) {
+                    existingRelation.setDisplayOrder(resolveNextDisplayOrder(teamId));
+                    shiftDefinitionTeamRelMapper.updateById(existingRelation);
+                }
+                continue;
+            }
+
             ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
             relation.setShiftDefinitionId(shiftDefinitionId);
             relation.setTeamId(teamId);
+            relation.setDisplayOrder(resolveNextDisplayOrder(teamId));
             shiftDefinitionTeamRelMapper.insert(relation);
         }
+    }
+
+    private int resolveNextDisplayOrder(Long teamId) {
+        ShiftDefinitionTeamRelEntity lastRelation = shiftDefinitionTeamRelMapper.selectOne(
+            Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
+                .eq(ShiftDefinitionTeamRelEntity::getTeamId, teamId)
+                .orderByDesc(ShiftDefinitionTeamRelEntity::getDisplayOrder)
+                .orderByDesc(ShiftDefinitionTeamRelEntity::getId)
+                .last("limit 1")
+        );
+        return lastRelation == null || lastRelation.getDisplayOrder() == null
+            ? 0
+            : lastRelation.getDisplayOrder() + 1;
     }
 
     private LambdaQueryWrapper<RosterAssignmentEntity> buildAssignmentCleanupQuery(Long shiftDefinitionId) {

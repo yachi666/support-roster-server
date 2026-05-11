@@ -479,7 +479,9 @@ public class WorkspaceImportService {
             ? List.of()
             : shiftDefinitionTeamRelMapper.selectList(Wrappers.<ShiftDefinitionTeamRelEntity>lambdaQuery()
                 .in(ShiftDefinitionTeamRelEntity::getTeamId, readableTeamIds)
-                .orderByAsc(ShiftDefinitionTeamRelEntity::getTeamId));
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getTeamId)
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getDisplayOrder)
+                .orderByAsc(ShiftDefinitionTeamRelEntity::getShiftDefinitionId));
         Set<Long> visibleShiftDefinitionIds = visibleShiftRelations.stream()
             .map(ShiftDefinitionTeamRelEntity::getShiftDefinitionId)
             .collect(Collectors.toCollection(LinkedHashSet::new));
