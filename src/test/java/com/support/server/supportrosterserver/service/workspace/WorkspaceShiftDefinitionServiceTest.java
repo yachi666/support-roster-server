@@ -6,13 +6,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.support.server.supportrosterserver.dto.workspace.WorkspaceShiftDefinitionUpsertRequest;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionEntity;
 import com.support.server.supportrosterserver.entity.workspace.ShiftDefinitionTeamRelEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
@@ -97,16 +100,72 @@ class WorkspaceShiftDefinitionServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, updatedRelations.get(1).getDisplayOrder());
     }
 
+    @Test
+    void shouldKeepPrimaryTeamWhenUpdatingWithoutRemovingIt() {
+        ShiftDefinitionEntity existing = buildDefinition(51L, "A");
+        existing.setTeamId(201L);
+        WorkspaceShiftDefinitionUpsertRequest request = buildUpsertRequest(List.of(202L, 201L), "A");
+        TeamEntity team201 = buildTeam(201L, "Tier 1");
+        TeamEntity team202 = buildTeam(202L, "Tier 2");
+
+        when(shiftDefinitionMapper.selectById(51L)).thenReturn(existing);
+        when(shiftDefinitionMapper.selectList(any())).thenReturn(List.of());
+        when(lookupService.teamMap()).thenReturn(Map.of(201L, team201, 202L, team202));
+        when(lookupService.requireTeam(201L)).thenReturn(team201);
+        when(lookupService.requireTeam(202L)).thenReturn(team202);
+        when(lookupService.normalizeWorkspaceTimezone("Asia/Shanghai")).thenReturn("Asia/Shanghai");
+        when(teamMapper.selectOne(any())).thenReturn(team201, team202);
+        when(shiftDefinitionTeamRelMapper.selectList(any())).thenReturn(
+            List.of(buildRelation(51L, 201L, 3), buildRelation(51L, 202L, 1)),
+            List.of(buildRelation(51L, 201L, 3), buildRelation(51L, 202L, 1)),
+            List.of(buildRelation(51L, 201L, 3), buildRelation(51L, 202L, 1))
+        );
+
+        workspaceShiftDefinitionService.updateShiftDefinition(51L, request);
+
+        ArgumentCaptor<ShiftDefinitionEntity> definitionCaptor = ArgumentCaptor.forClass(ShiftDefinitionEntity.class);
+        verify(shiftDefinitionMapper).updateById(definitionCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(201L, definitionCaptor.getValue().getTeamId());
+    }
+
     private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId) {
+        return buildRelation(shiftDefinitionId, teamId, 0);
+    }
+
+    private ShiftDefinitionTeamRelEntity buildRelation(Long shiftDefinitionId, Long teamId, Integer displayOrder) {
         ShiftDefinitionTeamRelEntity relation = new ShiftDefinitionTeamRelEntity();
         relation.setShiftDefinitionId(shiftDefinitionId);
         relation.setTeamId(teamId);
+        relation.setDisplayOrder(displayOrder);
         return relation;
     }
 
-    private TeamEntity buildTeam(Long id) {
+    private ShiftDefinitionEntity buildDefinition(Long id, String code) {
+        ShiftDefinitionEntity definition = new ShiftDefinitionEntity();
+        definition.setId(id);
+        definition.setCode(code);
+        definition.setMeaning(code + "-meaning");
+        definition.setVisible(true);
+        return definition;
+    }
+
+    private WorkspaceShiftDefinitionUpsertRequest buildUpsertRequest(List<Long> teamIds, String code) {
+        WorkspaceShiftDefinitionUpsertRequest request = new WorkspaceShiftDefinitionUpsertRequest();
+        request.setTeamIds(teamIds);
+        request.setCode(code);
+        request.setMeaning(code + "-meaning");
+        request.setStartTime(LocalTime.of(9, 0));
+        request.setDurationMinutes(480);
+        request.setTimezone("Asia/Shanghai");
+        request.setPrimaryShift(true);
+        request.setVisible(true);
+        return request;
+    }
+
+    private TeamEntity buildTeam(Long id, String name) {
         TeamEntity team = new TeamEntity();
         team.setId(id);
+        team.setName(name);
         return team;
     }
 }

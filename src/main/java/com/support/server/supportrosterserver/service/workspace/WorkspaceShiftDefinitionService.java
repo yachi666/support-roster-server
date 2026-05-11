@@ -88,7 +88,7 @@ public class WorkspaceShiftDefinitionService {
         validateCodeAvailability(null, request.getCode(), request.getTeamIds());
 
         ShiftDefinitionEntity entity = new ShiftDefinitionEntity();
-        apply(entity, request);
+        apply(entity, request, null);
         shiftDefinitionMapper.insert(entity);
         syncTeamRelations(entity.getId(), request.getTeamIds());
         return getShiftDefinition(entity.getId());
@@ -108,7 +108,7 @@ public class WorkspaceShiftDefinitionService {
         authContextService.requireWritableTeams(request.getTeamIds());
 
         validateCodeAvailability(id, request.getCode(), request.getTeamIds());
-        apply(entity, request);
+        apply(entity, request, entity.getTeamId());
         shiftDefinitionMapper.updateById(entity);
         syncTeamRelations(id, request.getTeamIds());
         if (!Objects.equals(previousCode, entity.getCode())) {
@@ -225,11 +225,11 @@ public class WorkspaceShiftDefinitionService {
         );
     }
 
-    private void apply(ShiftDefinitionEntity entity, WorkspaceShiftDefinitionUpsertRequest request) {
+    private void apply(ShiftDefinitionEntity entity, WorkspaceShiftDefinitionUpsertRequest request, Long currentPrimaryTeamId) {
         List<Long> normalizedTeamIds = request.getTeamIds().stream().distinct().toList();
         normalizedTeamIds.forEach(lookupService::requireTeam);
 
-        entity.setTeamId(normalizedTeamIds.get(0));
+        entity.setTeamId(resolvePrimaryTeamId(normalizedTeamIds, currentPrimaryTeamId));
         entity.setRoleGroupId(null);
         entity.setCode(request.getCode());
         entity.setMeaning(request.getMeaning());
@@ -241,6 +241,13 @@ public class WorkspaceShiftDefinitionService {
         entity.setVisible(request.getVisible());
         entity.setColorHex(normalizeOptionalHexColor(request.getColorHex()));
         entity.setRemark(request.getRemark());
+    }
+
+    private Long resolvePrimaryTeamId(List<Long> normalizedTeamIds, Long currentPrimaryTeamId) {
+        if (currentPrimaryTeamId != null && normalizedTeamIds.contains(currentPrimaryTeamId)) {
+            return currentPrimaryTeamId;
+        }
+        return normalizedTeamIds.get(0);
     }
 
     private String normalizeOptionalHexColor(String colorHex) {

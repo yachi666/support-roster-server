@@ -30,6 +30,7 @@
 - 列表接口支持可选 `keyword`。
 - 单条班次定义可关联多个团队。
 - 响应通过 `teams` 数组返回共享团队列表，并保留 `teamId` / `teamName` 作为主显示团队。
+- 更新共享班次时，如果原 `teamId` 仍包含在新的 `teamIds` 中，必须保持原主显示团队不变；只有原团队被移除时才使用新的首个团队作为主显示团队。
 - `teams[].displayOrder` 记录当前班次在对应 TEAM 下的展示顺序，供工作台拖拽排序、月排班和导入预览复用。
 
 ## 核心规则
@@ -37,6 +38,7 @@
 - 班次定义必须至少绑定一个已存在团队。
 - 同一团队下，相同 `code` 只能关联一条有效班次定义。
 - 共享班次通过团队关联表实现，而不是复制多条主记录。
+- `teamId/teamName` 是主显示团队，更新 `teamIds` 时应优先保留既有主显示团队，避免普通编辑改变共享班次身份与默认排序锚点。
 - TEAM 维度的排序持久化在 `workspace_shift_definition_team_rel.display_order`，允许同一条共享班次在不同 TEAM 下拥有不同顺序。
 - 写入语义使用 `startTime + durationMinutes`，其中 `durationMinutes` 范围为 `1..1440`。
 - `primaryShift` 参与主班次校验规则；`visible` 控制是否出现在后台排班选项和公共 Viewer 中，不能再额外依赖 `primaryShift=true` 才可见。
