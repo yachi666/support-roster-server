@@ -47,6 +47,8 @@ shiftDefinitionReorder:
     responses:
       '204':
         description: Reordered
+      '400':
+        $ref: ../../components/common.yaml#/responses/BadRequest
 
 shiftDefinitionItem:
   get:
