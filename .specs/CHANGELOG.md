@@ -1,5 +1,50 @@
 # 规范变更记录
 
+## 2026-07-01 - 员工自助注册与自动团队授权
+
+### 变更背景
+
+为降低管理员维护成本，员工可直接使用 `staffId` 自行注册登录，无需管理员预创建账号。自助注册的账号自动获得 `editor` 角色并授予其所在团队的编辑权限，使员工能自行调整本团队排班。
+
+### 变更文件
+
+1. `src/main/java/.../service/auth/AuthService.java` — 增强 `activate()` 方法
+2. `.specs/features/auth/overview.md`
+3. `.specs/features/auth/api-and-permissions.md`
+4. `.specs/features/auth/data-model.md`
+5. `.specs/CHANGELOG.md`
+
+### 详细变更记录
+
+#### 后端 — AuthService.java
+
+- 重写 `activate()` 方法：
+  - 先查 `workspace_account` 是否有已有账号。若存在且为 `PENDING_ACTIVATION`，走原有激活流程。
+  - 若不存在，查 `workspace_staff`。找到员工记录后，自动创建 `editor` 角色、`ACTIVE` 状态的新账号。
+  - 自动写入 `workspace_account_team_scope`，授权范围 = 员工的 `teamId`。
+  - `authSource` 设为 `"self-registered"`，与管理员创建的 `"LOCAL_PASSWORD"` 区分。
+- 注入 `WorkspaceAccountTeamScopeMapper` 以支持 team scope 写入。
+
+#### 前端 — LoginPage.vue & i18n
+
+- 更新激活页面提示文案，说明新员工可直接用 staffId 自助注册。
+- 激活 Tab 标签从"首次激活"改为"首次登录"。
+- i18n 中英文文案同步更新。
+
+#### Spec 文档
+
+- `overview.md`：新增"自助注册"章节，详细描述注册流程与约束。
+- `api-and-permissions.md`：更新 `/api/auth/activate` 接口说明，补充自助注册场景下的错误语义。
+- `data-model.md`：状态机新增 `[*] → ACTIVE` 路径，`authSource` 补充 `self-registered` 可取值。
+
+### 影响评估
+
+- 自助注册仅依赖于 `workspace_staff` 中已有员工记录，不要求任何在先管理员操作。
+- 管理员预创建的 `PENDING_ACTIVATION` 流程完全保留，不受影响。
+- 已存在的 `ACTIVE` 账号不受影响，自助注册仅对"无账号 + 有 staff 记录"的场景生效。
+- 若员工无团队（`teamId = null`），自助注册后仍可登录，但无任何可写团队（等价于 readonly 能力）。
+- 审计日志新增 `"Self-register workspace account"` 操作类型。
+
 ## 2026-05-01 - 0.0.2 发版准备
 
 ### 变更背景

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.support.server.supportrosterserver.auth.AccountRole;
 import com.support.server.supportrosterserver.auth.AccountStatus;
 import com.support.server.supportrosterserver.auth.AuthenticatedAccount;
 import com.support.server.supportrosterserver.dto.auth.AuthActivateRequest;
@@ -17,6 +18,7 @@ import com.support.server.supportrosterserver.dto.auth.AuthCurrentUserDto;
 import com.support.server.supportrosterserver.dto.auth.AuthLoginRequest;
 import com.support.server.supportrosterserver.dto.auth.AuthLoginResponse;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.entity.workspace.TeamEntity;
 import com.support.server.supportrosterserver.exception.BadRequestException;
@@ -24,6 +26,7 @@ import com.support.server.supportrosterserver.exception.ForbiddenException;
 import com.support.server.supportrosterserver.exception.ResourceNotFoundException;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
+import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceLookupService;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceOperationLogService;
 
@@ -36,6 +39,7 @@ public class AuthService {
 
     private final WorkspaceAccountMapper workspaceAccountMapper;
     private final StaffMapper staffMapper;
+    private final WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private final AuthContextService authContextService;
     private final AuthTokenVersionService authTokenVersionService;
     private final WorkspaceOperationLogService workspaceOperationLogService;
@@ -64,20 +68,67 @@ public class AuthService {
     @Transactional
     public AuthLoginResponse activate(AuthActivateRequest request) {
         String normalizedStaffId = normalizeStaffId(request.getStaffId());
-        WorkspaceAccountEntity account = requireAccountByStaffId(normalizedStaffId);
+        validateNewPassword(request.getNewPassword());
 
-        if (!AccountStatus.PENDING_ACTIVATION.getCode().equalsIgnoreCase(account.getAccountStatus())) {
-            throw new BadRequestException("Password has already been initialized. Please sign in.");
+        // Try to find existing account first
+        WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(
+            Wrappers.<WorkspaceAccountEntity>lambdaQuery()
+                .eq(WorkspaceAccountEntity::getStaffId, normalizedStaffId)
+                .last("limit 1"));
+
+        if (account != null) {
+            // Existing account flow
+            if (AccountStatus.DISABLED.getCode().equalsIgnoreCase(account.getAccountStatus())) {
+                throw new ForbiddenException("Account is disabled.");
+            }
+            if (!AccountStatus.PENDING_ACTIVATION.getCode().equalsIgnoreCase(account.getAccountStatus())) {
+                throw new BadRequestException("Password has already been initialized. Please sign in.");
+            }
+
+            // Activate existing pending account
+            account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+            account.setPasswordSetAt(LocalDateTime.now());
+            account.setAccountStatus(AccountStatus.ACTIVE.getCode());
+            workspaceAccountMapper.updateById(account);
+            workspaceOperationLogService.log(normalizedStaffId, "Activate workspace account",
+                "workspace_account", account.getId(), "First-login password setup completed");
+
+            return establishSession(account, "Login succeeded via first-time activation");
         }
 
-        validateNewPassword(request.getNewPassword());
-        account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-        account.setPasswordSetAt(LocalDateTime.now());
-        account.setAccountStatus(AccountStatus.ACTIVE.getCode());
-        workspaceAccountMapper.updateById(account);
-        workspaceOperationLogService.log(normalizedStaffId, "Activate workspace account", "workspace_account", account.getId(), "First-login password setup completed");
+        // Self-registration: no account exists — auto-create from staff record
+        StaffEntity staff = staffMapper.selectOne(
+            Wrappers.<StaffEntity>lambdaQuery()
+                .eq(StaffEntity::getStaffId, normalizedStaffId)
+                .last("limit 1"));
+        if (staff == null) {
+            throw new BadRequestException("No staff record found for the provided staff ID.");
+        }
 
-        return establishSession(account, "Login succeeded via first-time activation");
+        WorkspaceAccountEntity newAccount = new WorkspaceAccountEntity();
+        newAccount.setStaffRecordId(staff.getId());
+        newAccount.setStaffId(normalizedStaffId);
+        newAccount.setRoleCode(AccountRole.EDITOR.getCode());
+        newAccount.setAccountStatus(AccountStatus.ACTIVE.getCode());
+        newAccount.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        newAccount.setPasswordSetAt(LocalDateTime.now());
+        newAccount.setAuthSource("self-registered");
+        newAccount.setTokenVersion(1L);
+        workspaceAccountMapper.insert(newAccount);
+
+        // Auto-grant editor access to the staff's own team
+        if (staff.getTeamId() != null) {
+            WorkspaceAccountTeamScopeEntity teamScope = new WorkspaceAccountTeamScopeEntity();
+            teamScope.setAccountId(newAccount.getId());
+            teamScope.setTeamId(staff.getTeamId());
+            workspaceAccountTeamScopeMapper.insert(teamScope);
+        }
+
+        workspaceOperationLogService.log(normalizedStaffId, "Self-register workspace account",
+            "workspace_account", newAccount.getId(),
+            "Account auto-created with editor role scoped to own team");
+
+        return establishSession(newAccount, "Login succeeded via self-registration");
     }
 
     public AuthCurrentUserDto getCurrentUser() {
