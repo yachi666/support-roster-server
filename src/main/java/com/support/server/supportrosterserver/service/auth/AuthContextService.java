@@ -137,13 +137,8 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return;
         }
-        AuthenticatedAccount current = requireLogin();
-        if (current.isAdmin() || current.isReadonly()) {
-            return;
-        }
-        if (!current.teamScopeIds().contains(teamId)) {
-            throw new ForbiddenException("You do not have access to the selected team.");
-        }
+        // Validate account status and token version; team-scope not enforced — all active users can read any team
+        requireLogin();
     }
 
     public void requireReadableAnyTeam(Collection<Long> teamIds) {
@@ -153,25 +148,17 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return;
         }
-        AuthenticatedAccount current = requireLogin();
-        if (current.isAdmin() || current.isReadonly()) {
-            return;
-        }
-        boolean hasReadable = teamIds.stream().anyMatch(current.teamScopeIds()::contains);
-        if (!hasReadable) {
-            throw new ForbiddenException("You do not have access to the selected resource.");
-        }
+        // Validate account status and token version; team-scope not enforced — all active users can read any team
+        requireLogin();
     }
 
     public List<Long> readableTeamIds() {
         if (!isLoggedIn()) {
             return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
         }
-        AuthenticatedAccount current = requireLogin();
-        if (current.isAdmin() || current.isReadonly()) {
-            return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
-        }
-        return List.copyOf(current.teamScopeIds());
+        // Validate account status and token version; all active users can see all teams
+        requireLogin();
+        return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
     }
 
     public List<Long> editableTeamIds() {
@@ -192,8 +179,9 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return true;
         }
-        AuthenticatedAccount current = requireLogin();
-        return current.isAdmin() || current.isReadonly() || current.teamScopeIds().contains(teamId);
+        // All authenticated users can read any team; validates account status and token version
+        requireLogin();
+        return true;
     }
 
     public String currentActor(String fallback) {
