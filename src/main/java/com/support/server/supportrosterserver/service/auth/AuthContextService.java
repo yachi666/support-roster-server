@@ -137,13 +137,7 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return;
         }
-        AuthenticatedAccount current = requireLogin();
-        if (current.isAdmin() || current.isReadonly()) {
-            return;
-        }
-        if (!current.teamScopeIds().contains(teamId)) {
-            throw new ForbiddenException("You do not have access to the selected team.");
-        }
+        // All authenticated users can read any team
     }
 
     public void requireReadableAnyTeam(Collection<Long> teamIds) {
@@ -153,14 +147,7 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return;
         }
-        AuthenticatedAccount current = requireLogin();
-        if (current.isAdmin() || current.isReadonly()) {
-            return;
-        }
-        boolean hasReadable = teamIds.stream().anyMatch(current.teamScopeIds()::contains);
-        if (!hasReadable) {
-            throw new ForbiddenException("You do not have access to the selected resource.");
-        }
+        // All authenticated users can read any team
     }
 
     public List<Long> readableTeamIds() {
@@ -168,10 +155,8 @@ public class AuthContextService {
             return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
         }
         AuthenticatedAccount current = requireLogin();
-        if (current.isAdmin() || current.isReadonly()) {
-            return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
-        }
-        return List.copyOf(current.teamScopeIds());
+        // All authenticated users (admin, editor, readonly) can see all teams
+        return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
     }
 
     public List<Long> editableTeamIds() {
@@ -192,8 +177,9 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return true;
         }
+        // All authenticated users can read any team
         AuthenticatedAccount current = requireLogin();
-        return current.isAdmin() || current.isReadonly() || current.teamScopeIds().contains(teamId);
+        return true;
     }
 
     public String currentActor(String fallback) {
