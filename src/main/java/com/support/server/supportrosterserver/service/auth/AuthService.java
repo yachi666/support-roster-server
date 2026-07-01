@@ -3,6 +3,7 @@ package com.support.server.supportrosterserver.service.auth;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,30 +71,32 @@ public class AuthService {
         String normalizedStaffId = normalizeStaffId(request.getStaffId());
         validateNewPassword(request.getNewPassword());
 
-        // Try to find existing account first
-        WorkspaceAccountEntity account = workspaceAccountMapper.selectOne(
-            Wrappers.<WorkspaceAccountEntity>lambdaQuery()
-                .eq(WorkspaceAccountEntity::getStaffId, normalizedStaffId)
-                .last("limit 1"));
+        // Query ALL accounts including soft-deleted ones (bypass @TableLogic)
+        WorkspaceAccountEntity existingAccount = workspaceAccountMapper.selectAnyByStaffId(normalizedStaffId);
 
-        if (account != null) {
+        if (existingAccount != null) {
+            // Fix 1: reject soft-deleted accounts (offboarding bypass)
+            if (existingAccount.getDeleted() != null && existingAccount.getDeleted() == 1) {
+                throw new BadRequestException("Account was previously deactivated. Please contact an administrator.");
+            }
+
             // Existing account flow
-            if (AccountStatus.DISABLED.getCode().equalsIgnoreCase(account.getAccountStatus())) {
+            if (AccountStatus.DISABLED.getCode().equalsIgnoreCase(existingAccount.getAccountStatus())) {
                 throw new ForbiddenException("Account is disabled.");
             }
-            if (!AccountStatus.PENDING_ACTIVATION.getCode().equalsIgnoreCase(account.getAccountStatus())) {
+            if (!AccountStatus.PENDING_ACTIVATION.getCode().equalsIgnoreCase(existingAccount.getAccountStatus())) {
                 throw new BadRequestException("Password has already been initialized. Please sign in.");
             }
 
             // Activate existing pending account
-            account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-            account.setPasswordSetAt(LocalDateTime.now());
-            account.setAccountStatus(AccountStatus.ACTIVE.getCode());
-            workspaceAccountMapper.updateById(account);
+            existingAccount.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+            existingAccount.setPasswordSetAt(LocalDateTime.now());
+            existingAccount.setAccountStatus(AccountStatus.ACTIVE.getCode());
+            workspaceAccountMapper.updateById(existingAccount);
             workspaceOperationLogService.log(normalizedStaffId, "Activate workspace account",
-                "workspace_account", account.getId(), "First-login password setup completed");
+                "workspace_account", existingAccount.getId(), "First-login password setup completed");
 
-            return establishSession(account, "Login succeeded via first-time activation");
+            return establishSession(existingAccount, "Login succeeded via first-time activation");
         }
 
         // Self-registration: no account exists — auto-create from staff record
@@ -105,6 +108,11 @@ public class AuthService {
             throw new BadRequestException("No staff record found for the provided staff ID.");
         }
 
+        // Fix 3: reject inactive staff
+        if (staff.getStatus() != null && !"Active".equalsIgnoreCase(staff.getStatus())) {
+            throw new BadRequestException("Staff member is not active. Please contact an administrator.");
+        }
+
         WorkspaceAccountEntity newAccount = new WorkspaceAccountEntity();
         newAccount.setStaffRecordId(staff.getId());
         newAccount.setStaffId(normalizedStaffId);
@@ -114,7 +122,13 @@ public class AuthService {
         newAccount.setPasswordSetAt(LocalDateTime.now());
         newAccount.setAuthSource("self-registered");
         newAccount.setTokenVersion(1L);
-        workspaceAccountMapper.insert(newAccount);
+
+        // Fix 2: handle race condition — concurrent activation for same staffId
+        try {
+            workspaceAccountMapper.insert(newAccount);
+        } catch (DataIntegrityViolationException e) {
+            throw new BadRequestException("Account was already created. Please sign in.");
+        }
 
         // Auto-grant editor access to the staff's own team
         if (staff.getTeamId() != null) {

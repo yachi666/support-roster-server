@@ -48,6 +48,9 @@
   5. 直接建立登录会话，返回 token。
 - 自助注册的账号 `authSource` 为 `"self-registered"`，与管理员创建的 `"LOCAL_PASSWORD"` 区分，便于审计追溯。
 - 若 `staffId` 在 `workspace_staff` 中不存在，返回 `400` 错误。
+- **安全校验**：
+  - 若员工在 `workspace_staff` 中的状态非 `Active`（如 `Inactive`），拒绝注册并提示联系管理员。
+  - 若该 `staffId` 曾有过账号且已被软删除（管理员下线），拒绝注册并提示联系管理员。
 - 自助注册功能已作为正式能力上线，不再局限于内网/测试环境。但管理员预创建的 `PENDING_ACTIVATION` 流程仍保留并支持。
 
 ## 初始管理员引导

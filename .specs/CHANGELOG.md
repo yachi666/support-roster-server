@@ -45,6 +45,22 @@
 - 若员工无团队（`teamId = null`），自助注册后仍可登录，但无任何可写团队（等价于 readonly 能力）。
 - 审计日志新增 `"Self-register workspace account"` 操作类型。
 
+### 代码审查修复（2026-07-01 追加）
+
+代码审查发现三项安全问题并修复：
+
+1. **软删除绕过（Fix 1）**：`@TableLogic` 配合部分唯一索引导致已软删除的账号对 `selectOne` 不可见，自助注册可绕过下线状态。已改为使用 `selectAnyByStaffId()` 绕过 `@TableLogic` 查询全部账号，检测到 `deleted = 1` 时拒绝注册。
+2. **并发竞态（Fix 2）**：并发请求通过账号存在性检查后同时执行 insert，违反唯一约束返回 500。已通过 `catch DataIntegrityViolationException` 转为友好错误提示。
+3. **员工状态校验（Fix 3）**：未检查 `staff.status`，非激活员工也可注册。已补充 `staff.getStatus()` 校验。
+
+#### 变更文件
+
+1. `src/main/java/.../mapper/WorkspaceAccountMapper.java` — 新增 `selectAnyByStaffId()` 绕过 @TableLogic 查询
+2. `src/main/java/.../service/auth/AuthService.java` — 三项安全修复
+3. `.specs/features/auth/overview.md`
+4. `.specs/features/auth/api-and-permissions.md`
+5. `.specs/CHANGELOG.md`
+
 ## 2026-05-01 - 0.0.2 发版准备
 
 ### 变更背景
