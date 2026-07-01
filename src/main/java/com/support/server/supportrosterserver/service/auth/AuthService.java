@@ -8,6 +8,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import lombok.extern.slf4j.Slf4j;
+
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.support.server.supportrosterserver.auth.AccountRole;
 import com.support.server.supportrosterserver.auth.AccountStatus;
@@ -36,6 +38,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final WorkspaceAccountMapper workspaceAccountMapper;
@@ -127,6 +130,7 @@ public class AuthService {
         try {
             workspaceAccountMapper.insert(newAccount);
         } catch (DataIntegrityViolationException e) {
+            log.warn("Data integrity violation during self-registration for staffId: {}", normalizedStaffId, e);
             throw new BadRequestException("Account was already created. Please sign in.");
         }
 

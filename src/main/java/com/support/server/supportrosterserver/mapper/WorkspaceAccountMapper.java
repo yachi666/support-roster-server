@@ -13,7 +13,9 @@ public interface WorkspaceAccountMapper extends BaseMapper<WorkspaceAccountEntit
     /**
      * Query account by staffId, including soft-deleted rows.
      * Bypasses {@code @TableLogic} filter to detect deactivated accounts.
+     * Orders by deleted ASC so active/pending rows (deleted=0) come first
+     * when both a deleted and non-deleted account exist for the same staffId.
      */
-    @Select("SELECT * FROM workspace_account WHERE staff_id = #{staffId} LIMIT 1")
+    @Select("SELECT * FROM workspace_account WHERE staff_id = #{staffId} ORDER BY deleted ASC LIMIT 1")
     WorkspaceAccountEntity selectAnyByStaffId(@Param("staffId") String staffId);
 }
