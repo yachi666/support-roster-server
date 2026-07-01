@@ -156,8 +156,8 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
         }
-        AuthenticatedAccount current = requireLogin();
-        // All authenticated users (admin, editor, readonly) can see all teams
+        // Validate account status and token version; all active users can see all teams
+        requireLogin();
         return workspaceLookupService.listTeams().stream().map(TeamEntity::getId).toList();
     }
 
@@ -179,8 +179,8 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return true;
         }
-        // All authenticated users can read any team
-        AuthenticatedAccount current = requireLogin();
+        // All authenticated users can read any team; validates account status and token version
+        requireLogin();
         return true;
     }
 
