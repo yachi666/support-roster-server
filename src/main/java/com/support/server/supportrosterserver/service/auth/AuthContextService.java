@@ -137,7 +137,8 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return;
         }
-        // All authenticated users can read any team
+        // Validate account status and token version; team-scope not enforced — all active users can read any team
+        requireLogin();
     }
 
     public void requireReadableAnyTeam(Collection<Long> teamIds) {
@@ -147,7 +148,8 @@ public class AuthContextService {
         if (!isLoggedIn()) {
             return;
         }
-        // All authenticated users can read any team
+        // Validate account status and token version; team-scope not enforced — all active users can read any team
+        requireLogin();
     }
 
     public List<Long> readableTeamIds() {
