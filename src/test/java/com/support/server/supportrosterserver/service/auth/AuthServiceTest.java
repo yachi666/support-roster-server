@@ -16,15 +16,20 @@ import com.support.server.supportrosterserver.auth.AccountStatus;
 import com.support.server.supportrosterserver.dto.auth.AuthActivateRequest;
 import com.support.server.supportrosterserver.dto.auth.AuthLoginRequest;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
+import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.exception.BadRequestException;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
 import com.support.server.supportrosterserver.mapper.WorkspaceAccountMapper;
+import com.support.server.supportrosterserver.mapper.WorkspaceAccountTeamScopeMapper;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceLookupService;
 import com.support.server.supportrosterserver.service.workspace.WorkspaceOperationLogService;
 
 class AuthServiceTest {
 
     private WorkspaceAccountMapper workspaceAccountMapper;
+    private StaffMapper staffMapper;
+    private WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private PasswordEncoder passwordEncoder;
     private AuthTokenVersionService authTokenVersionService;
     private AuthService authService;
@@ -32,11 +37,14 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         workspaceAccountMapper = mock(WorkspaceAccountMapper.class);
+        staffMapper = mock(StaffMapper.class);
+        workspaceAccountTeamScopeMapper = mock(WorkspaceAccountTeamScopeMapper.class);
         passwordEncoder = mock(PasswordEncoder.class);
         authTokenVersionService = mock(AuthTokenVersionService.class);
         authService = new AuthService(
             workspaceAccountMapper,
-            mock(StaffMapper.class),
+            staffMapper,
+            workspaceAccountTeamScopeMapper,
             mock(AuthContextService.class),
             authTokenVersionService,
             mock(WorkspaceOperationLogService.class),
@@ -69,7 +77,8 @@ class AuthServiceTest {
         account.setId(102L);
         account.setStaffId("A002");
         account.setAccountStatus(AccountStatus.ACTIVE.getCode());
-        when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
+        account.setDeleted(0);
+        when(workspaceAccountMapper.selectAnyByStaffId("A002")).thenReturn(account);
 
         AuthActivateRequest request = new AuthActivateRequest();
         request.setStaffId("A002");
@@ -83,12 +92,6 @@ class AuthServiceTest {
 
     @Test
     void shouldRejectActivationWhenNewPasswordIsShorterThanFourCharacters() {
-        WorkspaceAccountEntity account = new WorkspaceAccountEntity();
-        account.setId(103L);
-        account.setStaffId("A003");
-        account.setAccountStatus(AccountStatus.PENDING_ACTIVATION.getCode());
-        when(workspaceAccountMapper.selectOne(any())).thenReturn(account);
-
         AuthActivateRequest request = new AuthActivateRequest();
         request.setStaffId("A003");
         request.setNewPassword("123");
@@ -97,6 +100,32 @@ class AuthServiceTest {
 
         assertEquals("Password must be at least 4 characters.", error.getMessage());
         verify(passwordEncoder, never()).encode(any());
-        verify(workspaceAccountMapper, never()).updateById(any(WorkspaceAccountEntity.class));
+        verify(workspaceAccountMapper, never()).selectAnyByStaffId(any());
+    }
+
+    @Test
+    void shouldSelfRegisterWhenNoExistingAccount() {
+        when(workspaceAccountMapper.selectAnyByStaffId("A004")).thenReturn(null);
+        StaffEntity staff = new StaffEntity();
+        staff.setId(201L);
+        staff.setStaffId("A004");
+        staff.setStatus("Active");
+        staff.setTeamId(301L);
+        when(staffMapper.selectOne(any())).thenReturn(staff);
+        when(passwordEncoder.encode("secret123")).thenReturn("$2a$encodedhash");
+
+        AuthActivateRequest request = new AuthActivateRequest();
+        request.setStaffId("A004");
+        request.setNewPassword("secret123");
+
+        // establishSession calls getCurrentUser() → authContextService.requireLogin()
+        // which throws because AuthContextService is mocked without a stub.
+        // Full session flow needs integration test, but we verify that the
+        // account creation and team scope insertion were executed.
+        assertThrows(Exception.class, () -> authService.activate(request));
+
+        verify(passwordEncoder).encode("secret123");
+        verify(workspaceAccountMapper).insert(any(WorkspaceAccountEntity.class));
+        verify(workspaceAccountTeamScopeMapper).insert(any(WorkspaceAccountTeamScopeEntity.class));
     }
 }

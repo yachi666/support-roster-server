@@ -19,7 +19,7 @@
 | `account_status` | `VARCHAR(32)` | `PENDING_ACTIVATION` / `ACTIVE` / `DISABLED` |
 | `password_hash` | `VARCHAR(255)` | 本地密码哈希 |
 | `password_set_at` | `TIMESTAMP` | 首次设密或最近一次重置完成时间 |
-| `auth_source` | `VARCHAR(32)` | `LOCAL_PASSWORD`，未来可扩展 `CORP_SSO` |
+| `auth_source` | `VARCHAR(32)` | `LOCAL_PASSWORD`（管理员创建）、`self-registered`（自助注册），未来可扩展 `CORP_SSO` |
 | `external_subject` | `VARCHAR(255)` | 未来 SSO 的外部主体标识 |
 | `notes` | `TEXT` | 管理备注 |
 | `last_login_at` | `TIMESTAMP` | 最近成功登录时间 |
@@ -50,8 +50,9 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING_ACTIVATION
+    [*] --> PENDING_ACTIVATION: 管理员预创建
     PENDING_ACTIVATION --> ACTIVE: 首登设密成功
+    [*] --> ACTIVE: 自助注册
     ACTIVE --> DISABLED: 管理员禁用
     DISABLED --> ACTIVE: 管理员启用
     ACTIVE --> PENDING_ACTIVATION: 管理员重置密码

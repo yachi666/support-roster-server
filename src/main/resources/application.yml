@@ -32,6 +32,7 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
+    out-of-order: true
     validate-on-migrate: true
 
 mybatis-plus:

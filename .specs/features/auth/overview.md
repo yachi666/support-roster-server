@@ -37,9 +37,21 @@
 ## 登录标识与首登设密
 
 - 登录标识使用 `workspace_staff.staff_id`，在产品语义上对应 `staffid`。
-- 账号由管理员预创建，并关联到唯一 staff 记录。
-- 员工首登时，如果账号尚未设置密码，则允许以 `staffid + 新密码` 完成激活。
-- 该首登方案仅适用于内网/测试环境；正式上线前必须补充激活校验（例如激活码、邮箱验证或企业身份验证）。
+- 支持两种账号创建方式：
+  - **管理员预创建**：管理员通过"账号管理"创建 `PENDING_ACTIVATION` 账号 → 员工使用 `staffId + 新密码` 完成激活。
+  - **自助注册**（2026-07 新增）：员工直接使用 `staffId + 新密码` 在 `/api/auth/activate` 注册，系统自动在 `workspace_account` 创建账号并建立会话。
+- 自助注册流程：
+  1. 系统先按 `staffId` 查找已有账号。若存在且为 `PENDING_ACTIVATION`，走原有激活逻辑。
+  2. 若不存在，继续在 `workspace_staff` 中查找员工记录。
+  3. 找到员工记录后，自动创建 `ACTIVE` 状态的账号，`roleCode = editor`，`authSource = "self-registered"`。
+  4. 自动写入 `workspace_account_team_scope`，授予该员工对其所在团队的编辑权限。
+  5. 直接建立登录会话，返回 token。
+- 自助注册的账号 `authSource` 为 `"self-registered"`，与管理员创建的 `"LOCAL_PASSWORD"` 区分，便于审计追溯。
+- 若 `staffId` 在 `workspace_staff` 中不存在，返回 `400` 错误。
+- **安全校验**：
+  - 若员工在 `workspace_staff` 中的状态非 `Active`（如 `Inactive`），拒绝注册并提示联系管理员。
+  - 若该 `staffId` 曾有过账号且已被软删除（管理员下线），拒绝注册并提示联系管理员。
+- 自助注册功能已作为正式能力上线，不再局限于内网/测试环境。但管理员预创建的 `PENDING_ACTIVATION` 流程仍保留并支持。
 
 ## 初始管理员引导
 
@@ -79,6 +91,7 @@
 
 - 登录成功
 - 首登设密
+- 自助注册账号
 - 管理员创建账号
 - 管理员重置密码
 - 管理员禁用/启用账号
