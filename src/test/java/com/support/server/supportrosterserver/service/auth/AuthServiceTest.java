@@ -16,6 +16,7 @@ import com.support.server.supportrosterserver.auth.AccountStatus;
 import com.support.server.supportrosterserver.dto.auth.AuthActivateRequest;
 import com.support.server.supportrosterserver.dto.auth.AuthLoginRequest;
 import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountEntity;
+import com.support.server.supportrosterserver.entity.auth.WorkspaceAccountTeamScopeEntity;
 import com.support.server.supportrosterserver.entity.workspace.StaffEntity;
 import com.support.server.supportrosterserver.exception.BadRequestException;
 import com.support.server.supportrosterserver.mapper.StaffMapper;
@@ -28,6 +29,7 @@ class AuthServiceTest {
 
     private WorkspaceAccountMapper workspaceAccountMapper;
     private StaffMapper staffMapper;
+    private WorkspaceAccountTeamScopeMapper workspaceAccountTeamScopeMapper;
     private PasswordEncoder passwordEncoder;
     private AuthTokenVersionService authTokenVersionService;
     private AuthService authService;
@@ -36,12 +38,13 @@ class AuthServiceTest {
     void setUp() {
         workspaceAccountMapper = mock(WorkspaceAccountMapper.class);
         staffMapper = mock(StaffMapper.class);
+        workspaceAccountTeamScopeMapper = mock(WorkspaceAccountTeamScopeMapper.class);
         passwordEncoder = mock(PasswordEncoder.class);
         authTokenVersionService = mock(AuthTokenVersionService.class);
         authService = new AuthService(
             workspaceAccountMapper,
             staffMapper,
-            mock(WorkspaceAccountTeamScopeMapper.class),
+            workspaceAccountTeamScopeMapper,
             mock(AuthContextService.class),
             authTokenVersionService,
             mock(WorkspaceOperationLogService.class),
@@ -109,16 +112,20 @@ class AuthServiceTest {
         staff.setStatus("Active");
         staff.setTeamId(301L);
         when(staffMapper.selectOne(any())).thenReturn(staff);
+        when(passwordEncoder.encode("secret123")).thenReturn("$2a$encodedhash");
 
         AuthActivateRequest request = new AuthActivateRequest();
         request.setStaffId("A004");
         request.setNewPassword("secret123");
 
-        // The activate() will reach establishSession which calls getCurrentUser()
-        // which calls authContextService.requireLogin() — this throws because
-        // AuthContextService is mocked and StpUtil is not initialized in unit test.
-        // We just verify it doesn't throw a BadRequestException for validation.
-        // Full session flow needs integration test.
+        // establishSession calls getCurrentUser() → authContextService.requireLogin()
+        // which throws because AuthContextService is mocked without a stub.
+        // Full session flow needs integration test, but we verify that the
+        // account creation and team scope insertion were executed.
         assertThrows(Exception.class, () -> authService.activate(request));
+
+        verify(passwordEncoder).encode("secret123");
+        verify(workspaceAccountMapper).insert(any(WorkspaceAccountEntity.class));
+        verify(workspaceAccountTeamScopeMapper).insert(any(WorkspaceAccountTeamScopeEntity.class));
     }
 }

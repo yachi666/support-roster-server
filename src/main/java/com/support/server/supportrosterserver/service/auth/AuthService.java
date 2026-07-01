@@ -111,8 +111,8 @@ public class AuthService {
             throw new BadRequestException("No staff record found for the provided staff ID.");
         }
 
-        // Fix 3: reject inactive staff
-        if (staff.getStatus() != null && !"Active".equalsIgnoreCase(staff.getStatus())) {
+        // Fix 3: reject inactive staff (null status also rejected)
+        if (!"Active".equalsIgnoreCase(staff.getStatus())) {
             throw new BadRequestException("Staff member is not active. Please contact an administrator.");
         }
 
