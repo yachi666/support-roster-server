@@ -134,6 +134,8 @@ graph TB
 | 集成测试命名 | `{ClassName}IT.java` |
 | 推荐覆盖 | Service 层逻辑、Controller 集成、边界条件、异常场景 |
 
+- 当前项目显式固定 `maven-surefire-plugin` 版本为 `3.5.4`，避免 Spring Boot parent 管理到当前仓库源无法稳定解析的版本后导致 `mvn test` 在测试执行前失败。
+
 > `Warning`：当前测试覆盖率仍偏低，需继续补充。
 
 ## 配置管理

@@ -12,19 +12,19 @@ import org.junit.jupiter.api.Test;
 class WorkspaceShiftDefinitionTeamOrderMigrationTest {
 
     @Test
-    void shouldMakeV14DisplayOrderMigrationIdempotentWhileKeepingBackfill() throws IOException {
+    void shouldMakeV15DisplayOrderMigrationIdempotentWhileKeepingBackfill() throws IOException {
         try (InputStream inputStream = getClass().getClassLoader()
-            .getResourceAsStream("db/migration/V14__workspace_shift_definition_team_order.sql")) {
-            assertNotNull(inputStream, "Expected V14 team-order migration to exist.");
+            .getResourceAsStream("db/migration/V15__workspace_shift_definition_team_display_order.sql")) {
+            assertNotNull(inputStream, "Expected V15 team-order migration to exist.");
 
             String migration = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
 
             assertTrue(migration.contains("ADD COLUMN IF NOT EXISTS display_order"),
-                "Expected V14 migration to add display_order idempotently.");
+                "Expected V15 migration to add display_order idempotently.");
             assertTrue(migration.contains("UPDATE workspace_shift_definition_team_rel"),
-                "Expected V14 migration to keep the display_order backfill update.");
+                "Expected V15 migration to keep the display_order backfill update.");
             assertTrue(migration.contains("row_number() OVER") || migration.contains("ROW_NUMBER() OVER"),
-                "Expected V14 migration to preserve ordered backfill logic.");
+                "Expected V15 migration to preserve ordered backfill logic.");
         }
     }
 }

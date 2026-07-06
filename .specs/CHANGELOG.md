@@ -1,5 +1,30 @@
 # 规范变更记录
 
+## 2026-07-06 - 固定 Maven Surefire 插件版本
+
+### 变更背景
+
+执行 `mvn test` 时，Spring Boot parent 管理的 `maven-surefire-plugin:3.5.6` 需要重新校验 POM，但当前 Maven Central 访问返回 `403 Forbidden`，导致测试在执行前因插件解析失败中断。离线模式下该版本又因插件依赖信息不可用，缺少 `SurefireReportParameters` 等 surefire 运行时类。
+
+### 变更文件
+
+1. `pom.xml`
+2. `.specs/constraints-and-conventions.md`
+3. `.specs/CHANGELOG.md`
+
+### 详细变更记录
+
+- 在 `pom.xml` 中新增 `maven-surefire-plugin.version=3.5.4`。
+- 在 `build.plugins` 中显式声明 `maven-surefire-plugin`，覆盖父级管理版本。
+- 将班次定义团队排序迁移测试从历史 `V14` 调整为校验当前幂等补迁移 `V15`，与 Flyway checksum 修复后的迁移分工保持一致。
+- 在实现约束文档中记录测试插件版本固定原因，避免后续误删。
+
+### 影响评估
+
+- `mvn test` 不再在 surefire 插件解析阶段失败，可以进入实际测试执行。
+- 迁移测试继续覆盖 `display_order` 幂等加列和回填逻辑，但不再要求已恢复 checksum 的历史 `V14` 迁移承担该职责。
+- 本次只影响测试构建插件版本，不改变运行时代码、接口契约或数据库结构。
+
 ## 2026-07-06 - Sa-Token Jackson 2 运行时依赖补齐
 
 ### 变更背景
