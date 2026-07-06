@@ -48,6 +48,9 @@ com.support.server.supportrosterserver/
 
 - 使用 `ObjectMapper`、`JsonProcessingException`、Jackson 注解或 JSON HTTP 消息转换时，必须显式声明 `spring-boot-starter-json`。
 - 服务类优先通过 Spring 注入 `ObjectMapper`，避免手工 `new ObjectMapper()` 导致全局序列化配置不一致。
+- 当前运行基线为 Spring Boot 4，HTTP JSON 消息转换使用 Boot 管理的 Jackson 3（`tools.jackson.*`）。
+- `sa-token-spring-boot3-starter` 会自动安装 `sa-token-jackson` 插件，该插件仍依赖 Jackson 2（`com.fasterxml.jackson.*`）的 `jackson-core`、`jackson-databind` 与 `jackson-datatype-jsr310`。因此 `pom.xml` 必须显式保留这三个 Jackson 2 运行时依赖，并通过 `sa-token-jackson2.version` 固定到可解析的兼容版本；不要移除为“重复 JSON 依赖”。
+- `jackson-2-bom.version` 仍需保留在 Spring Boot 4 兼容的版本，用于提供 Jackson 3 运行时需要的 `com.fasterxml.jackson.annotation` 兼容注解。
 
 ### 全局 CORS
 

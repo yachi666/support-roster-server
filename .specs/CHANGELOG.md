@@ -1,5 +1,29 @@
 # 规范变更记录
 
+## 2026-07-06 - Sa-Token Jackson 2 运行时依赖补齐
+
+### 变更背景
+
+后端启动时 `sa-token-jackson` 插件自动安装失败，抛出 `NoClassDefFoundError: com/fasterxml/jackson/...`。项目已升级到 Spring Boot 4，业务 JSON 栈使用 Jackson 3（`tools.jackson.*`），但 Sa-Token 1.45.0 的 Jackson 插件仍编译依赖 Jackson 2（`com.fasterxml.jackson.*`）。
+
+### 变更文件
+
+1. `pom.xml`
+2. `.specs/constraints-and-conventions.md`
+3. `.specs/CHANGELOG.md`
+
+### 详细变更记录
+
+- 在 `pom.xml` 中显式加入 `com.fasterxml.jackson.core:jackson-core`、`com.fasterxml.jackson.core:jackson-databind` 与 `com.fasterxml.jackson.datatype:jackson-datatype-jsr310`，为 `sa-token-jackson` 提供 Jackson 2 运行时类。
+- 继续保留 `spring-boot-starter-json` 作为业务 HTTP JSON 消息转换入口，不改变 Spring Boot 4 的 Jackson 3 使用方式。
+- 在实现约束文档中记录 Boot 4 + Sa-Token 场景下 Jackson 3 与 Jackson 2 并存的维护规则，其中 Jackson 2 annotations 由 `jackson-2-bom.version` 保持 Boot 4 兼容，Sa-Token 插件运行时组件由 `sa-token-jackson2.version` 固定到可解析版本。
+
+### 影响评估
+
+- 修复 Sa-Token 插件初始化阶段的 `NoClassDefFoundError`，后端可继续启动。
+- 依赖版本显式区分 Jackson 3 所需 annotations 与 Sa-Token 插件运行时组件，避免互相降级导致新的启动错误。
+- 本次不改变接口契约、数据库结构或认证业务流程。
+
 ## 2026-07-01 - 员工自助注册与自动团队授权
 
 ### 变更背景
